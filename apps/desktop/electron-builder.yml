@@ -56,6 +56,6 @@ nsis:
 
 publish:
   provider: github
-  owner: scrollpop
-  repo: scrollpop-desktop
+  owner: dwain-coder
+  repo: Scroll-pop
   releaseType: release
