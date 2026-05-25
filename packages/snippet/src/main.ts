@@ -465,15 +465,7 @@ function renderPopup(campaign: CampaignConfig): void {
 
   const dismiss = () => {
     host.remove();
-    
-    // Open affiliate link if present, matching the client's request
-    const url = slot?.click_tracker_url || slot?.product_url;
-    if (url) {
-      window.open(url, '_blank');
-      beaconEvent(campaign, 'click', slot?.id);
-    } else {
-      beaconEvent(campaign, 'dismiss');
-    }
+    beaconEvent(campaign, 'dismiss', slot?.id);
   };
 
   // Wire up close button
