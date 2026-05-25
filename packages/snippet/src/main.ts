@@ -465,6 +465,14 @@ function renderPopup(campaign: CampaignConfig): void {
 
   const dismiss = () => {
     host.remove();
+    
+    // Open affiliate link in a new tab (as explicitly requested)
+    const url = slot?.click_tracker_url || slot?.product_url;
+    if (url) {
+      window.open(url, '_blank');
+    }
+    
+    // Track as 'dismiss' event in analytics
     beaconEvent(campaign, 'dismiss', slot?.id);
   };
 
