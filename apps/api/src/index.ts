@@ -220,7 +220,7 @@ async function bootstrap() {
     const payload = request.body;
     if (payload && Array.isArray(payload.events)) {
       for (const rawEvt of payload.events) {
-        const { campaignId, eventType, affiliateSlotId, visitorId, sessionId, device, pageUrl, referrer } = rawEvt;
+        const { campaignId, eventType, affiliateSlotId, visitorId, sessionId, device, pageUrl, referrer, ts, country } = rawEvt;
         if (!campaignId || !eventType) continue;
 
         try {
@@ -240,6 +240,8 @@ async function bootstrap() {
               device: device || null,
               pageUrl: pageUrl || null,
               referrer: referrer || null,
+              ts: ts ? new Date(ts) : new Date(),
+              country: country || null,
             });
           }
         } catch (err) {
