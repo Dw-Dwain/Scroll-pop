@@ -32,23 +32,28 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     const authHeader = request.headers.authorization;
     const internalSecret = process.env['INTERNAL_SECRET'] || 'change_me_in_production_32_chars_min';
     if (authHeader && authHeader === `Bearer ${internalSecret}`) {
-      // Create seed tenant if it doesn't exist
-      let tenant = await db.query.tenants.findFirst({
-        where: eq(tenants.clerkOrgId, 'org_demo_12345'),
-      });
-      if (!tenant) {
-        const results = await db.insert(tenants).values({
-          clerkOrgId: 'org_demo_12345',
-          name: 'Demo Local Org',
-          plan: 'free',
-          monthlyViewLimit: 1000,
-        }).returning();
-        tenant = results[0];
+      const tenantOverride = request.headers['x-tenant-override'] as string | undefined;
+      if (tenantOverride && tenantOverride.length === 36) {
+        request.tenantId = tenantOverride;
+      } else {
+        // Create seed tenant if it doesn't exist
+        let tenant = await db.query.tenants.findFirst({
+          where: eq(tenants.clerkOrgId, 'org_demo_12345'),
+        });
+        if (!tenant) {
+          const results = await db.insert(tenants).values({
+            clerkOrgId: 'org_demo_12345',
+            name: 'Demo Local Org',
+            plan: 'free',
+            monthlyViewLimit: 1000,
+          }).returning();
+          tenant = results[0];
+        }
+        if (!tenant) {
+          throw new Error('Failed to create or retrieve demo tenant');
+        }
+        request.tenantId = tenant.id;
       }
-      if (!tenant) {
-        throw new Error('Failed to create or retrieve demo tenant');
-      }
-      request.tenantId = tenant.id;
       request.userId = 'admin_desktop_client';
       request.memberRole = 'admin';
       return;
