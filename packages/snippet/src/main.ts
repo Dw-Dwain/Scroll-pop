@@ -327,6 +327,10 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
 // ─── Frequency Capping ────────────────────────────────────────────────────────
 
 function checkFrequencyCap(campaignId: string, frequency: string): boolean {
+  if (frequency === 'once_per_session') {
+    return !sessionStorage.getItem(`_sp_session_${campaignId}`);
+  }
+
   const key = `_sp_${campaignId}`;
   const stored = localStorage.getItem(key);
   if (!stored) return true;
@@ -340,9 +344,6 @@ function checkFrequencyCap(campaignId: string, frequency: string): boolean {
 
     case 'once_per_day':
       return now - ts > 86400000; // 24h
-
-    case 'once_per_session':
-      return now - ts > (sessionStorage.getItem(`_sp_session_${campaignId}`) ? 0 : Infinity);
 
     case 'always':
       return true;
