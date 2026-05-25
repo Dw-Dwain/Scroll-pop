@@ -44,7 +44,7 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
         }).returning();
         tenant = results[0];
       }
-      request.tenantId = 'org_demo_12345';
+      request.tenantId = tenant.id;
       request.userId = 'admin_desktop_client';
       request.memberRole = 'admin';
       return;
