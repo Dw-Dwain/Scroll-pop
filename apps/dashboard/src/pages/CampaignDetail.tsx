@@ -26,7 +26,14 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
     const fetchAnalytics = async () => {
       setIsAnalyticsLoading(true);
       try {
-        const res = await fetch(`/api/v1/analytics/campaigns/${campaignId}`);
+        const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
+        const baseUrl = apiBase ? `${apiBase}/api/v1` : '/api/v1';
+        const token = localStorage.getItem('desktop_token');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(`${baseUrl}/analytics/campaigns/${campaignId}`, { headers });
         if (res.ok) {
           const body = await res.json();
           setAnalytics(body.data || []);
@@ -327,7 +334,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
                       ]
                     };
 
-                    const res = await fetch('/e', {
+                    const res = await fetch('https://scrollpop-worker.dwain-scrollpop.workers.dev/e', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify(payload),
