@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
-import { sites, campaigns, designs, triggers, targetingRules, frequencyRules } from '../db/schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events } from '../db/schema.js';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import type { SiteConfigPayload } from '@scrollpop/shared';
 import crypto from 'node:crypto';
 
@@ -156,4 +156,16 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   );
+
+  // GET /api/v1/internal/test-db — Diagnostic route for DB debugging in production
+  fastify.get('/test-db', async (request, reply) => {
+    if (!assertInternalSecret(request, reply)) return;
+    try {
+      const c = await db.query.campaigns.findFirst();
+      const countEvents = await db.select({ count: sql<number>`count(*)::int` }).from(events);
+      return reply.send({ ok: true, firstCampaign: c, countEvents });
+    } catch (err: any) {
+      return reply.send({ ok: false, error: err.message, stack: err.stack });
+    }
+  });
 };

@@ -463,17 +463,24 @@ function renderPopup(campaign: CampaignConfig): void {
     </div>
   `;
 
+  let hasRedirected = false;
   const dismiss = () => {
-    host.remove();
-    
-    // Open affiliate link in a new tab (as explicitly requested)
-    const url = slot?.click_tracker_url || slot?.product_url;
-    if (url) {
-      window.open(url, '_blank');
+    if (!hasRedirected) {
+      hasRedirected = true;
+      // Open affiliate link in a new tab (as explicitly requested)
+      const url = slot?.click_tracker_url || slot?.product_url;
+      if (url) {
+        window.open(url, '_blank');
+      }
+      // Track as 'dismiss' event in analytics
+      beaconEvent(campaign, 'dismiss', slot?.id);
+    } else {
+      // Actually close the popup on second click!
+      host.remove();
+      // Clear frequency cap on close so refreshing the page starts the flow again!
+      localStorage.removeItem(`_sp_${campaignId}`);
+      sessionStorage.removeItem(`_sp_session_${campaignId}`);
     }
-    
-    // Track as 'dismiss' event in analytics
-    beaconEvent(campaign, 'dismiss', slot?.id);
   };
 
   // Wire up close button
