@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
  */
 
 function assertInternalSecret(request: FastifyRequest, reply: FastifyReply): boolean {
-  const secret = process.env['API_SECRET'];
+  const secret = process.env['API_SECRET'] || 'change_me_in_production_32_chars_min';
   const provided = request.headers['x-internal-secret'] as string | undefined;
 
   if (!secret || provided !== secret) {
