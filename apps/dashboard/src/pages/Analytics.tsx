@@ -1,6 +1,6 @@
 import React from 'react';
 import { Eye, MousePointerClick, Percent, Megaphone, TrendingUp, BarChart3 } from 'lucide-react';
-import { useList } from '@refinedev/core';
+import { useList, useCustom, useApiUrl } from '@refinedev/core';
 
 interface AnalyticsProps {
   onNavigate: (path: string) => void;
@@ -17,28 +17,23 @@ type CampaignStat = {
 
 export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   const { data: campaignsData } = useList({ resource: 'campaigns' });
+  const apiUrl = useApiUrl();
 
-  const [overview, setOverview] = React.useState<any>(null);
-  const [campaignStats, setCampaignStats] = React.useState<CampaignStat[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const { data: overviewResult, isLoading: overviewLoading } = useCustom({
+    url: `${apiUrl}/analytics/overview`,
+    method: 'get',
+  });
 
-  React.useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [overviewRes, statsRes] = await Promise.all([
-          fetch('/api/v1/analytics/overview'),
-          fetch('/api/v1/analytics/campaigns'),
-        ]);
-        if (overviewRes.ok) setOverview((await overviewRes.json()).data);
-        if (statsRes.ok) setCampaignStats((await statsRes.json()).data || []);
-      } catch (err) {
-        console.error('Analytics fetch failed:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchAll();
-  }, []);
+  const { data: statsResult, isLoading: statsLoading } = useCustom({
+    url: `${apiUrl}/analytics/campaigns`,
+    method: 'get',
+  });
+
+  const overview = (overviewResult as any)?.data ?? null;
+  const campaignStats: CampaignStat[] = Array.isArray((statsResult as any)?.data)
+    ? (statsResult as any).data
+    : [];
+  const isLoading = overviewLoading || statsLoading;
 
   const getCampaign = (id: string) => campaignsData?.data?.find((c: any) => c.id === id);
 

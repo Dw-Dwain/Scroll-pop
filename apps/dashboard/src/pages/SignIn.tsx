@@ -92,7 +92,7 @@ export const SignIn: React.FC<SignInProps> = ({ isDemo = false, isDesktop = fals
           </p>
         </div>
 
-        {isDesktop ? (
+        {isDesktop && !isDemo ? (
           <div className="bg-slate-900/80 backdrop-blur border border-slate-800 shadow-xl rounded-2xl p-6 text-slate-200 space-y-6">
             <div className="text-center">
               <h2 className="text-lg font-bold text-slate-100">Local Desktop Access</h2>

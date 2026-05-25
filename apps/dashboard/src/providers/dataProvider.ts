@@ -14,11 +14,19 @@ declare global {
   }
 }
 
-function getApiBase(): string {
+export function getApiBase(): string {
   if (typeof window !== 'undefined' && window.electronAPI?.isDesktop) {
     return `${window.electronAPI.getLocalApiUrl()}/api/v1`;
   }
   return '/api/v1';
+}
+
+function resolveUrl(apiBase: string, relativePath: string): string {
+  if (relativePath.startsWith('http')) return relativePath;
+  const origin = apiBase.startsWith('http')
+    ? apiBase.replace(/\/api\/v1$/, '')
+    : window.location.origin;
+  return `${origin}${relativePath}`;
 }
 
 export const createDataProvider = (getToken: () => Promise<string | null>): DataProvider => {
@@ -49,9 +57,10 @@ export const createDataProvider = (getToken: () => Promise<string | null>): Data
       }
 
       const res = await fetchWithAuth(url.toString());
+      if (res.status === 401) return { data: [], total: 0 };
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const body = await res.json() as { data: unknown[]; meta?: { total?: number } };
-      
+
       return {
         data: body.data as any[],
         total: body.meta?.total ?? body.data.length,
@@ -102,6 +111,18 @@ export const createDataProvider = (getToken: () => Promise<string | null>): Data
       } catch {
         return { data: { id } as any };
       }
+    },
+
+    custom: async ({ url, method, payload }: any): Promise<any> => {
+      const API_BASE = getApiBase();
+      const resolvedUrl = resolveUrl(API_BASE, url);
+      const options: RequestInit = { method: (method as string).toUpperCase() };
+      if (payload) options.body = JSON.stringify(payload);
+      const res = await fetchWithAuth(resolvedUrl, options);
+      if (res.status === 401) return { data: null };
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const body = await res.json();
+      return { data: body.data ?? body };
     },
 
     getApiUrl: () => getApiBase(),

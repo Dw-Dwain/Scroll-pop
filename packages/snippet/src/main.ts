@@ -47,6 +47,7 @@ interface DesignConfig {
   position: 'center' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom';
   size: 'sm' | 'md' | 'lg';
   backgroundColor: string;
+  backgroundImage?: string;
   textColor: string;
   accentColor: string;
   borderRadius: number;

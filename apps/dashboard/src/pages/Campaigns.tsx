@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Megaphone, Play, Pause, Trash2, Eye, Calendar, Sparkles, Edit } from 'lucide-react';
-import { useList, useUpdate, useDelete } from '@refinedev/core';
+import { useList, useUpdate, useDelete, useCustom, useApiUrl } from '@refinedev/core';
 
 interface CampaignsProps {
   onNavigate: (path: string) => void;
@@ -18,20 +18,18 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
   const [isRenameOpen, setIsRenameOpen] = React.useState(false);
   const [renameCampaign, setRenameCampaign] = React.useState({ id: '', name: '' });
 
-  const [analyticsMap, setAnalyticsMap] = React.useState<Record<string, CampaignStat>>({});
-  const [analyticsLoading, setAnalyticsLoading] = React.useState(true);
+  const apiUrl = useApiUrl();
+  const { data: analyticsResult, isLoading: analyticsLoading } = useCustom({
+    url: `${apiUrl}/analytics/campaigns`,
+    method: 'get',
+  });
 
-  React.useEffect(() => {
-    fetch('/api/v1/analytics/campaigns')
-      .then((r) => r.ok ? r.json() : { data: [] })
-      .then((body) => {
-        const map: Record<string, CampaignStat> = {};
-        for (const s of (body.data ?? [])) map[s.campaignId] = s;
-        setAnalyticsMap(map);
-      })
-      .catch(() => {})
-      .finally(() => setAnalyticsLoading(false));
-  }, []);
+  const analyticsMap = React.useMemo<Record<string, CampaignStat>>(() => {
+    const map: Record<string, CampaignStat> = {};
+    const list = Array.isArray((analyticsResult as any)?.data) ? (analyticsResult as any).data : [];
+    for (const s of list) map[s.campaignId] = s;
+    return map;
+  }, [analyticsResult]);
 
   const getSiteDomain = (siteId: string) => {
     const site = sitesData?.data.find((s: any) => s.id === siteId);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Eye, MousePointerClick, Percent, Megaphone, ArrowUpRight, TrendingUp } from 'lucide-react';
-import { useList } from '@refinedev/core';
+import { useList, useCustom, useApiUrl } from '@refinedev/core';
 
 interface DashboardProps {
   onNavigate: (path: string) => void;
@@ -12,32 +12,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const activeCampaigns = campaignsData?.data.filter((c: any) => c.status === 'active') || [];
 
-  // Real-time Telemetry Overview Fetch
-  const [overview, setOverview] = React.useState<any>(null);
-  const [campaignStats, setCampaignStats] = React.useState<Record<string, any>>({});
-  const [isOverviewLoading, setIsOverviewLoading] = React.useState(true);
+  const apiUrl = useApiUrl();
+  const { data: overviewResult, isLoading: isOverviewLoading } = useCustom({
+    url: `${apiUrl}/analytics/overview`,
+    method: 'get',
+  });
+  const { data: statsResult } = useCustom({
+    url: `${apiUrl}/analytics/campaigns`,
+    method: 'get',
+  });
 
-  React.useEffect(() => {
-    const fetchAnalytics = async () => {
-      try {
-        const [overviewRes, statsRes] = await Promise.all([
-          fetch('/api/v1/analytics/overview'),
-          fetch('/api/v1/analytics/campaigns'),
-        ]);
-        if (overviewRes.ok) setOverview((await overviewRes.json()).data);
-        if (statsRes.ok) {
-          const map: Record<string, any> = {};
-          for (const s of ((await statsRes.json()).data ?? [])) map[s.campaignId] = s;
-          setCampaignStats(map);
-        }
-      } catch (err) {
-        console.error('Failed to fetch analytics:', err);
-      } finally {
-        setIsOverviewLoading(false);
-      }
-    };
-    fetchAnalytics();
-  }, []);
+  const overview = (overviewResult as any)?.data ?? null;
+  const campaignStats = React.useMemo<Record<string, any>>(() => {
+    const map: Record<string, any> = {};
+    const list = Array.isArray((statsResult as any)?.data) ? (statsResult as any).data : [];
+    for (const s of list) map[s.campaignId] = s;
+    return map;
+  }, [statsResult]);
 
   // MVP Telemetry Metrics (Mapped to live postgres data!)
   const stats = [
