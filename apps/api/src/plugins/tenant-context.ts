@@ -44,6 +44,9 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
         }).returning();
         tenant = results[0];
       }
+      if (!tenant) {
+        throw new Error('Failed to create or retrieve demo tenant');
+      }
       request.tenantId = tenant.id;
       request.userId = 'admin_desktop_client';
       request.memberRole = 'admin';
