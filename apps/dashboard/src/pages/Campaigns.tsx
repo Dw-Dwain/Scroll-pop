@@ -1,293 +1,368 @@
-import React from 'react';
-import { Plus, Megaphone, Play, Pause, Trash2, Eye, Calendar, Sparkles, Edit } from 'lucide-react';
-import { useList, useUpdate, useDelete, useCustom, useApiUrl } from '@refinedev/core';
+import React, { useState, useMemo, useDeferredValue } from 'react';
+import { Plus, Search, Layers, Pencil, Trash2, MoreHorizontal, Play, Pause } from 'lucide-react';
+import { useCustom, useDelete, useList, useUpdate, useApiUrl } from '@refinedev/core';
 
 interface CampaignsProps {
   onNavigate: (path: string) => void;
 }
 
-type CampaignStat = { campaignId: string; impressions: number; views: number; clicks: number; conversions: number; ctr: number };
+type CampaignStat = { campaignId: string; impressions: number; clicks: number; ctr: number };
+
+function StatusDot({ status }: { status: string }) {
+  const color =
+    status === 'active' ? 'var(--status-success)' :
+    status === 'paused' ? 'var(--status-warning)' :
+    'var(--text-muted)';
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)' }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+      <span style={{ textTransform: 'capitalize', color: 'var(--text-muted)', fontSize: 11 }}>{status ?? 'draft'}</span>
+    </span>
+  );
+}
 
 export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
-  const { data: campaignsData, refetch } = useList({ resource: 'campaigns' });
+  const { data: campaignsData, refetch, isLoading } = useList({ resource: 'campaigns' });
   const { data: sitesData } = useList({ resource: 'sites' });
-
   const { mutate: updateCampaign } = useUpdate();
   const { mutate: deleteCampaign } = useDelete();
-
-  const [isRenameOpen, setIsRenameOpen] = React.useState(false);
-  const [renameCampaign, setRenameCampaign] = React.useState({ id: '', name: '' });
-
   const apiUrl = useApiUrl();
-  const { data: analyticsResult, isLoading: analyticsLoading } = useCustom({
-    url: `${apiUrl}/analytics/campaigns`,
-    method: 'get',
-  });
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'draft'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'name' | 'ctr'>('newest');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  const analyticsMap = React.useMemo<Record<string, CampaignStat>>(() => {
+  const { data: analyticsResult } = useCustom({ url: `${apiUrl}/analytics/campaigns`, method: 'get' });
+
+  const analyticsMap = useMemo<Record<string, CampaignStat>>(() => {
     const map: Record<string, CampaignStat> = {};
-    const list = Array.isArray((analyticsResult as any)?.data) ? (analyticsResult as any).data : [];
-    for (const s of list) map[s.campaignId] = s;
+    const rows = Array.isArray((analyticsResult as any)?.data) ? (analyticsResult as any).data : [];
+    for (const row of rows) map[row.campaignId] = row;
     return map;
   }, [analyticsResult]);
 
-  const getSiteDomain = (siteId: string) => {
-    const site = sitesData?.data.find((s: any) => s.id === siteId);
-    return site ? site.domain : 'Unknown site';
+  const siteById = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const s of sitesData?.data ?? []) if (s?.id) map[s.id] = s;
+    return map;
+  }, [sitesData]);
+
+  const rows = useMemo(() => {
+    const raw = campaignsData?.data ?? [];
+    const filtered = raw.filter((c: any) => {
+      const matchQ = c.name.toLowerCase().includes(deferredQuery.toLowerCase());
+      const matchS = statusFilter === 'all' || c.status === statusFilter;
+      return matchQ && matchS;
+    });
+    const sorted = [...filtered];
+    if (sortBy === 'name') sorted.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    if (sortBy === 'ctr') sorted.sort((a: any, b: any) => (analyticsMap[b.id]?.ctr ?? 0) - (analyticsMap[a.id]?.ctr ?? 0));
+    if (sortBy === 'newest') sorted.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return sorted;
+  }, [campaignsData, deferredQuery, statusFilter, sortBy, analyticsMap]);
+
+  const allSelected = rows.length > 0 && rows.every((r: any) => selected.has(r.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(rows.map((r: any) => r.id)));
   };
 
-  const handleToggleStatus = (id: string, currentStatus: string) => {
-    const targetStatus = currentStatus === 'active' ? 'paused' : 'active';
-    const endpointSuffix = targetStatus === 'active' ? 'activate' : 'pause';
-    
-    // Custom post action for activate/pause endpoints
-    updateCampaign({
-      resource: `campaigns/${id}/${endpointSuffix}`,
-      id: '',
-      values: {},
-      successNotification: () => ({
-        message: `Campaign status updated to ${targetStatus}!`,
-        type: 'success',
-      }),
-    }, {
-      onSuccess: () => refetch(),
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
   };
 
+  const handleToggleStatus = (id: string, currentStatus: string) => {
+    updateCampaign(
+      { resource: `campaigns/${id}/${currentStatus === 'active' ? 'pause' : 'activate'}`, id: '', values: {} },
+      { onSuccess: () => refetch() }
+    );
+  };
+
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to soft delete this campaign? All analytics logs will be preserved but the campaign will be permanently archived.')) {
-      deleteCampaign({
-        resource: 'campaigns',
-        id,
-      }, {
-        onSuccess: () => refetch(),
-      });
+    if (confirm('Delete this campaign?')) {
+      deleteCampaign({ resource: 'campaigns', id }, { onSuccess: () => refetch() });
     }
   };
 
+  const handleBulkDelete = () => {
+    if (!confirm(`Delete ${selected.size} campaign(s)?`)) return;
+    selected.forEach((id) => deleteCampaign({ resource: 'campaigns', id }, { onSuccess: () => refetch() }));
+    setSelected(new Set());
+  };
+
   return (
-    <div className="space-y-8">
-      {/* Header section */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1.5">
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">Affiliate Campaigns</h1>
-          <p className="text-slate-400 text-sm">Manage popup creatives, trigger rules, and site delivery weightings.</p>
+    <div style={{ maxWidth: 1200 }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+        marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)',
+      }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, marginBottom: 4, letterSpacing: '-0.01em' }}>Campaigns</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            {rows.length} campaign{rows.length !== 1 ? 's' : ''}
+            {statusFilter !== 'all' ? ` · ${statusFilter}` : ''}
+          </p>
         </div>
-        <button
-          onClick={() => onNavigate('/campaigns/new')}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-sm hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Create Campaign
+        <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Plus size={14} />
+          New Campaign
         </button>
       </div>
 
-      {/* Campaigns Listing Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {campaignsData?.data && campaignsData.data.length > 0 ? (
-          campaignsData.data.map((campaign: any) => {
-            const domain = getSiteDomain(campaign.siteId);
-            const isActive = campaign.status === 'active';
-            
-            const stats = analyticsMap[campaign.id];
-
-            return (
-              <div key={campaign.id} className="glass-card rounded-2xl p-6 flex flex-col justify-between gap-6 relative overflow-hidden">
-                {/* Visual Accent */}
-                <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${
-                  campaign.status === 'active' ? 'from-emerald-500 to-teal-500' : campaign.status === 'paused' ? 'from-amber-500 to-orange-500' : 'from-slate-600 to-slate-700'
-                }`}></div>
-
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div
-                      className="space-y-1 cursor-pointer group"
-                      onClick={() => onNavigate(`/campaigns/detail/${campaign.id}`)}
-                    >
-                      <h4 className="font-bold text-slate-200 leading-snug group-hover:text-indigo-300 transition">{campaign.name}</h4>
-                      <span className="text-xs text-slate-500 font-mono block">{domain}</span>
-                    </div>
-                    <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                      campaign.status === 'active' 
-                        ? 'bg-emerald-500/20 text-emerald-300' 
-                        : campaign.status === 'paused' 
-                        ? 'bg-amber-500/20 text-amber-300' 
-                        : 'bg-slate-800 text-slate-400'
-                    }`}>
-                      {campaign.status}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-xs text-slate-400">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-slate-500" />
-                      <span>Starts: {campaign.startsAt ? new Date(campaign.startsAt).toLocaleDateString() : 'Immediate'}</span>
-                    </div>
-                    {campaign.endsAt && (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-slate-500" />
-                        <span>Ends: {new Date(campaign.endsAt).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Real-time analytics mini-bar */}
-                <div className="grid grid-cols-3 gap-2 bg-slate-950/40 rounded-xl px-3 py-2.5 border border-slate-800/60">
-                  {analyticsLoading ? (
-                    <div className="col-span-3 h-4 bg-slate-800 rounded animate-pulse" />
-                  ) : stats ? (
-                    <>
-                      <div className="text-center">
-                        <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Impr.</div>
-                        <div className="text-sm font-extrabold text-slate-200">{stats.impressions.toLocaleString()}</div>
-                      </div>
-                      <div className="text-center border-x border-slate-800/60">
-                        <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Clicks</div>
-                        <div className="text-sm font-extrabold text-amber-400">{stats.clicks.toLocaleString()}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">CTR</div>
-                        <div className={`text-sm font-extrabold ${stats.ctr > 0.05 ? 'text-emerald-400' : stats.ctr > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                          {(stats.ctr * 100).toFixed(1)}%
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="col-span-3 text-center text-[10px] text-slate-600 font-semibold py-0.5">No events yet</div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-4 border-t border-slate-800/60">
-                  <div className="flex items-center gap-2">
-                    {campaign.status !== 'archived' && (
-                      <button
-                        onClick={() => handleToggleStatus(campaign.id, campaign.status)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${
-                          isActive 
-                            ? 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10' 
-                            : 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
-                        }`}
-                      >
-                        {isActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                        {isActive ? 'Pause' : 'Activate'}
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onNavigate(`/campaigns/detail/${campaign.id}`)}
-                      className="p-2 text-slate-500 hover:text-emerald-400 rounded-lg hover:bg-emerald-500/10 transition cursor-pointer"
-                      title="View Analytics & Telemetry"
-                    >
-                      <Eye className="w-4.5 h-4.5" />
-                    </button>
-                    
-                    <button
-                      onClick={() => onNavigate(`/campaigns/${campaign.id}/design`)}
-                      className="p-2 text-slate-500 hover:text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition cursor-pointer"
-                      title="Edit Design & Triggers"
-                    >
-                      <Sparkles className="w-4.5 h-4.5" />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setRenameCampaign({ id: campaign.id, name: campaign.name });
-                        setIsRenameOpen(true);
-                      }}
-                      className="p-2 text-slate-500 hover:text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition cursor-pointer"
-                      title="Rename Campaign"
-                    >
-                      <Edit className="w-4.5 h-4.5" />
-                    </button>
-                    
-                    <button
-                      onClick={() => handleDelete(campaign.id)}
-                      className="p-2 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition cursor-pointer"
-                      title="Archive Campaign"
-                    >
-                      <Trash2 className="w-4.5 h-4.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="col-span-full glass-card rounded-2xl py-16 flex flex-col items-center justify-center gap-4 text-center">
-            <span className="text-4xl">📣</span>
-            <div className="space-y-1">
-              <h3 className="font-bold text-slate-200">No Campaigns Created</h3>
-              <p className="text-slate-400 text-sm max-w-sm">Launch a new scroll-triggered, affiliate-monetized popup campaign to start tracking conversions.</p>
-            </div>
+      {/* Filter strip */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Status filter */}
+        <div style={{ display: 'flex', border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
+          {(['all', 'active', 'paused', 'draft'] as const).map((s) => (
             <button
-              onClick={() => onNavigate('/campaigns/new')}
-              className="px-4.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow transition cursor-pointer"
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              style={{
+                padding: '5px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                background: statusFilter === s ? 'var(--bg-raised)' : 'transparent',
+                color: statusFilter === s ? 'var(--text-primary)' : 'var(--text-muted)',
+                border: 'none', textTransform: 'capitalize',
+              }}
             >
-              Launch First Campaign
+              {s}
             </button>
-          </div>
-        )}
+          ))}
+        </div>
+
+        {/* Sort */}
+        <select
+          className="input"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as any)}
+          style={{ maxWidth: 140 }}
+        >
+          <option value="newest">Newest first</option>
+          <option value="name">Name A→Z</option>
+          <option value="ctr">Highest CTR</option>
+        </select>
+
+        {/* Search */}
+        <div style={{ position: 'relative', flex: 1, maxWidth: 280 }}>
+          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            className="input"
+            style={{ paddingLeft: 30, width: '100%' }}
+            placeholder="Search campaigns…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
       </div>
 
-      {/* Rename Campaign Modal */}
-      {isRenameOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm z-50 px-4">
-          <div className="glass-card rounded-2xl max-w-md w-full p-6 space-y-6 glow-indigo relative z-10">
-            <div className="space-y-1">
-              <h3 className="font-extrabold text-xl text-slate-100">Rename Campaign</h3>
-              <p className="text-slate-400 text-xs font-semibold leading-relaxed">Change the internal reference name for this creative campaign.</p>
-            </div>
+      {/* Table */}
+      {isLoading ? (
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton" style={{ height: 48, margin: '1px 0', borderRadius: 0 }} />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div style={{
+          background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8,
+          padding: '48px 24px', textAlign: 'center',
+        }}>
+          <Layers size={28} style={{ color: 'var(--text-muted)', display: 'block', margin: '0 auto 12px' }} />
+          <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
+            {campaignsData?.data?.length === 0 ? 'No campaigns yet.' : 'No campaigns match your filters.'}
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            {campaignsData?.data?.length === 0 ? 'Create your first campaign to get started.' : 'Try adjusting your search or filters.'}
+          </p>
+          {campaignsData?.data?.length === 0 ? (
+            <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')}>
+              Create Campaign
+            </button>
+          ) : (
+            <button className="btn btn-secondary" onClick={() => { setQuery(''); setStatusFilter('all'); }}>
+              Clear Filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, overflow: 'hidden' }}>
+          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <th style={{ width: 40, padding: '10px 12px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    style={{ accentColor: 'var(--accent-500)', cursor: 'pointer' }}
+                  />
+                </th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Campaign
+                </th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Site
+                </th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Format
+                </th>
+                <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Impr.
+                </th>
+                <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  CTR
+                </th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Created
+                </th>
+                <th style={{ width: 80, padding: '10px 16px' }} />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c: any) => {
+                const stats = analyticsMap[c.id];
+                const site = siteById[c.siteId];
+                const isChecked = selected.has(c.id);
+                return (
+                  <tr
+                    key={c.id}
+                    style={{
+                      borderBottom: '1px solid var(--border-subtle)',
+                      background: isChecked ? 'rgba(99,102,241,0.04)' : 'transparent',
+                      height: 48,
+                    }}
+                  >
+                    <td style={{ padding: '0 12px', width: 40 }}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleSelect(c.id)}
+                        style={{ accentColor: 'var(--accent-500)', cursor: 'pointer' }}
+                      />
+                    </td>
+                    <td style={{ padding: '0 16px' }}>
+                      <div>
+                        <button
+                          onClick={() => onNavigate(`/campaigns/detail/${c.id}`)}
+                          style={{
+                            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                            fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', display: 'block',
+                          }}
+                        >
+                          {c.name}
+                        </button>
+                        <StatusDot status={c.status ?? 'draft'} />
+                      </div>
+                    </td>
+                    <td style={{ padding: '0 16px', fontSize: 12, color: 'var(--text-muted)' }}>
+                      {site?.domain ?? '—'}
+                    </td>
+                    <td style={{ padding: '0 16px' }}>
+                      <span style={{
+                        fontSize: 11, padding: '2px 7px', borderRadius: 3,
+                        background: 'var(--bg-raised)', color: 'var(--text-muted)',
+                        textTransform: 'capitalize',
+                      }}>
+                        {c.kind?.replace(/_/g, ' ') ?? '—'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {stats?.impressions?.toLocaleString() ?? '—'}
+                    </td>
+                    <td style={{ padding: '0 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: stats?.ctr ? 'var(--accent-300)' : 'var(--text-muted)' }}>
+                      {stats?.ctr != null ? `${(stats.ctr * 100).toFixed(2)}%` : '—'}
+                    </td>
+                    <td style={{ padding: '0 16px', fontSize: 11, color: 'var(--text-muted)' }}>
+                      {c.createdAt ? new Date(c.createdAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    </td>
+                    <td style={{ padding: '0 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => handleToggleStatus(c.id, c.status)}
+                          className="btn btn-icon"
+                          title={c.status === 'active' ? 'Pause' : 'Activate'}
+                        >
+                          {c.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
+                        </button>
+                        <button
+                          onClick={() => onNavigate(`/campaigns/${c.id}/design`)}
+                          className="btn btn-icon"
+                          title="Edit design"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => setOpenMenuId(openMenuId === c.id ? null : c.id)}
+                            className="btn btn-icon"
+                          >
+                            <MoreHorizontal size={13} />
+                          </button>
+                          {openMenuId === c.id && (
+                            <div style={{
+                              position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                              background: 'var(--bg-overlay)', border: '1px solid var(--border-default)',
+                              borderRadius: 6, minWidth: 140, zIndex: 50,
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                            }}>
+                              <button
+                                onClick={() => { onNavigate(`/campaigns/detail/${c.id}`); setOpenMenuId(null); }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
+                              >
+                                View details
+                              </button>
+                              <button
+                                onClick={() => { handleDelete(c.id); setOpenMenuId(null); }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--status-error)', background: 'none', border: 'none', cursor: 'pointer' }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                updateCampaign({
-                  resource: 'campaigns',
-                  id: renameCampaign.id,
-                  values: { name: renameCampaign.name },
-                  successNotification: () => ({
-                    message: 'Campaign renamed successfully!',
-                    type: 'success',
-                  })
-                }, {
-                  onSuccess: () => {
-                    refetch();
-                    setIsRenameOpen(false);
-                  }
-                });
-              }} 
-              className="space-y-4"
-            >
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Campaign Name</label>
-                <input
-                  type="text"
-                  required
-                  value={renameCampaign.name}
-                  onChange={(e) => setRenameCampaign({ ...renameCampaign, name: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 text-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none transition"
-                />
-              </div>
-
-              <div className="flex items-center gap-3 pt-4 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsRenameOpen(false)}
-                  className="px-4.5 py-2.5 rounded-xl border border-slate-800 hover:bg-slate-900 text-slate-300 font-semibold text-sm transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-sm transition shadow-lg cursor-pointer"
-                >
-                  Rename Campaign
-                </button>
-              </div>
-            </form>
-          </div>
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-overlay)', border: '1px solid var(--border-default)',
+          borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 50, minWidth: 320,
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {selected.size} selected
+          </span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => setSelected(new Set())}
+            className="btn btn-ghost btn-sm"
+          >
+            Deselect all
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            className="btn btn-sm"
+            style={{ color: 'var(--status-error)', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)' }}
+          >
+            <Trash2 size={13} />
+            Delete {selected.size}
+          </button>
         </div>
       )}
     </div>

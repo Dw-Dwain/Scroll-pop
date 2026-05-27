@@ -4,8 +4,11 @@ import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk } from '@clerk/cl
 import { Refine } from '@refinedev/core';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
+import { OpsCenter } from './pages/OpsCenter';
 import { Sites } from './pages/Sites';
 import { Campaigns } from './pages/Campaigns';
+import { Journeys } from './pages/Journeys';
+import { Experiments } from './pages/Experiments';
 import { CampaignWizard } from './pages/CampaignWizard';
 import { CampaignDetail } from './pages/CampaignDetail';
 import { CampaignDesign } from './pages/CampaignDesign';
@@ -40,6 +43,7 @@ import { FormsPage } from './pages/FormsPage';
 import { TablesPage } from './pages/TablesPage';
 
 import { createDataProvider } from './providers/dataProvider';
+import { isFeatureEnabled } from './lib/flags';
 import './index.css';
 
 // Clerk Publishable Key mapping
@@ -50,6 +54,9 @@ const IS_DEMO_MODE =
   CLERK_PUBLISHABLE_KEY === 'pk_test_c2F2ZWQtbWFzdG9kb24tMjcuY2xlcmsuYWNjb3VudHMuZGV2JA' ||
   !CLERK_PUBLISHABLE_KEY ||
   ((import.meta as any).env.VITE_DEMO_MODE === 'true');
+const OPS_CENTER_ENABLED = isFeatureEnabled('ff_realtime_ops_dashboard');
+const JOURNEYS_ENABLED = isFeatureEnabled('ff_journeys_ui');
+const EXPERIMENTS_ENABLED = isFeatureEnabled('ff_experiments_v1');
 
 const ClerkAppContent: React.FC = () => {
   const { getToken, signOut } = useAuth();
@@ -87,7 +94,7 @@ const ClerkAppContent: React.FC = () => {
       <SignedIn>
         <Refine
           dataProvider={dataProvider}
-          options={{ syncWithLocation: false, warnWhenUnsavedChanges: false }}
+          options={{ syncWithLocation: true, warnWhenUnsavedChanges: true, disableTelemetry: true }}
         >
           <Layout
             currentPath={currentPath}
@@ -95,7 +102,9 @@ const ClerkAppContent: React.FC = () => {
             onLogout={handleLogout}
             isDemo={false}
           >
-            {currentPath === '/dashboard' || currentPath === '/' ? <Dashboard onNavigate={navigate} /> : null}
+            {currentPath === '/dashboard' || currentPath === '/' ? (OPS_CENTER_ENABLED ? <OpsCenter onNavigate={navigate} /> : <Dashboard onNavigate={navigate} />) : null}
+            {currentPath === '/journeys' && JOURNEYS_ENABLED ? <Journeys onNavigate={navigate} /> : null}
+            {currentPath === '/experiments' && EXPERIMENTS_ENABLED ? <Experiments onNavigate={navigate} /> : null}
             {currentPath === '/sites' ? <Sites onNavigate={navigate} /> : null}
             {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
             {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}
@@ -174,7 +183,7 @@ const DemoAppContent: React.FC = () => {
     return (
       <Refine
         dataProvider={dataProvider}
-        options={{ syncWithLocation: false, warnWhenUnsavedChanges: false }}
+        options={{ syncWithLocation: true, warnWhenUnsavedChanges: true, disableTelemetry: true }}
       >
         <Layout
           currentPath={currentPath}
@@ -182,7 +191,9 @@ const DemoAppContent: React.FC = () => {
           onLogout={handleLogout}
           isDemo={true}
         >
-          {currentPath === '/dashboard' || currentPath === '/' ? <Dashboard onNavigate={navigate} /> : null}
+          {currentPath === '/dashboard' || currentPath === '/' ? (OPS_CENTER_ENABLED ? <OpsCenter onNavigate={navigate} /> : <Dashboard onNavigate={navigate} />) : null}
+          {currentPath === '/journeys' && JOURNEYS_ENABLED ? <Journeys onNavigate={navigate} /> : null}
+          {currentPath === '/experiments' && EXPERIMENTS_ENABLED ? <Experiments onNavigate={navigate} /> : null}
           {currentPath === '/sites' ? <Sites onNavigate={navigate} /> : null}
           {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
           {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}
@@ -256,9 +267,11 @@ const DesktopAppContent: React.FC = () => {
     if (!isAuthenticated) return <SignIn isDemo={true} isDesktop={true} onLogin={handleLogin} />;
 
     return (
-      <Refine dataProvider={dataProvider} options={{ syncWithLocation: false, warnWhenUnsavedChanges: false }}>
+      <Refine dataProvider={dataProvider} options={{ syncWithLocation: false, warnWhenUnsavedChanges: false, disableTelemetry: true }}>
         <Layout currentPath={currentPath} onNavigate={navigate} onLogout={handleLogout} isDemo={true}>
-          {currentPath === '/dashboard' || currentPath === '/' ? <Dashboard onNavigate={navigate} /> : null}
+          {currentPath === '/dashboard' || currentPath === '/' ? (OPS_CENTER_ENABLED ? <OpsCenter onNavigate={navigate} /> : <Dashboard onNavigate={navigate} />) : null}
+          {currentPath === '/journeys' && JOURNEYS_ENABLED ? <Journeys onNavigate={navigate} /> : null}
+          {currentPath === '/experiments' && EXPERIMENTS_ENABLED ? <Experiments onNavigate={navigate} /> : null}
           {currentPath === '/sites' ? <Sites /> : null}
           {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
           {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}

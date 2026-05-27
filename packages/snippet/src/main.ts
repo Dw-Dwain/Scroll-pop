@@ -122,6 +122,15 @@ const EDGE_URL = getEdgeUrl();
 
 function init(publicKey: string): void {
   console.log('[ScrollPop] Bootstrapping snippet with key:', publicKey);
+
+  // Network Preconnect to shave off TLS/DNS time for the config fetch
+  try {
+    const link = document.createElement('link');
+    link.rel = 'preconnect';
+    link.href = EDGE_URL;
+    document.head.appendChild(link);
+  } catch (e) { /* ignore */ }
+
   // Defer until page is interactive — don't block LCP
   const run = () => fetchConfigAndBoot(publicKey);
 

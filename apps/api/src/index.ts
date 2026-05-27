@@ -17,12 +17,16 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { designRoutes } from './routes/designs.js';
 import { triggerRoutes } from './routes/triggers.js';
 import { targetingRoutes } from './routes/targeting.js';
+import { frequencyRoutes } from './routes/frequency.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { billingRoutes } from './routes/billing.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { internalRoutes } from './routes/internal.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
+import { opsRoutes } from './routes/ops.js';
+import { journeyRoutes } from './routes/journeys.js';
+import { experimentRoutes } from './routes/experiments.js';
 
 // Plugins
 import { tenantContextPlugin } from './plugins/tenant-context.js';
@@ -85,7 +89,11 @@ async function bootstrap() {
   await app.register(designRoutes, { prefix: '/api/v1' });
   await app.register(triggerRoutes, { prefix: '/api/v1' });
   await app.register(targetingRoutes, { prefix: '/api/v1' });
+  await app.register(frequencyRoutes, { prefix: '/api/v1' });
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
+  await app.register(opsRoutes, { prefix: '/api/v1' });
+  await app.register(journeyRoutes, { prefix: '/api/v1' });
+  await app.register(experimentRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
   await app.register(tenantRoutes, { prefix: '/api/v1' });
 
@@ -124,8 +132,28 @@ async function bootstrap() {
     '/c/:publicKey',
     async (request, reply) => {
       const { publicKey } = request.params;
+      const cacheKey = `sp_config:${publicKey}`;
 
-      // Look up site by public key
+      // 1. Check Redis Cache
+      if (redis) {
+        try {
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            return reply
+              .type('application/json')
+              .headers({
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+              })
+              .send(cached);
+          }
+        } catch (err) {
+          request.log.error(err, 'Redis cache read error');
+        }
+      }
+
+      // 2. Look up site by public key
       const site = await db.query.sites.findFirst({
         where: and(eq(sites.publicKey, publicKey), isNull(sites.deletedAt)),
       });
@@ -141,7 +169,7 @@ async function bootstrap() {
           .send({ error: 'Site not found' });
       }
 
-      // Get all active campaigns for this site
+      // 3. Get all active campaigns for this site
       const activeCampaigns = await db.query.campaigns.findMany({
         where: and(
           eq(campaigns.siteId, site.id),
@@ -150,25 +178,28 @@ async function bootstrap() {
         ),
       });
 
-      // Fetch configurations matching Cloudflare Worker schema
-      const campaignConfigs = await Promise.all(
-        activeCampaigns.map(async (campaign) => {
-          const [design, campaignTriggers, targeting, freq] = await Promise.all([
-            db.query.designs.findFirst({
-              where: eq(designs.campaignId, campaign.id),
-            }),
-            db.query.triggers.findMany({
-              where: eq(triggers.campaignId, campaign.id),
-            }),
-            db.query.targetingRules.findMany({
-              where: eq(targetingRules.campaignId, campaign.id),
-            }),
-            db.query.frequencyRules.findFirst({
-              where: eq(frequencyRules.campaignId, campaign.id),
-            }),
-          ]);
+      const campaignIds = activeCampaigns.map((c) => c.id);
 
+      let campaignConfigs: any[] = [];
+
+      if (campaignIds.length > 0) {
+        // 4. Fetch all related entities in 4 concurrent queries (eliminating N+1)
+        const { inArray } = await import('drizzle-orm');
+        const [allDesigns, allTriggers, allTargeting, allFreq] = await Promise.all([
+          db.query.designs.findMany({ where: inArray(designs.campaignId, campaignIds) }),
+          db.query.triggers.findMany({ where: inArray(triggers.campaignId, campaignIds) }),
+          db.query.targetingRules.findMany({ where: inArray(targetingRules.campaignId, campaignIds) }),
+          db.query.frequencyRules.findMany({ where: inArray(frequencyRules.campaignId, campaignIds) }),
+        ]);
+
+        // Group by campaignId
+        campaignConfigs = activeCampaigns.map((campaign) => {
+          const design = allDesigns.find((d) => d.campaignId === campaign.id);
           if (!design) return null;
+
+          const campaignTriggers = allTriggers.filter((t) => t.campaignId === campaign.id);
+          const targeting = allTargeting.filter((r) => r.campaignId === campaign.id);
+          const freq = allFreq.find((f) => f.campaignId === campaign.id);
 
           return {
             id: campaign.id,
@@ -187,22 +218,29 @@ async function bootstrap() {
             frequency: { frequency: freq?.frequency ?? 'once_per_session' },
             affiliateSlots: design.affiliateSlots,
           };
-        })
-      );
-
-      const validCampaigns = campaignConfigs.filter(Boolean);
+        }).filter(Boolean);
+      }
 
       const version = crypto
         .createHash('sha256')
-        .update(JSON.stringify(validCampaigns))
+        .update(JSON.stringify(campaignConfigs))
         .digest('hex')
         .slice(0, 8);
 
       const payload = {
         siteId: site.id,
-        campaigns: validCampaigns,
+        campaigns: campaignConfigs,
         version,
       };
+
+      // 5. Save to Redis Cache (60 second TTL)
+      if (redis) {
+        try {
+          await redis.setex(cacheKey, 60, JSON.stringify(payload));
+        } catch (err) {
+          request.log.error(err, 'Redis cache write error');
+        }
+      }
 
       void reply
         .type('application/json')
@@ -220,7 +258,7 @@ async function bootstrap() {
     const payload = request.body;
     if (payload && Array.isArray(payload.events)) {
       for (const rawEvt of payload.events) {
-        const { campaignId, eventType, affiliateSlotId, visitorId, sessionId, device, pageUrl, referrer, ts, country } = rawEvt;
+        const { campaignId, eventType, affiliateSlotId, visitorId, sessionId, device, pageUrl, referrer } = rawEvt;
         if (!campaignId || !eventType) continue;
 
         try {
@@ -240,8 +278,6 @@ async function bootstrap() {
               device: device || null,
               pageUrl: pageUrl || null,
               referrer: referrer || null,
-              ts: ts ? new Date(ts) : new Date(),
-              country: country || null,
             });
           }
         } catch (err) {

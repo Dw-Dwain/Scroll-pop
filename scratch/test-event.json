@@ -1,0 +1,14 @@
+{
+  "events": [
+    {
+      "campaignId": "9bb0b60b-bebf-4c2d-93aa-02b48bb5d70d",
+      "eventType": "impression",
+      "affiliateSlotId": null,
+      "visitorId": "test-vid",
+      "sessionId": "test-sid",
+      "device": "desktop",
+      "pageUrl": "https://shumisphere.com/2026/05/13/pokemon-tcg-lottery-application-guide/",
+      "referrer": ""
+    }
+  ]
+}

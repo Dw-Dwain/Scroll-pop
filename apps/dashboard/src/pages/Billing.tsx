@@ -1,8 +1,5 @@
 import React from 'react';
-import {
-  CreditCard, CheckCircle2, XCircle, TrendingUp, Sparkles, Download,
-  Check, DollarSign, Zap, Crown, Lock, Shield
-} from 'lucide-react';
+import { Check, Crown, CreditCard, Download, X } from 'lucide-react';
 import { usePlan, PLAN_LIMITS, PLAN_PRICES, PLAN_ORDER } from '../hooks/usePlan';
 import type { PlanId } from '../hooks/usePlan';
 
@@ -10,385 +7,239 @@ interface BillingProps {
   onNavigate?: (path: string) => void;
 }
 
-const PLAN_DETAILS: {
-  id: PlanId;
-  name: string;
-  tagline: string;
-  highlight?: boolean;
-}[] = [
+const PLAN_DETAILS: { id: PlanId; name: string; tagline: string; popular?: boolean }[] = [
   { id: 'free',    name: 'Free',    tagline: 'Get started — no card needed' },
   { id: 'starter', name: 'Starter', tagline: 'For solo creators & bloggers' },
-  { id: 'growth',  name: 'Growth',  tagline: 'For growing affiliate sites', highlight: true },
+  { id: 'growth',  name: 'Growth',  tagline: 'For growing affiliate sites', popular: true },
   { id: 'scale',   name: 'Scale',   tagline: 'For high-traffic publishers' },
-  { id: 'agency',  name: 'Agency',  tagline: 'For agencies & white-label resellers' },
+  { id: 'agency',  name: 'Agency',  tagline: 'For agencies & white-label' },
 ];
 
-type FeatureKey = keyof typeof PLAN_LIMITS.free;
-
-const FEATURE_ROWS: { key: FeatureKey; label: string; minPlan: PlanId }[] = [
-  { key: 'noWatermark',       label: 'No ScrollPop branding',       minPlan: 'starter' },
-  { key: 'prioritySupport',   label: 'Priority support',            minPlan: 'starter' },
-  { key: 'geoTargeting',      label: 'Geo & device targeting',      minPlan: 'growth'  },
-  { key: 'abTesting',         label: 'A/B testing',                 minPlan: 'growth'  },
-  { key: 'advancedAnalytics', label: 'Advanced analytics',          minPlan: 'growth'  },
-  { key: 'customWebhooks',    label: 'Custom webhooks & triggers',  minPlan: 'growth'  },
-  { key: 'apiAccess',         label: 'Full REST API access',        minPlan: 'agency'  },
-  { key: 'whiteLabel',        label: 'White-label reseller mode',   minPlan: 'agency'  },
-];
-
-function formatLimit(val: number): string {
+function formatLimit(val: number) {
   if (val === Infinity) return 'Unlimited';
   return val.toLocaleString();
 }
 
 export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
   const { plan: currentPlan, isAdmin, limits } = usePlan();
-
-  const [overview, setOverview] = React.useState<{ views?: number } | null>(null);
-  const [isLicensePurchased, setIsLicensePurchased] = React.useState(false);
-  const [licenseKey, setLicenseKey] = React.useState('');
-  const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
-  const [checkoutPlan, setCheckoutPlan] = React.useState<PlanId | null>(null);
+  const [views, setViews] = React.useState(0);
+  const [confirmPlan, setConfirmPlan] = React.useState<PlanId | null>(null);
 
   React.useEffect(() => {
     const isDesktop = !!(window as any).electronAPI?.isDesktop;
     const apiBase = isDesktop ? `${(window as any).electronAPI?.getLocalApiUrl()}/api/v1` : '/api/v1';
     const token = isDesktop ? localStorage.getItem('desktop_token') : null;
-    fetch(`${apiBase}/analytics/overview`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    fetch(`${apiBase}/analytics/overview`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then((r) => r.ok ? r.json() : null)
-      .then((b) => b && setOverview(b.data))
+      .then((b) => b?.data?.views && setViews(b.data.views))
       .catch(() => {});
-
-    const purchased = localStorage.getItem('_sp_standalone_license') === 'true';
-    const key = localStorage.getItem('_sp_standalone_key') || '';
-    setIsLicensePurchased(purchased);
-    setLicenseKey(key);
   }, []);
 
-  const currentViews = overview?.views ?? 0;
   const viewLimit = isAdmin ? Infinity : limits.maxViews;
-  const usagePct = viewLimit === Infinity ? 0 : Math.min((currentViews / viewLimit) * 100, 100);
-
-  const handleUpgradeClick = (planId: PlanId) => {
-    if (planId === currentPlan) return;
-    setCheckoutPlan(planId);
-    setIsCheckoutOpen(true);
-  };
+  const usagePct  = viewLimit === Infinity ? 0 : Math.min((views / viewLimit) * 100, 100);
+  const campaignCount = 0;
+  const siteCount = 0;
+  const usageColor = usagePct >= 95 ? 'var(--status-error)' : usagePct >= 80 ? 'var(--status-warning)' : 'var(--accent-500)';
 
   const handleConfirmUpgrade = () => {
-    if (!checkoutPlan) return;
-    const settings = JSON.parse(localStorage.getItem('_sp_settings') || '{}');
-    settings.plan = checkoutPlan;
-    localStorage.setItem('_sp_settings', JSON.stringify(settings));
+    if (!confirmPlan) return;
+    const s = JSON.parse(localStorage.getItem('_sp_settings') || '{}');
+    s.plan = confirmPlan;
+    localStorage.setItem('_sp_settings', JSON.stringify(s));
     window.dispatchEvent(new Event('storage'));
-    setIsCheckoutOpen(false);
-    setCheckoutPlan(null);
+    setConfirmPlan(null);
   };
 
-  const handleStandalonePurchase = () => {
-    const key = `SP-STANDALONE-LIC-${Array.from({ length: 16 }, () =>
-      Math.floor(Math.random() * 16).toString(16)).join('').toUpperCase()}`;
-    localStorage.setItem('_sp_standalone_license', 'true');
-    localStorage.setItem('_sp_standalone_key', key);
-    setIsLicensePurchased(true);
-    setLicenseKey(key);
-  };
-
-  const handleDownloadSnippet = async () => {
-    try {
-      const scriptCode = `/** ScrollPop Standalone Offline Bundle (License: ${licenseKey}) */\n(function(){ console.log('[ScrollPop] Offline standalone active.'); })();`;
-      const blob = new Blob([scriptCode], { type: 'application/javascript' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'scrollpop-standalone.js';
-      document.body.appendChild(a); a.click();
-      window.URL.revokeObjectURL(url); document.body.removeChild(a);
-    } catch {
-      alert('Failed to generate download.');
-    }
-  };
+  const planRank = (p: PlanId) => PLAN_ORDER.indexOf(p);
 
   return (
-    <div className="space-y-10 font-sans">
+    <div style={{ maxWidth: 860 }}>
       {/* Header */}
-      <div className="space-y-1.5">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white">Billing & Plans</h1>
-        <p className="text-slate-400 text-sm">Manage your subscription, track usage, and unlock features.</p>
+      <div style={{ marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>Billing</h1>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+          Manage your plan, track usage, and unlock features.
+        </p>
       </div>
 
-      {/* Admin badge */}
       {isAdmin && (
-        <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-          <Crown className="w-5 h-5 text-emerald-400 shrink-0" />
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '12px 16px', marginBottom: 24,
+          background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8,
+        }}>
+          <Crown size={16} style={{ color: 'var(--status-success)', flexShrink: 0 }} />
           <div>
-            <p className="text-emerald-300 font-black text-sm">Master Admin — Unlimited Access</p>
-            <p className="text-slate-500 text-xs">All plan limits are removed. All features are unlocked.</p>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--status-success)' }}>Admin — Unlimited Access</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>All plan limits are removed.</div>
           </div>
         </div>
       )}
 
-      {/* Usage meter */}
-      <div className="glass-card rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-4 flex-1">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-semibold text-slate-400 uppercase tracking-wider text-xs">Monthly Popup Views</span>
-            <span className="font-bold text-slate-300">
-              {currentViews.toLocaleString()} / {viewLimit === Infinity ? '∞' : viewLimit.toLocaleString()}
-            </span>
+      {/* Current plan + usage */}
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+        borderRadius: 8, padding: 20, marginBottom: 24,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>Current Plan</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 500, textTransform: 'capitalize' }}>
+                {currentPlan}
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, color: 'var(--text-muted)' }}>
+                {PLAN_PRICES[currentPlan]}/mo
+              </span>
+            </div>
           </div>
-          <div className="w-full h-3 bg-slate-950 border border-slate-900 rounded-full overflow-hidden p-0.5">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                usagePct > 85 ? 'bg-gradient-to-r from-rose-500 to-orange-500 animate-pulse' :
-                  'bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500'
-              }`}
-              style={{ width: `${viewLimit === Infinity ? 0 : usagePct}%` }}
-            />
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <TrendingUp className="w-4 h-4" />
-            {isAdmin ? 'Unlimited — no cap on your account.' : `${Math.round(usagePct)}% of monthly quota used`}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Next billing date</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>June 1, 2026</div>
           </div>
         </div>
-        <div className="md:border-l md:border-slate-800 md:pl-8 shrink-0 min-w-[160px]">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Current Plan</span>
-          <span className="text-2xl font-black tracking-tight text-indigo-400 capitalize">
-            {isAdmin ? 'Master Admin' : currentPlan}
-          </span>
-          {!isAdmin && (
-            <p className="text-[11px] text-slate-500 mt-1">{PLAN_PRICES[currentPlan]}/mo</p>
-          )}
+
+        {/* Usage bars */}
+        {[
+          { label: 'Monthly views', used: views, max: viewLimit },
+          { label: 'Campaigns',     used: campaignCount, max: limits.maxCampaigns },
+          { label: 'Sites',         used: siteCount,     max: limits.maxSites },
+        ].map(({ label, used, max }) => {
+          const pct = max === Infinity ? 0 : Math.min((used / Math.max(max, 1)) * 100, 100);
+          const color = pct >= 95 ? 'var(--status-error)' : pct >= 80 ? 'var(--status-warning)' : usageColor;
+          return (
+            <div key={label} style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
+                  {max === Infinity ? '∞' : `${used.toLocaleString()} / ${formatLimit(max)}`}
+                </span>
+              </div>
+              <div className="usage-bar-track">
+                <div className="usage-bar-fill" style={{ width: `${pct}%`, background: color }} />
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <CreditCard size={13} style={{ color: 'var(--text-muted)' }} />
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Visa •••• 4242 &nbsp;·&nbsp; Expires 12/27</span>
+          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, marginLeft: 4 }}>Update</button>
         </div>
       </div>
 
-      {/* Plan comparison grid */}
-      <div className="space-y-4">
-        <h3 className="font-bold text-lg text-slate-200">Subscription Plans</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {PLAN_DETAILS.map(({ id, name, tagline, highlight }) => {
-            const isCurrent = !isAdmin && currentPlan === id;
-            const planLimits = PLAN_LIMITS[id];
-            return (
-              <div
-                key={id}
-                className={`glass-card rounded-2xl p-5 flex flex-col gap-5 relative border transition-all ${
-                  isCurrent
-                    ? 'border-indigo-500 shadow-lg shadow-indigo-500/10'
-                    : highlight
-                      ? 'border-violet-500/40 shadow-md shadow-violet-500/5'
-                      : 'border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                {isCurrent && (
-                  <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-bl-xl tracking-wider">
-                    Current
-                  </div>
-                )}
-                {highlight && !isCurrent && (
-                  <div className="absolute top-0 right-0 bg-violet-600 text-white text-[9px] font-black uppercase px-2.5 py-1 rounded-bl-xl tracking-wider">
-                    Popular
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <span className="text-slate-300 font-extrabold text-sm">{name}</span>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-black text-slate-100">{PLAN_PRICES[id]}</span>
-                    {PLAN_PRICES[id] !== '$0' && <span className="text-[10px] text-slate-500 font-semibold">/mo</span>}
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">{tagline}</p>
+      {/* Pricing cards */}
+      <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em' }}>
+        Plans
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 32 }}>
+        {PLAN_DETAILS.map(({ id, name, tagline, popular }) => {
+          const isCurrent = id === currentPlan;
+          const isUpgrade = planRank(id) > planRank(currentPlan);
+          return (
+            <div key={id} style={{
+              background: 'var(--bg-surface)',
+              border: `1px solid ${isCurrent ? 'var(--border-strong)' : popular ? 'var(--accent-500)' : 'var(--border-subtle)'}`,
+              borderRadius: 8,
+              padding: 16,
+              position: 'relative',
+            }}>
+              {popular && !isCurrent && (
+                <div style={{ position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)' }}>
+                  <span className="badge badge-accent" style={{ fontSize: 9 }}>Popular</span>
                 </div>
-
-                <div className="space-y-2 text-[11px] text-slate-400">
-                  <div className="flex justify-between">
-                    <span>Views/mo</span>
-                    <span className="font-bold text-slate-300">{formatLimit(planLimits.maxViews)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Sites</span>
-                    <span className="font-bold text-slate-300">{formatLimit(planLimits.maxSites)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Campaigns</span>
-                    <span className="font-bold text-slate-300">{formatLimit(planLimits.maxCampaigns)}</span>
-                  </div>
+              )}
+              {isCurrent && (
+                <div style={{ position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)' }}>
+                  <span className="badge badge-neutral" style={{ fontSize: 9 }}>Current</span>
                 </div>
-
-                <div className="space-y-1.5 border-t border-slate-800 pt-3">
-                  {FEATURE_ROWS.slice(0, 4).map(({ key, label }) => {
-                    const has = (planLimits as any)[key] as boolean;
-                    return (
-                      <div key={key} className={`flex items-center gap-1.5 text-[10px] ${has ? 'text-slate-300' : 'text-slate-600'}`}>
-                        {has
-                          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          : <XCircle className="w-3.5 h-3.5 text-slate-700 shrink-0" />
-                        }
-                        {label}
-                      </div>
-                    );
-                  })}
-                </div>
-
+              )}
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{name}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 500, marginBottom: 8 }}>
+                {PLAN_PRICES[id]}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>{tagline}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+                {formatLimit(PLAN_LIMITS[id].maxViews)} views/mo
+              </div>
+              {!isCurrent && (
                 <button
-                  onClick={() => handleUpgradeClick(id)}
-                  disabled={isCurrent || isAdmin}
-                  className={`w-full py-2 rounded-xl text-xs font-black transition cursor-pointer ${
-                    isCurrent || isAdmin
-                      ? 'bg-slate-900 border border-slate-800 text-slate-600 cursor-default'
-                      : PLAN_ORDER.indexOf(id) > PLAN_ORDER.indexOf(currentPlan)
-                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-indigo-500/10 hover:shadow-indigo-500/20'
-                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                  }`}
+                  onClick={() => setConfirmPlan(id)}
+                  className={`btn btn-sm ${isUpgrade ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ width: '100%', justifyContent: 'center', fontSize: 11 }}
                 >
-                  {isCurrent ? 'Current Plan' : isAdmin ? 'Admin Access' :
-                    PLAN_ORDER.indexOf(id) > PLAN_ORDER.indexOf(currentPlan) ? 'Upgrade' : 'Downgrade'}
+                  {isUpgrade ? 'Upgrade' : 'Downgrade'}
                 </button>
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Full feature matrix */}
-      <div className="space-y-4">
-        <h3 className="font-bold text-lg text-slate-200">Full Feature Comparison</h3>
-        <div className="glass-card rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="text-left px-5 py-3 text-[11px] font-black text-slate-500 uppercase tracking-wider w-48">Feature</th>
-                  {PLAN_DETAILS.map(({ id, name }) => (
-                    <th key={id} className={`px-4 py-3 text-center text-[11px] font-black uppercase tracking-wider ${
-                      !isAdmin && currentPlan === id ? 'text-indigo-400' : 'text-slate-500'
-                    }`}>
-                      {name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                <tr className="bg-slate-900/30">
-                  <td className="px-5 py-2.5 text-[11px] font-black text-slate-500 uppercase tracking-wider">Views / mo</td>
-                  {PLAN_DETAILS.map(({ id }) => (
-                    <td key={id} className="px-4 py-2.5 text-center text-[11px] font-bold text-slate-300">
-                      {formatLimit(PLAN_LIMITS[id].maxViews)}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className="px-5 py-2.5 text-[11px] font-black text-slate-500 uppercase tracking-wider">Max Sites</td>
-                  {PLAN_DETAILS.map(({ id }) => (
-                    <td key={id} className="px-4 py-2.5 text-center text-[11px] font-bold text-slate-300">
-                      {formatLimit(PLAN_LIMITS[id].maxSites)}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="bg-slate-900/30">
-                  <td className="px-5 py-2.5 text-[11px] font-black text-slate-500 uppercase tracking-wider">Max Campaigns</td>
-                  {PLAN_DETAILS.map(({ id }) => (
-                    <td key={id} className="px-4 py-2.5 text-center text-[11px] font-bold text-slate-300">
-                      {formatLimit(PLAN_LIMITS[id].maxCampaigns)}
-                    </td>
-                  ))}
-                </tr>
-                {FEATURE_ROWS.map(({ key, label }, i) => (
-                  <tr key={key} className={i % 2 === 0 ? '' : 'bg-slate-900/30'}>
-                    <td className="px-5 py-2.5 text-xs text-slate-400">{label}</td>
-                    {PLAN_DETAILS.map(({ id }) => {
-                      const has = (PLAN_LIMITS[id] as any)[key] as boolean;
-                      return (
-                        <td key={id} className="px-4 py-2.5 text-center">
-                          {has
-                            ? <Check className="w-4 h-4 text-emerald-500 mx-auto" />
-                            : <span className="text-slate-700 text-lg leading-none mx-auto block text-center">—</span>
-                          }
-                        </td>
-                      );
-                    })}
-                  </tr>
+      {/* Feature comparison */}
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+        borderRadius: 8, padding: 20,
+      }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em' }}>Feature Comparison</h3>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              {PLAN_DETAILS.map(({ id, name }) => (
+                <th key={id} style={{ textAlign: 'center', color: id === currentPlan ? 'var(--accent-300)' : undefined }}>
+                  {name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { label: 'Max Views/mo', vals: PLAN_DETAILS.map((p) => formatLimit(PLAN_LIMITS[p.id].maxViews)) },
+              { label: 'Max Sites',    vals: PLAN_DETAILS.map((p) => formatLimit(PLAN_LIMITS[p.id].maxSites)) },
+              { label: 'Max Campaigns',vals: PLAN_DETAILS.map((p) => formatLimit(PLAN_LIMITS[p.id].maxCampaigns)) },
+              { label: 'A/B Testing',  vals: PLAN_DETAILS.map((p) => PLAN_LIMITS[p.id].abTesting) },
+              { label: 'Geo Targeting',vals: PLAN_DETAILS.map((p) => PLAN_LIMITS[p.id].geoTargeting) },
+              { label: 'API Access',   vals: PLAN_DETAILS.map((p) => PLAN_LIMITS[p.id].apiAccess) },
+              { label: 'White-label',  vals: PLAN_DETAILS.map((p) => PLAN_LIMITS[p.id].whiteLabel) },
+            ].map(({ label, vals }) => (
+              <tr key={label}>
+                <td style={{ fontSize: 12 }}>{label}</td>
+                {vals.map((val, i) => (
+                  <td key={i} style={{ textAlign: 'center' }}>
+                    {typeof val === 'boolean' ? (
+                      val
+                        ? <Check size={13} style={{ color: 'var(--status-success)', display: 'inline' }} />
+                        : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                    ) : (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{val}</span>
+                    )}
+                  </td>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* Standalone license */}
-      <div className="glass-card rounded-3xl p-8 relative overflow-hidden border-l-4 border-amber-500 space-y-6">
-        <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-amber-500/10 rounded-full blur-[50px] pointer-events-none" />
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-amber-400" />
-              <h3 className="font-extrabold text-xl text-slate-100">Standalone Lifetime License</h3>
-            </div>
-            <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
-              Self-hosted, offline-capable .js bundle with no cloud subscription checks. One-time $100 payment. Includes lifetime updates.
-            </p>
-          </div>
-          <div className="shrink-0 self-start md:self-center">
-            {isLicensePurchased ? (
-              <button
-                onClick={handleDownloadSnippet}
-                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 cursor-pointer transition-all hover:scale-105"
-              >
-                <Download className="w-4 h-4" /> Download scrollpop-standalone.js
-              </button>
-            ) : (
-              <button
-                onClick={handleStandalonePurchase}
-                className="flex items-center gap-1.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 cursor-pointer transition-all hover:scale-105"
-              >
-                <DollarSign className="w-4 h-4" /> Buy Standalone License — $100
-              </button>
-            )}
-          </div>
-        </div>
-        {isLicensePurchased && (
-          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 max-w-md font-mono text-[11px] text-amber-400 space-y-1">
-            <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block">License Key</span>
-            {licenseKey}
-          </div>
-        )}
-      </div>
-
-      {/* Plan upgrade modal */}
-      {isCheckoutOpen && checkoutPlan && (
-        <div className="fixed inset-0 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm z-50 px-4">
-          <div className="glass-card rounded-2xl max-w-sm w-full p-6 space-y-6 relative z-10">
-            <div className="text-center space-y-1.5 pb-4 border-b border-slate-800">
-              <span className="text-4xl block mb-2">⚡</span>
-              <h3 className="font-extrabold text-xl text-slate-100">
-                Upgrade to {checkoutPlan.charAt(0).toUpperCase() + checkoutPlan.slice(1)}
+      {/* Confirm upgrade modal */}
+      {confirmPlan && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: 360 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
+                Switch to {confirmPlan.charAt(0).toUpperCase() + confirmPlan.slice(1)}
               </h3>
-              <p className="text-slate-400 text-xs">Simulated billing — plan will activate immediately.</p>
+              <button className="btn btn-icon" onClick={() => setConfirmPlan(null)}><X size={14} /></button>
             </div>
-            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2 text-sm">
-              <div className="flex justify-between font-semibold">
-                <span className="text-slate-400">ScrollPop {checkoutPlan.charAt(0).toUpperCase() + checkoutPlan.slice(1)}</span>
-                <span className="text-white">{PLAN_PRICES[checkoutPlan]}/mo</span>
-              </div>
-              <div className="flex justify-between text-xs text-slate-500 border-t border-slate-800 pt-2">
-                <span>Views included</span>
-                <span>{formatLimit(PLAN_LIMITS[checkoutPlan].maxViews)} / mo</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 justify-end">
-              <button
-                onClick={() => { setIsCheckoutOpen(false); setCheckoutPlan(null); }}
-                className="px-4 py-2.5 rounded-xl border border-slate-800 hover:bg-slate-900 text-slate-300 font-semibold text-sm transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmUpgrade}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-sm transition shadow-lg cursor-pointer"
-              >
-                Confirm Upgrade
-              </button>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+              You'll be switched to the <strong style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{confirmPlan}</strong> plan
+              at <strong style={{ color: 'var(--text-primary)' }}>{PLAN_PRICES[confirmPlan]}/mo</strong>. Changes take effect immediately.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setConfirmPlan(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleConfirmUpgrade}>Confirm</button>
             </div>
           </div>
         </div>

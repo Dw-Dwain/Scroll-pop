@@ -192,9 +192,8 @@ async function handleIngest(
     colo: cf?.['colo'] ?? null,
   }));
 
-  // Push to Redis stream (Upstash REST API)
-  // The API drains this stream and bulk-inserts to TimescaleDB
-  ctx.waitUntil(pushToRedisStream(env, enrichedEvents));
+  // Forward events to production Fastify backend for real-time DB persistence
+  ctx.waitUntil(forwardEventsToApi(env, enrichedEvents));
 
   return new Response(JSON.stringify({ received: enrichedEvents.length }), {
     status: 200,
@@ -202,23 +201,25 @@ async function handleIngest(
   });
 }
 
-async function pushToRedisStream(env: Env, events: unknown[]): Promise<void> {
-  if (!env.REDIS_URL || !env.REDIS_TOKEN) {
-    console.warn('Redis not configured — events dropped');
+async function forwardEventsToApi(env: Env, events: unknown[]): Promise<void> {
+  if (!env.API_ORIGIN) {
+    console.warn('API_ORIGIN not configured — events cannot be forwarded');
     return;
   }
 
   try {
-    // Use Upstash Redis REST API for edge compat
-    await fetch(`${env.REDIS_URL}/xadd/scrollpop:events/*`, {
+    const url = `${env.API_ORIGIN}/e`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${env.REDIS_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ events: JSON.stringify(events) }),
+      body: JSON.stringify({ events }),
     });
+    if (!response.ok) {
+      console.error('API event forwarding returned non-ok status:', response.status);
+    }
   } catch (err) {
-    console.error('Redis stream write error:', err);
+    console.error('Error forwarding events to API:', err);
   }
 }

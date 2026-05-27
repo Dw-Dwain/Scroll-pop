@@ -214,4 +214,3 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 };
-

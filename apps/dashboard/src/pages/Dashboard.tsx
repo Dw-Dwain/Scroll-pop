@@ -1,19 +1,132 @@
 import React from 'react';
-import { Eye, MousePointerClick, Percent, Megaphone, ArrowUpRight, TrendingUp } from 'lucide-react';
+import { Eye, MousePointerClick, Percent, ArrowUpRight, TrendingUp, TrendingDown, Plus } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
 
 interface DashboardProps {
   onNavigate: (path: string) => void;
 }
 
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  if (!data.length) return null;
+  const h = 36, w = 80;
+  const max = Math.max(...data, 1);
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - (v / max) * h;
+    return `${x},${y}`;
+  }).join(' ');
+  return (
+    <svg width={w} height={h} style={{ overflow: 'visible' }}>
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.7}
+      />
+    </svg>
+  );
+}
+
+function useCountUp(target: number, duration = 600) {
+  const [val, setVal] = React.useState(0);
+  React.useEffect(() => {
+    if (target === 0) { setVal(0); return; }
+    let start = 0;
+    const step = (ts: number) => {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      setVal(Math.floor(progress * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, duration]);
+  return val;
+}
+
+function KpiCard({
+  label,
+  value,
+  delta,
+  suffix = '',
+  color,
+  spark,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  delta: string;
+  suffix?: string;
+  color: string;
+  spark: number[];
+  onClick: () => void;
+}) {
+  const displayed = useCountUp(value);
+  const positive = !delta.startsWith('-') && delta !== '—';
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: 20,
+        cursor: 'pointer',
+        textAlign: 'left',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        transition: 'background 100ms, border-color 100ms',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.background = 'var(--bg-raised)';
+        (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)';
+        (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)';
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: '16px' }}>{label}</span>
+        <Sparkline data={spark} color={color} />
+      </div>
+      <div>
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 28,
+          fontWeight: 500,
+          color: 'var(--text-primary)',
+          lineHeight: '36px',
+          letterSpacing: '-0.02em',
+        }}>
+          {value >= 10000
+            ? (displayed / 1000).toFixed(1) + 'k' + suffix
+            : displayed.toLocaleString() + suffix}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          {delta === '—' ? null : positive
+            ? <TrendingUp size={12} style={{ color: 'var(--status-success)' }} />
+            : <TrendingDown size={12} style={{ color: 'var(--status-error)' }} />}
+          <span style={{ fontSize: 11, color: delta === '—' ? 'var(--text-muted)' : positive ? 'var(--status-success)' : 'var(--status-error)' }}>
+            {delta}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>vs last 30d</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { data: sitesData } = useList({ resource: 'sites' });
   const { data: campaignsData } = useList({ resource: 'campaigns' });
-
-  const activeCampaigns = campaignsData?.data.filter((c: any) => c.status === 'active') || [];
-
   const apiUrl = useApiUrl();
-  const { data: overviewResult, isLoading: isOverviewLoading } = useCustom({
+
+  const { data: overviewResult, isLoading } = useCustom({
     url: `${apiUrl}/analytics/overview`,
     method: 'get',
   });
@@ -25,9 +138,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     url: `${apiUrl}/analytics/recent`,
     method: 'get',
   });
+  const { data: dailyResult } = useCustom({
+    url: `${apiUrl}/analytics/daily`,
+    method: 'get',
+  });
 
   const overview = (overviewResult as any)?.data ?? null;
   const recentEvents = (recentEventsResult as any)?.data ?? [];
+
+  // Per-day data: last 60 days split into current 30 and previous 30
+  const dailyAll: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }> =
+    (dailyResult as any)?.data?.daily ?? [];
+  const prev30 = dailyAll.slice(0, 30);
+  const curr30 = dailyAll.slice(30);
+
+  const sumMetric = (arr: typeof curr30, key: 'impressions' | 'views' | 'clicks') =>
+    arr.reduce((s, d) => s + (d[key] ?? 0), 0);
+
+  const pctDelta = (curr: number, prev: number) => {
+    if (prev === 0) return curr > 0 ? '+100%' : '—';
+    const d = ((curr - prev) / prev) * 100;
+    return (d >= 0 ? '+' : '') + d.toFixed(1) + '%';
+  };
+
+  const spark = (key: 'impressions' | 'views' | 'clicks') =>
+    curr30.slice(-14).map((d) => d[key] ?? 0);
 
   const campaignStats = React.useMemo<Record<string, any>>(() => {
     const map: Record<string, any> = {};
@@ -36,221 +171,404 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     return map;
   }, [statsResult]);
 
+  const topCampaigns = React.useMemo(() => {
+    const list = Array.isArray((statsResult as any)?.data) ? (statsResult as any).data : [];
+    return list
+      .sort((a: any, b: any) => (b.impressions ?? 0) - (a.impressions ?? 0))
+      .slice(0, 5)
+      .map((s: any) => {
+        const c = campaignsData?.data?.find((x: any) => x.id === s.campaignId);
+        return { ...s, name: c?.name ?? `Campaign ${s.campaignId?.slice(0, 8)}`, status: c?.status ?? 'draft' };
+      });
+  }, [statsResult, campaignsData]);
+
   const recentEventsList = React.useMemo(() => {
-    const list = Array.isArray(recentEvents) ? recentEvents : [];
-    if (list.length === 0) {
-      return [{ text: 'No edge events received yet.', time: '—', type: 'sys' }];
-    }
-    
+    const list = Array.isArray(recentEvents) ? recentEvents.slice(0, 10) : [];
     return list.map((evt: any) => {
-      let text = '';
-      let type = 'sys';
-      
-      const campaignName = campaignsData?.data.find((c: any) => c.id === evt.campaignId)?.name ?? 'Campaign';
-      
-      if (evt.eventType === 'impression') {
-        text = `Impression registered for "${campaignName}" from ${evt.country || 'Global'}`;
-        type = 'imp';
-      } else if (evt.eventType === 'click') {
-        text = `CTA clicked on "${campaignName}"`;
-        type = 'clk';
-      } else if (evt.eventType === 'view') {
-        text = `Popup viewed for "${campaignName}"`;
-        type = 'imp';
-      } else if (evt.eventType === 'dismiss') {
-        text = `Popup dismissed for "${campaignName}"`;
-        type = 'sys';
-      } else if (evt.eventType === 'conversion') {
-        text = `Conversion logged for "${campaignName}"`;
-        type = 'clk';
-      } else {
-        text = `Event: ${evt.eventType}`;
-      }
-
-      // Format time
-      let timeStr = '';
+      const campaign = campaignsData?.data?.find((c: any) => c.id === evt.campaignId);
+      const name = campaign?.name ?? evt.campaignId?.slice(0, 12) ?? '—';
+      let ts = '';
       try {
-        const diffMs = Date.now() - new Date(evt.ts).getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        if (diffMins < 1) timeStr = 'Just now';
-        else if (diffMins < 60) timeStr = `${diffMins}m ago`;
-        else {
-          const diffHrs = Math.floor(diffMins / 60);
-          if (diffHrs < 24) timeStr = `${diffHrs}h ago`;
-          else timeStr = new Date(evt.ts).toLocaleDateString();
-        }
-      } catch {
-        timeStr = 'Recent';
-      }
-
-      return { text, time: timeStr, type };
+        const diff = Date.now() - new Date(evt.ts).getTime();
+        const m = Math.floor(diff / 60000);
+        ts = m < 1 ? 'now' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
+      } catch { ts = '—'; }
+      return { type: evt.eventType ?? 'sys', name, ts, domain: evt.domain ?? '' };
     });
   }, [recentEvents, campaignsData]);
 
-  // MVP Telemetry Metrics (Mapped to live postgres data!)
-  const stats = [
-    { 
-      name: 'Total Impressions', 
-      value: overview ? overview.impressions.toLocaleString() : '0', 
-      change: overview && overview.impressions > 0 ? '+12.4%' : '+0%', 
-      icon: Eye, 
-      color: 'text-indigo-400', 
-      bg: 'bg-indigo-500/10' 
+  const currImpr  = sumMetric(curr30, 'impressions');
+  const currViews = sumMetric(curr30, 'views');
+  const currClks  = sumMetric(curr30, 'clicks');
+  const prevImpr  = sumMetric(prev30, 'impressions');
+  const prevViews = sumMetric(prev30, 'views');
+  const prevClks  = sumMetric(prev30, 'clicks');
+  const prevCtr   = prevImpr > 0 ? (prevClks / prevImpr) * 100 : 0;
+  const currCtr   = currImpr > 0 ? (currClks / currImpr) * 100 : 0;
+
+  const kpis = [
+    {
+      label: 'Impressions',
+      value: overview?.impressions ?? currImpr,
+      delta: pctDelta(currImpr, prevImpr),
+      color: 'var(--data-1)',
+      spark: spark('impressions'),
     },
-    { 
-      name: 'Popup Views', 
-      value: overview ? overview.views.toLocaleString() : '0', 
-      change: overview && overview.views > 0 ? '+8.1%' : '+0%', 
-      icon: Megaphone, 
-      color: 'text-emerald-400', 
-      bg: 'bg-emerald-500/10' 
+    {
+      label: 'Views',
+      value: overview?.views ?? currViews,
+      delta: pctDelta(currViews, prevViews),
+      color: 'var(--data-2)',
+      spark: spark('views'),
     },
-    { 
-      name: 'Clicks / CTA Engagements', 
-      value: overview ? overview.clicks.toLocaleString() : '0', 
-      change: overview && overview.clicks > 0 ? '+18.3%' : '+0%', 
-      icon: MousePointerClick, 
-      color: 'text-amber-400', 
-      bg: 'bg-amber-500/10' 
+    {
+      label: 'Clicks',
+      value: overview?.clicks ?? currClks,
+      delta: pctDelta(currClks, prevClks),
+      color: 'var(--data-3)',
+      spark: spark('clicks'),
     },
-    { 
-      name: 'Average CTR', 
-      value: overview ? `${(overview.ctr * 100).toFixed(1)}%` : '0%', 
-      change: overview && overview.ctr > 0 ? '+2.1%' : '+0%', 
-      icon: Percent, 
-      color: 'text-violet-400', 
-      bg: 'bg-violet-500/10' 
+    {
+      label: 'CTR',
+      value: overview ? Math.round((overview.ctr ?? 0) * 1000) / 10 : Math.round(currCtr * 10) / 10,
+      delta: pctDelta(currCtr, prevCtr),
+      suffix: '%',
+      color: 'var(--data-4)',
+      spark: curr30.slice(-14).map((d) => d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0),
     },
   ];
 
+  const activeCampaigns = campaignsData?.data?.filter((c: any) => c.status === 'active') ?? [];
+
   return (
-    <div className="space-y-8 font-sans">
-      {/* Welcome Banner */}
-      <div className="glass-card rounded-3xl p-8 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6 glow-indigo">
-        <div className="absolute -right-16 -top-16 w-48 h-48 bg-indigo-600/20 rounded-full blur-[40px] pointer-events-none"></div>
-        
-        <div className="space-y-2">
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">
-            Welcome Back! 👋
+    <div style={{ maxWidth: 1200 }}>
+      {/* Page header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        marginBottom: 24,
+        paddingBottom: 20,
+        borderBottom: '1px solid var(--border-subtle)',
+      }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
+            Dashboard
           </h1>
-          <p className="text-slate-400 max-w-xl text-sm leading-relaxed font-medium">
-            Your popup campaigns are active and collecting compliant scroll-triggered revenue. Here is your portfolio performance for the last 30 days.
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+            Portfolio performance — last 30 days
           </p>
         </div>
-
-        <div className="flex items-center gap-6 z-10">
-          <button
-            onClick={() => onNavigate('/sites')}
-            className="bg-slate-950/60 border border-white/5 px-5 py-3.5 rounded-2xl text-center hover:border-indigo-500/40 hover:bg-slate-900/60 transition cursor-pointer"
-          >
-            <span className="text-xs text-slate-400 font-semibold block uppercase tracking-wider mb-1">Active Sites</span>
-            <span className="text-xl font-extrabold text-slate-100">{sitesData?.data?.length || 0}</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => onNavigate('/sites')}>
+            {sitesData?.data?.length ?? 0} sites
           </button>
-          <button
-            onClick={() => onNavigate('/campaigns')}
-            className="bg-slate-950/60 border border-white/5 px-5 py-3.5 rounded-2xl text-center hover:border-indigo-500/40 hover:bg-slate-900/60 transition cursor-pointer"
-          >
-            <span className="text-xs text-slate-400 font-semibold block uppercase tracking-wider mb-1">Active Campaigns</span>
-            <span className="text-xl font-extrabold text-slate-100">{activeCampaigns.length}</span>
+          <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')}>
+            <Plus size={14} />
+            New Campaign
           </button>
         </div>
       </div>
 
-      {/* Analytics grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, idx) => {
-          const Icon = stat.icon;
-          return (
-            <button
-              key={idx}
-              onClick={() => onNavigate('/analytics')}
-              className="glass-card glass-card-hover rounded-2xl p-6 flex items-center justify-between text-left cursor-pointer w-full"
-            >
-              <div className="space-y-2.5">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{stat.name}</span>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold text-slate-100">{stat.value}</span>
-                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-0.5">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    {stat.change}
-                  </span>
-                </div>
-              </div>
-              <div className={`p-4 rounded-xl ${stat.bg} ${stat.color}`}>
-                <Icon className="w-6 h-6" />
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {/* KPI strip */}
+      {isLoading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+          {[0,1,2,3].map((i) => (
+            <div key={i} className="skeleton" style={{ height: 120, borderRadius: 8 }} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+          {kpis.map((k) => (
+            <KpiCard key={k.label} {...k} onClick={() => onNavigate('/analytics')} />
+          ))}
+        </div>
+      )}
 
-      {/* Top Campaigns List */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="glass-card rounded-2xl p-6 lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-extrabold text-lg text-slate-200">Active Campaigns</h3>
+      {/* Charts row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, marginBottom: 24 }}>
+        {/* Events over time — area chart placeholder */}
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 8,
+          padding: 20,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Events over time
+            </h3>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {['7d','30d','90d'].map((r) => (
+                <button key={r} className="btn btn-ghost btn-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+          <EventsAreaChart daily={curr30} />
+        </div>
+
+        {/* Top campaigns leaderboard */}
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 8,
+          padding: 20,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Top campaigns
+            </h3>
             <button
               onClick={() => onNavigate('/campaigns')}
-              className="text-xs text-indigo-400 font-bold hover:text-indigo-300 cursor-pointer flex items-center gap-1 transition"
+              className="btn btn-ghost btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-300)', fontSize: 11 }}
             >
-              View All Campaigns <ArrowUpRight className="w-3.5 h-3.5" />
+              View all <ArrowUpRight size={12} />
             </button>
           </div>
 
-          <div className="divide-y divide-white/5">
-            {campaignsData?.data && campaignsData.data.length > 0 ? (
-              campaignsData.data.slice(0, 4).map((campaign: any) => {
-                const s = campaignStats[campaign.id];
-                return (
+          {topCampaigns.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+              No campaign data yet
+            </div>
+          ) : (
+            <div>
+              {topCampaigns.map((c: any, i: number) => (
                 <button
-                  key={campaign.id}
-                  onClick={() => onNavigate(`/campaigns/detail/${campaign.id}`)}
-                  className="flex items-center justify-between py-4 first:pt-0 last:pb-0 w-full text-left hover:bg-slate-900/20 rounded-xl px-2 -mx-2 transition cursor-pointer"
+                  key={c.campaignId}
+                  onClick={() => onNavigate(`/campaigns/detail/${c.campaignId}`)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    padding: '8px 0',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    borderBottom: i < topCampaigns.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                    textAlign: 'left',
+                  }}
                 >
-                  <div className="space-y-1">
-                    <span className="font-bold text-slate-200 block text-sm">{campaign.name}</span>
-                    <span className="text-xs text-slate-400 flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${campaign.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                      {campaign.status.toUpperCase()}
-                    </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', width: 14, textAlign: 'right' }}>
+                    {i + 1}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {(c.impressions ?? 0).toLocaleString()} impr.
+                    </div>
                   </div>
-                  <div className="text-right space-y-1">
-                    <span className={`font-extrabold block text-sm ${s && s.ctr > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
-                      {s ? `${(s.ctr * 100).toFixed(1)}% CTR` : '— CTR'}
-                    </span>
-                    <span className="text-xs text-slate-400">{s ? `${s.impressions.toLocaleString()} impr.` : 'no data'}</span>
-                  </div>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--data-3)' }}>
+                    {((c.ctr ?? 0) * 100).toFixed(1)}%
+                  </span>
                 </button>
-                );
-              })
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-3">
-                <span className="text-3xl">🏜️</span>
-                <p className="text-sm font-medium">No campaigns created yet.</p>
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => onNavigate('/campaigns')}
+            style={{ width: '100%', marginTop: 12, fontSize: 12, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            View all campaigns
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {/* Recent events feed */}
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 8,
+          padding: 20,
+        }}>
+          <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 12px', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Recent events
+          </h3>
+          {recentEventsList.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>No events yet</div>
+          ) : (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+              {recentEventsList.map((evt, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  gap: 8,
+                  padding: '4px 0',
+                  borderBottom: i < recentEventsList.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                  alignItems: 'baseline',
+                }}>
+                  <span style={{
+                    color: evt.type === 'click' ? 'var(--data-2)' :
+                           evt.type === 'conversion' ? 'var(--data-3)' :
+                           evt.type === 'impression' ? 'var(--data-1)' :
+                           'var(--text-muted)',
+                    minWidth: 80,
+                    fontSize: 10,
+                  }}>
+                    {evt.type.toUpperCase()}
+                  </span>
+                  <span style={{ flex: 1, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {evt.name}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{evt.ts}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* System Activity */}
-        <div className="glass-card rounded-2xl p-6 space-y-6">
-          <h3 className="font-extrabold text-lg text-slate-200">Edge Activity Log</h3>
-          
-          <div className="space-y-4">
-            {recentEventsList.map((log, idx) => (
-              <div key={idx} className="flex items-start justify-between gap-4 text-xs font-semibold">
-                <div className="flex gap-3">
-                  <span className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${
-                    log.type === 'imp' ? 'bg-indigo-400' : log.type === 'clk' ? 'bg-amber-400' : 'bg-slate-400'
-                  }`}></span>
-                  <span className="text-slate-300 leading-snug">{log.text}</span>
-                </div>
-                <span className="text-xs text-slate-500 shrink-0 font-medium">{log.time}</span>
-              </div>
-            ))}
+        {/* Active campaigns status */}
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 8,
+          padding: 20,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Active campaigns
+            </h3>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {activeCampaigns.length} running
+            </span>
           </div>
+
+          {campaignsData?.data?.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 12 }}>
+              <Eye size={24} style={{ color: 'var(--text-muted)' }} />
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, textAlign: 'center' }}>
+                No campaigns yet.
+              </p>
+              <button className="btn btn-primary btn-sm" onClick={() => onNavigate('/campaigns/new')}>
+                Create your first campaign
+              </button>
+            </div>
+          ) : (
+            campaignsData?.data?.slice(0, 6).map((c: any) => {
+              const s = campaignStats[c.id];
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => onNavigate(`/campaigns/detail/${c.id}`)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    padding: '8px 0',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: c.status === 'active' ? 'var(--status-success)' :
+                                   c.status === 'paused' ? 'var(--text-muted)' :
+                                   'var(--border-default)',
+                    }}
+                  />
+                  <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.name}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+                    {s ? `${(s.ctr * 100).toFixed(1)}%` : '—'}
+                  </span>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
     </div>
   );
 };
+
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtDay(iso: string) {
+  const d = new Date(iso + 'T00:00:00');
+  return `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}`;
+}
+
+function EventsAreaChart({ daily }: {
+  daily: Array<{ day: string; impressions: number; views: number; clicks: number }>;
+}) {
+  const W = 600, H = 140;
+  const pad = { t: 16, r: 8, b: 20, l: 8 };
+  const w = W - pad.l - pad.r;
+  const h = H - pad.t - pad.b;
+
+  const days = daily.length || 30;
+
+  const impPts  = daily.map((d) => d.impressions);
+  const viewPts = daily.map((d) => d.views);
+  const clkPts  = daily.map((d) => d.clicks);
+
+  const max = Math.max(...impPts, ...viewPts, ...clkPts, 1);
+
+  const toPath = (pts: number[], fill = false): string => {
+    if (!pts.length) return '';
+    const coords = pts.map((v, i) => {
+      const x = pad.l + (i / (pts.length - 1)) * w;
+      const y = pad.t + h - (v / max) * h;
+      return `${x},${y}`;
+    });
+    if (fill) {
+      const last = coords[coords.length - 1]!.split(',');
+      const first = coords[0]!.split(',');
+      return `M ${coords.join(' L ')} L ${last[0]},${pad.t + h} L ${first[0]},${pad.t + h} Z`;
+    }
+    return `M ${coords.join(' L ')}`;
+  };
+
+  // Label every 7th day
+  const xLabels = daily.map((d, i) => (i % 7 === 0 ? fmtDay(d.day) : ''));
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+      <line x1={pad.l} y1={pad.t + h} x2={W - pad.r} y2={pad.t + h} stroke="var(--border-subtle)" strokeWidth={1} />
+
+      {impPts.length > 1 && (
+        <>
+          <path d={toPath(impPts, true)} fill="rgba(99,102,241,0.07)" />
+          <path d={toPath(impPts)} fill="none" stroke="var(--data-1)" strokeWidth={1.5} strokeLinecap="round" />
+        </>
+      )}
+      {viewPts.length > 1 && <path d={toPath(viewPts)} fill="none" stroke="var(--data-2)" strokeWidth={1.5} strokeLinecap="round" />}
+      {clkPts.length > 1  && <path d={toPath(clkPts)}  fill="none" stroke="var(--data-3)" strokeWidth={1.5} strokeLinecap="round" />}
+
+      {daily.length === 0 && (
+        <text x={W / 2} y={H / 2} textAnchor="middle" fontSize={11} fill="var(--text-muted)">No data yet</text>
+      )}
+
+      {xLabels.map((l, i) => l ? (
+        <text key={i}
+          x={pad.l + (i / (days - 1)) * w}
+          y={H - 2}
+          textAnchor="middle"
+          fontSize={9}
+          fill="var(--text-muted)"
+        >{l}</text>
+      ) : null)}
+
+      {[
+        { label: 'Impressions', color: 'var(--data-1)' },
+        { label: 'Views',       color: 'var(--data-2)' },
+        { label: 'Clicks',      color: 'var(--data-3)' },
+      ].map((l, i) => (
+        <g key={l.label} transform={`translate(${pad.l + i * 90}, ${pad.t - 4})`}>
+          <rect x={0} y={-6} width={8} height={2} rx={1} fill={l.color} />
+          <text x={12} y={0} fontSize={9} fill="var(--text-muted)">{l.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}

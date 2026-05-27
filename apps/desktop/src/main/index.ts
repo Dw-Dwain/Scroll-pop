@@ -5,16 +5,18 @@ import { autoUpdater } from 'electron-updater';
 
 let mainWindow: BrowserWindow | null = null;
 
+const DEV_SERVER_URL = process.env['ELECTRON_RENDERER_URL'] || process.env['VITE_DEV_SERVER_URL'];
+
 function getDashboardPath(): string {
-  // Packaged app: dashboard is in extraResources
+  // Packaged app: dashboard in extraResources
   const packedPath = join(process.resourcesPath, 'dashboard', 'index.html');
   if (existsSync(packedPath)) return packedPath;
 
-  // Dev / pre-package: __dirname = apps/desktop/out/main/ → up 3 = apps/ → dashboard/dist
+  // Dev: look for pre-built dashboard dist
   const devPath = join(__dirname, '../../../dashboard/dist/index.html');
   if (existsSync(devPath)) return devPath;
 
-  // Fallback to renderer placeholder (shows "Loading…" if dashboard not built yet)
+  // Fallback renderer placeholder
   return join(__dirname, '../renderer/index.html');
 }
 
@@ -24,13 +26,18 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#020308',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    backgroundColor: '#09090b',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#09090b',
+      symbolColor: '#a1a1aa',
+    },
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false, // needed to load file:// assets from extraResources
+      webSecurity: false,
     },
     show: false,
   });
@@ -42,7 +49,13 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  mainWindow.loadFile(getDashboardPath());
+  // In dev: load the Vite dev server. In prod: load the built file.
+  if (DEV_SERVER_URL) {
+    mainWindow.loadURL(DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    mainWindow.loadFile(getDashboardPath());
+  }
 }
 
 async function bootstrap() {

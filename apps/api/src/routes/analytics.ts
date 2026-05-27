@@ -130,6 +130,46 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // GET /api/v1/analytics/daily — per-day breakdown for last 60d (current + previous 30d windows)
+  fastify.get('/analytics/daily', async (request, reply) => {
+    const now = new Date();
+    const since60 = new Date(now);
+    since60.setDate(now.getDate() - 60);
+
+    const rows = await db
+      .select({
+        day: sql<string>`date_trunc('day', ${events.ts})::date::text`,
+        eventType: events.eventType,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(events)
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since60)))
+      .groupBy(sql`date_trunc('day', ${events.ts})`, events.eventType)
+      .orderBy(sql`date_trunc('day', ${events.ts})`);
+
+    const byDay: Record<string, Record<string, number>> = {};
+    for (const r of rows) {
+      if (!byDay[r.day]) byDay[r.day] = {};
+      byDay[r.day]![r.eventType] = r.count;
+    }
+
+    const daily = Array.from({ length: 60 }, (_, i) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - 59 + i);
+      const key = d.toISOString().split('T')[0]!;
+      const data = byDay[key] ?? {};
+      return {
+        day: key,
+        impressions: data['impression'] ?? 0,
+        views:       data['view']        ?? 0,
+        clicks:      data['click']       ?? 0,
+        conversions: data['conversion']  ?? 0,
+      };
+    });
+
+    return reply.send({ data: { daily } });
+  });
+
   // GET /api/v1/analytics/recent — tenant-level recent events log
   fastify.get('/analytics/recent', async (request, reply) => {
     const recentEvents = await db

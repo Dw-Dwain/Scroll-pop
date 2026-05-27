@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Mail, Shield, Sparkles, Key, Check, Sliders, Settings } from 'lucide-react';
+import { User, Mail, Shield, Key, Check, Sliders } from 'lucide-react';
 
 interface ProfileProps {
   isDemo: boolean;
@@ -15,12 +15,11 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
     avatar: '',
     developerMode: true,
     defaultTrigger: 'scroll_pct',
-    apiKey: 'sp_pk_live_a3e8630f904adceddc1d0553d7bcda0c'
+    apiKey: 'sp_pk_live_a3e8630f904adceddc1d0553d7bcda0c',
   });
-
   const [isSaved, setIsSaved] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
 
-  // Load from localStorage on mount (desktop_user takes priority)
   React.useEffect(() => {
     const desktopUser = localStorage.getItem('desktop_user');
     if (desktopUser) {
@@ -32,16 +31,13 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
     }
     const stored = localStorage.getItem('_sp_profile');
     if (stored) {
-      try {
-        setProfile(JSON.parse(stored));
-      } catch {}
+      try { setProfile(JSON.parse(stored)); } catch {}
     }
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('_sp_profile', JSON.stringify(profile));
-
     if (isDesktop) {
       const token = localStorage.getItem('desktop_token');
       const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? 'http://127.0.0.1:3010';
@@ -51,14 +47,9 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ name: profile.name, avatarUrl: profile.avatar }),
         });
-        if (res.ok) {
-          const resJson = await res.json();
-          const dbUser = resJson.data || resJson;
-          localStorage.setItem('desktop_user', JSON.stringify(dbUser));
-        }
+        if (res.ok) localStorage.setItem('desktop_user', JSON.stringify((await res.json()).data ?? {}));
       } catch {}
     }
-
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
     window.dispatchEvent(new Event('storage'));
@@ -69,205 +60,175 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
     setProfile({ ...profile, apiKey: newKey });
   };
 
-  const avatarsPreset = [
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80',
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80'
-  ];
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(profile.apiKey).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const initials = profile.name.slice(0, 2).toUpperCase();
 
   return (
-    <div className="space-y-8 font-sans">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Account Profile</h1>
-        <p className="text-slate-400 text-sm">Configure your personal information, developer tokens, and platform preferences.</p>
+    <div style={{ maxWidth: 720 }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, marginBottom: 4, letterSpacing: '-0.01em' }}>Profile</h1>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+          Manage your account details and developer credentials.
+        </p>
       </div>
 
-      <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        
-        {/* Left Side: Avatar selector card */}
-        <div className="glass-card rounded-3xl p-6 flex flex-col items-center text-center space-y-6">
-          <div className="space-y-4">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Profile Picture</span>
-            <div className="relative group">
-              <div className="absolute -inset-1.5 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-teal-400 opacity-75 blur-[4px]"></div>
-              <img
-                src={profile.avatar}
-                alt="Profile Avatar"
-                className="relative w-24 h-24 rounded-full object-cover border-4 border-slate-950 shadow-2xl"
-              />
+      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Avatar + identity */}
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 16 }}>Identity</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+              background: profile.avatar ? 'transparent' : 'var(--accent-500)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18, fontWeight: 600, color: '#fff',
+              border: '1px solid var(--border-subtle)', overflow: 'hidden',
+            }}>
+              {profile.avatar ? (
+                <img src={profile.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : initials}
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{profile.name || 'No name'}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{profile.email}</div>
             </div>
           </div>
 
-          {/* Quick presets */}
-          <div className="space-y-2.5 w-full">
-            <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block">Choose Avatar Preset</span>
-            <div className="flex justify-center gap-3">
-              {avatarsPreset.map((avUrl, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setProfile({ ...profile, avatar: avUrl })}
-                  className={`w-9 h-9 rounded-full overflow-hidden border-2 cursor-pointer transition ${
-                    profile.avatar === avUrl ? 'border-indigo-400 scale-105 shadow' : 'border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <img src={avUrl} className="w-full h-full object-cover" alt={`preset-${idx}`} />
-                </button>
-              ))}
-            </div>
-            <div className="pt-2">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Full Name
+              </label>
               <input
+                className="input"
                 type="text"
-                placeholder="Or paste custom image URL..."
-                value={profile.avatar}
-                onChange={(e) => setProfile({ ...profile, avatar: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-850 focus:border-indigo-500 text-slate-300 rounded-xl px-3 py-2 text-[10px] focus:outline-none transition font-mono"
+                required
+                value={profile.name}
+                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                style={{ width: '100%' }}
               />
             </div>
-          </div>
-
-          <div className="border-t border-slate-800/80 w-full pt-4 text-center">
-            <span className="text-xs text-indigo-400 font-extrabold capitalize">{profile.role}</span>
-            <p className="text-[10px] text-slate-500 mt-1 font-medium">{profile.email}</p>
-          </div>
-        </div>
-
-        {/* Center / Right: Profile credentials */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="glass-card rounded-3xl p-6 space-y-6">
-            <h3 className="font-extrabold text-lg text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
-              <User className="w-5 h-5 text-indigo-400" /> Account Information
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Full Name</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={profile.name}
-                    onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-850 focus:border-indigo-500 text-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition"
-                  />
-                  <User className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Email Address</label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    value={profile.email}
-                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-850 focus:border-indigo-500 text-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition"
-                  />
-                  <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Access Role</label>
-                <div className="relative">
-                  <select
-                    value={profile.role}
-                    onChange={(e) => setProfile({ ...profile, role: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-850 focus:border-indigo-500 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition"
-                  >
-                    <option value="Admin Manager">Admin Manager</option>
-                    <option value="Lead Developer">Lead Developer</option>
-                    <option value="Editor Creative">Editor Creative</option>
-                    <option value="Marketing Owner">Marketing Owner</option>
-                  </select>
-                  <Shield className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Default Trigger Type</label>
-                <div className="relative">
-                  <select
-                    value={profile.defaultTrigger}
-                    onChange={(e) => setProfile({ ...profile, defaultTrigger: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-850 focus:border-indigo-500 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition"
-                  >
-                    <option value="scroll_pct">Scroll Percentage</option>
-                    <option value="dwell_time">Dwell Time (Seconds)</option>
-                    <option value="inactivity">Inactivity Trigger</option>
-                  </select>
-                  <Sliders className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
-                </div>
-              </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Email Address
+              </label>
+              <input
+                className="input"
+                type="email"
+                required
+                value={profile.email}
+                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Role
+              </label>
+              <select
+                className="input"
+                value={profile.role}
+                onChange={(e) => setProfile({ ...profile, role: e.target.value })}
+                style={{ width: '100%' }}
+              >
+                <option value="Admin Manager">Admin Manager</option>
+                <option value="Lead Developer">Lead Developer</option>
+                <option value="Editor Creative">Editor Creative</option>
+                <option value="Marketing Owner">Marketing Owner</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Default Trigger
+              </label>
+              <select
+                className="input"
+                value={profile.defaultTrigger}
+                onChange={(e) => setProfile({ ...profile, defaultTrigger: e.target.value })}
+                style={{ width: '100%' }}
+              >
+                <option value="scroll_pct">Scroll Percentage</option>
+                <option value="dwell_time">Dwell Time</option>
+                <option value="inactivity">Inactivity</option>
+              </select>
             </div>
           </div>
 
-          {/* Developer center API access */}
-          <div className="glass-card rounded-3xl p-6 space-y-6">
-            <h3 className="font-extrabold text-lg text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
-              <Key className="w-5 h-5 text-indigo-400" /> Developer Credentials
-            </h3>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-400 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={profile.developerMode}
-                    onChange={(e) => setProfile({ ...profile, developerMode: e.target.checked })}
-                    className="rounded text-indigo-600 bg-slate-950 border-slate-850"
-                  />
-                  Enable Developer API Access Dashboard Widgets
-                </label>
-              </div>
-
-              {profile.developerMode && (
-                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-850">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Edge Public Key</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={profile.apiKey}
-                      className="flex-1 bg-slate-950 border border-slate-850 text-slate-300 rounded-xl px-4 py-2 text-xs font-mono select-all focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleGenerateKey}
-                      className="px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 font-bold text-xs cursor-pointer transition shrink-0"
-                    >
-                      Roll Key
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    This key identifies your sites programmatically when requesting stand-alone affiliate popup schedules from Edge DNS layers.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => onNavigate('/dashboard')}
-              className="px-5 py-2.5 rounded-xl border border-slate-800 hover:bg-slate-900 text-slate-300 font-semibold text-sm transition cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-sm transition shadow-lg shadow-indigo-500/20 cursor-pointer"
-            >
-              {isSaved ? <Check className="w-4 h-4 text-emerald-300" /> : <Settings className="w-4 h-4" />}
-              {isSaved ? 'Changes Saved!' : 'Save Account Settings'}
-            </button>
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Avatar URL
+            </label>
+            <input
+              className="input"
+              type="text"
+              placeholder="https://example.com/avatar.jpg"
+              value={profile.avatar}
+              onChange={(e) => setProfile({ ...profile, avatar: e.target.value })}
+              style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 12 }}
+            />
           </div>
         </div>
 
+        {/* Developer Credentials */}
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 16 }}>
+            Developer Credentials
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: profile.developerMode ? 16 : 0 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={profile.developerMode}
+                onChange={(e) => setProfile({ ...profile, developerMode: e.target.checked })}
+                style={{ accentColor: 'var(--accent-500)', cursor: 'pointer' }}
+              />
+              Enable Developer API Access
+            </label>
+          </div>
+
+          {profile.developerMode && (
+            <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Edge Public Key</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <code style={{
+                  flex: 1, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 4,
+                  padding: '6px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  display: 'block',
+                }}>
+                  {profile.apiKey}
+                </code>
+                <button type="button" onClick={handleCopyKey} className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }}>
+                  {copied ? <><Check size={12} /> Copied</> : 'Copy'}
+                </button>
+                <button type="button" onClick={handleGenerateKey} className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }}>
+                  Roll Key
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                Identifies your sites when requesting affiliate popup schedules from the edge layer.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button type="button" onClick={() => onNavigate('/dashboard')} className="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 120 }}>
+            {isSaved ? <><Check size={14} /> Saved</> : 'Save Changes'}
+          </button>
+        </div>
       </form>
     </div>
   );

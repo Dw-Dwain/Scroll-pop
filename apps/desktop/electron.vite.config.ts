@@ -10,14 +10,18 @@ export default defineConfig({
         '@server': resolve('src/server'),
       },
     },
+    define: {
+      // In dev mode, pass the dashboard dev server URL to the main process
+      // so it can load from localhost instead of a missing dist file.
+      'process.env.ELECTRON_RENDERER_URL': JSON.stringify(
+        process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : ''
+      ),
+    },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
-    // This placeholder satisfies electron-vite's requirement.
-    // The main process always loads the dashboard (from extraResources in prod,
-    // or from the pre-built dashboard/dist in dev via file:// path).
     build: {
       rollupOptions: {
         input: resolve('src/renderer/index.html'),

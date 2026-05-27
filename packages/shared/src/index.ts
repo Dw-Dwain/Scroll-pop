@@ -6,7 +6,7 @@ export const Plan = z.enum(['free', 'starter', 'growth', 'scale', 'agency']);
 export const MemberRole = z.enum(['owner', 'admin', 'editor', 'viewer']);
 export const Platform = z.enum(['wordpress', 'shopify', 'html', 'donorbox', 'gofundme', 'other']);
 export const CampaignStatus = z.enum(['draft', 'active', 'paused', 'archived']);
-export const DesignKind = z.enum(['modal', 'slide_in', 'banner', 'bar', 'fullscreen']);
+export const DesignKind = z.enum(['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'floating_bubble', 'notification_toast', 'corner_popup', 'gamified_overlay', 'inline_form']);
 export const EventType = z.enum(['impression', 'view', 'click', 'dismiss', 'conversion']);
 export const FrequencyType = z.enum(['once_per_session', 'once_per_day', 'once_per_visitor', 'always']);
 
@@ -19,6 +19,22 @@ export const TriggerType = z.enum([
 export const TargetingKind = z.enum([
   'url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor',
 ]);
+
+// ─── Builder Blocks ─────────────────────────────────────────────────────────────
+
+export const BuilderElementSchema = z.object({
+  id: z.string(),
+  type: z.enum(['text', 'image', 'button', 'timer', 'coupon', 'form', 'spacer', 'wheel', 'video', 'scratch_card', 'progress_bar']),
+  content: z.string().optional(),
+  styles: z.record(z.string()).optional(),
+  responsiveStyles: z.object({
+    mobile: z.record(z.string()).optional(),
+    desktop: z.record(z.string()).optional(),
+  }).optional(),
+  props: z.record(z.any()).optional(),
+});
+
+export type BuilderElement = z.infer<typeof BuilderElementSchema>;
 
 // ─── Design Config ────────────────────────────────────────────────────────────
 
@@ -54,6 +70,8 @@ export const DesignConfigSchema = z.object({
   dismissText: z.string().max(100).optional(),
   animation: z.enum(['fade', 'slide_up', 'slide_down', 'zoom', 'none']).default('slide_up'),
   showPoweredBy: z.boolean().default(true),
+  elements: z.array(BuilderElementSchema).optional(),
+  layoutMode: z.enum(['legacy', 'blocks']).default('legacy'),
 });
 
 // ─── Trigger Params ───────────────────────────────────────────────────────────

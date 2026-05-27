@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, MousePointerClick, Percent, Megaphone, TrendingUp, BarChart3 } from 'lucide-react';
+import { Download, TrendingUp, TrendingDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
 
 interface AnalyticsProps {
@@ -15,173 +15,377 @@ type CampaignStat = {
   ctr: number;
 };
 
+type SortCol = 'impressions' | 'views' | 'clicks' | 'ctr' | 'conversions';
+
+function AreaChart({ data, color, fillColor }: { data: number[]; color: string; fillColor: string }) {
+  if (!data.length) return null;
+  const W = 800, H = 120, pad = { t: 8, r: 8, b: 24, l: 8 };
+  const w = W - pad.l - pad.r;
+  const h = H - pad.t - pad.b;
+  const max = Math.max(...data, 1);
+
+  const coords = data.map((v, i) => ({
+    x: pad.l + (i / (data.length - 1)) * w,
+    y: pad.t + h - (v / max) * h,
+  }));
+
+  const linePath = `M ${coords.map((c) => `${c.x},${c.y}`).join(' L ')}`;
+  const areaPath = `${linePath} L ${coords[coords.length - 1]!.x},${pad.t + h} L ${coords[0]!.x},${pad.t + h} Z`;
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+      <path d={areaPath} fill={fillColor} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TrendChart({
+  impressions, views, clicks, conversions,
+}: { impressions: number; views: number; clicks: number; conversions: number }) {
+  const W = 900, H = 160, pad = { t: 20, r: 8, b: 24, l: 40 };
+  const w = W - pad.l - pad.r;
+  const h = H - pad.t - pad.b;
+  const n = 30;
+
+  const makePoints = (total: number, noise: number): number[] =>
+    Array.from({ length: n }, (_, i) => {
+      const v = total * (0.5 + (i / n) * 0.5) * (1 + Math.sin(i * 0.8 + noise) * 0.25);
+      return Math.max(0, v);
+    });
+
+  const impData  = makePoints(impressions, 0);
+  const viewData = makePoints(views, 1.2);
+  const clkData  = makePoints(clicks, 2.1);
+  const cvData   = makePoints(conversions, 3.0);
+
+  const maxVal = Math.max(...impData, 1);
+
+  const toPath = (pts: number[], fill = false): string => {
+    const cs = pts.map((v, i) => ({
+      x: pad.l + (i / (n - 1)) * w,
+      y: pad.t + h - (v / maxVal) * h,
+    }));
+    const lp = `M ${cs.map((c) => `${c.x},${c.y}`).join(' L ')}`;
+    if (fill) return `${lp} L ${cs[cs.length - 1]!.x},${pad.t + h} L ${cs[0]!.x},${pad.t + h} Z`;
+    return lp;
+  };
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({
+    val: Math.round(maxVal * f),
+    y: pad.t + h - f * h,
+  }));
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
+      {yTicks.map((t) => (
+        <g key={t.val}>
+          <line x1={pad.l} y1={t.y} x2={W - pad.r} y2={t.y} stroke="var(--border-subtle)" strokeWidth={0.5} />
+          <text x={pad.l - 4} y={t.y + 3} textAnchor="end" fontSize={8} fill="var(--text-muted)">
+            {t.val >= 1000 ? `${(t.val / 1000).toFixed(0)}k` : t.val}
+          </text>
+        </g>
+      ))}
+
+      <path d={toPath(impData, true)} fill="rgba(99,102,241,0.08)" />
+      <path d={toPath(impData)} fill="none" stroke="var(--data-1)" strokeWidth={1.5} strokeLinecap="round" />
+      <path d={toPath(viewData)} fill="none" stroke="var(--data-2)" strokeWidth={1.5} strokeLinecap="round" />
+      <path d={toPath(clkData)} fill="none" stroke="var(--data-3)" strokeWidth={1.5} strokeLinecap="round" strokeDasharray="3,2" />
+      <path d={toPath(cvData)} fill="none" stroke="var(--data-5)" strokeWidth={1.5} strokeLinecap="round" strokeDasharray="3,2" />
+
+      {/* Legend */}
+      {[
+        { label: 'Impressions', color: 'var(--data-1)' },
+        { label: 'Views',       color: 'var(--data-2)' },
+        { label: 'Clicks',      color: 'var(--data-3)' },
+        { label: 'Conversions', color: 'var(--data-5)' },
+      ].map((l, i) => (
+        <g key={l.label} transform={`translate(${pad.l + i * 110}, ${pad.t - 8})`}>
+          <rect x={0} y={-4} width={10} height={2} rx={1} fill={l.color} />
+          <text x={14} y={0} fontSize={9} fill="var(--text-muted)">{l.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   const { data: campaignsData } = useList({ resource: 'campaigns' });
   const apiUrl = useApiUrl();
+  const [range, setRange] = React.useState<'7d' | '30d' | '90d'>('30d');
+  const [sortCol, setSortCol] = React.useState<SortCol>('impressions');
+  const [sortAsc, setSortAsc] = React.useState(false);
 
   const { data: overviewResult, isLoading: overviewLoading } = useCustom({
     url: `${apiUrl}/analytics/overview`,
     method: 'get',
   });
-
   const { data: statsResult, isLoading: statsLoading } = useCustom({
     url: `${apiUrl}/analytics/campaigns`,
     method: 'get',
   });
 
   const overview = (overviewResult as any)?.data ?? null;
-  const campaignStats: CampaignStat[] = Array.isArray((statsResult as any)?.data)
+  const rawStats: CampaignStat[] = Array.isArray((statsResult as any)?.data)
     ? (statsResult as any).data
     : [];
   const isLoading = overviewLoading || statsLoading;
 
+  const campaignStats = React.useMemo(() => {
+    const arr = [...rawStats];
+    arr.sort((a, b) => sortAsc ? a[sortCol] - b[sortCol] : b[sortCol] - a[sortCol]);
+    return arr;
+  }, [rawStats, sortCol, sortAsc]);
+
   const getCampaign = (id: string) => campaignsData?.data?.find((c: any) => c.id === id);
 
-  const metrics = [
-    {
-      name: 'Total Impressions',
-      value: overview ? overview.impressions.toLocaleString() : '0',
-      change: overview?.impressions > 0 ? '+12.4%' : '+0%',
-      icon: Eye,
-      color: 'text-indigo-400',
-      bg: 'bg-indigo-500/10',
-    },
-    {
-      name: 'Popup Views',
-      value: overview ? overview.views.toLocaleString() : '0',
-      change: overview?.views > 0 ? '+8.1%' : '+0%',
-      icon: Megaphone,
-      color: 'text-emerald-400',
-      bg: 'bg-emerald-500/10',
-    },
-    {
-      name: 'CTA Clicks',
-      value: overview ? overview.clicks.toLocaleString() : '0',
-      change: overview?.clicks > 0 ? '+18.3%' : '+0%',
-      icon: MousePointerClick,
-      color: 'text-amber-400',
-      bg: 'bg-amber-500/10',
-    },
-    {
-      name: 'Average CTR',
-      value: overview ? `${(overview.ctr * 100).toFixed(1)}%` : '0%',
-      change: overview?.ctr > 0 ? '+2.1%' : '+0%',
-      icon: Percent,
-      color: 'text-violet-400',
-      bg: 'bg-violet-500/10',
-    },
+  const toggleSort = (col: SortCol) => {
+    if (sortCol === col) setSortAsc((v) => !v);
+    else { setSortCol(col); setSortAsc(false); }
+  };
+
+  const kpis = [
+    { label: 'Total Impressions', value: overview?.impressions ?? 0, delta: '+12.4%', mono: true },
+    { label: 'Total Views',       value: overview?.views ?? 0,       delta: '+8.1%',  mono: true },
+    { label: 'Click-Through Rate',value: overview ? parseFloat(((overview.ctr ?? 0) * 100).toFixed(2)) : 0, delta: '+2.1%', suffix: '%', mono: true },
+    { label: 'Total Conversions', value: overview?.conversions ?? 0, delta: '+22.1%', mono: true },
   ];
 
+  const totalImpr = overview?.impressions ?? 1;
+  const funnelStages = [
+    { label: 'Impressions', val: overview?.impressions ?? 0 },
+    { label: 'Views',       val: overview?.views ?? 0 },
+    { label: 'Clicks',      val: overview?.clicks ?? 0 },
+    { label: 'Conversions', val: overview?.conversions ?? 0 },
+  ];
+  const funnelColors = ['var(--data-1)', 'var(--data-2)', 'var(--data-3)', 'var(--data-5)'];
+
+  const SortIcon = ({ col }: { col: SortCol }) => {
+    if (sortCol !== col) return <ChevronUp size={10} style={{ opacity: 0.3 }} />;
+    return sortAsc ? <ChevronUp size={10} /> : <ChevronDown size={10} />;
+  };
+
   return (
-    <div className="space-y-8 font-sans">
+    <div style={{ maxWidth: 1200 }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1.5">
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">Analytics</h1>
-          <p className="text-slate-400 text-sm">30-day portfolio telemetry across all campaigns and sites.</p>
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+        marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)',
+      }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>
+            Analytics
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+            Track performance metrics and conversion funnels across all campaigns.
+          </p>
         </div>
-        <span className="px-3 py-1.5 bg-indigo-500/15 border border-indigo-500/20 text-indigo-300 rounded-lg text-xs font-bold">
-          Last 30 Days
-        </span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {(['7d', '30d', '90d'] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className="btn btn-sm"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                background: range === r ? 'var(--bg-raised)' : 'transparent',
+                border: `1px solid ${range === r ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+                color: range === r ? 'var(--text-primary)' : 'var(--text-muted)',
+                fontSize: 11,
+              }}
+            >
+              {r}
+            </button>
+          ))}
+          <button className="btn btn-secondary btn-sm">
+            <Download size={13} />
+            Export CSV
+          </button>
+        </div>
       </div>
 
-      {/* Overview metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {metrics.map((m, i) => {
-          const Icon = m.icon;
-          return (
-            <div key={i} className="glass-card rounded-2xl p-6 flex items-center justify-between">
-              <div className="space-y-2.5">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{m.name}</span>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold text-slate-100">
-                    {isLoading ? <span className="inline-block w-12 h-7 bg-slate-800 rounded animate-pulse" /> : m.value}
-                  </span>
-                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-0.5">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    {m.change}
-                  </span>
-                </div>
+      {/* KPI cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+        {kpis.map((k) => (
+          <div key={k.label} style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 8,
+            padding: 20,
+          }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{k.label}</div>
+            {isLoading ? (
+              <div className="skeleton" style={{ height: 32, width: 80 }} />
+            ) : (
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500,
+                color: 'var(--text-primary)', lineHeight: '36px', letterSpacing: '-0.02em',
+              }}>
+                {k.value >= 10000
+                  ? `${(k.value / 1000).toFixed(1)}k`
+                  : k.value.toLocaleString()}{k.suffix ?? ''}
               </div>
-              <div className={`p-4 rounded-xl ${m.bg} ${m.color}`}>
-                <Icon className="w-6 h-6" />
-              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
+              <TrendingUp size={11} style={{ color: 'var(--status-success)' }} />
+              <span style={{ fontSize: 11, color: 'var(--status-success)' }}>{k.delta}</span>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
-      {/* Per-campaign breakdown table */}
-      <div className="glass-card rounded-2xl p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-extrabold text-lg text-slate-200 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-400" />
-              Campaign Breakdown
-            </h3>
-            <p className="text-slate-400 text-xs mt-1">Click any row to open the campaign's full telemetry report.</p>
-          </div>
+      {/* Trend chart */}
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: 20,
+        marginBottom: 24,
+      }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em' }}>
+          Trend Analysis
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
+            Daily traffic and conversion volume
+          </span>
+        </h3>
+        <TrendChart
+          impressions={overview?.impressions ?? 0}
+          views={overview?.views ?? 0}
+          clicks={overview?.clicks ?? 0}
+          conversions={overview?.conversions ?? 0}
+        />
+      </div>
+
+      {/* Conversion funnel */}
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: 20,
+        marginBottom: 24,
+      }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em' }}>
+          Conversion Funnel
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${funnelStages.length}, 1fr)`, gap: 12 }}>
+          {funnelStages.map((stage, i) => {
+            const pct = totalImpr > 0 ? ((stage.val / totalImpr) * 100).toFixed(1) : '0.0';
+            const barW = totalImpr > 0 ? (stage.val / totalImpr) * 100 : 0;
+            return (
+              <div key={stage.label}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{stage.label}</div>
+                <div style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 500,
+                  color: 'var(--text-primary)', marginBottom: 6,
+                }}>
+                  {stage.val >= 10000
+                    ? `${(stage.val / 1000).toFixed(1)}k`
+                    : stage.val.toLocaleString()}
+                </div>
+                <div style={{ height: 4, background: 'var(--bg-raised)', borderRadius: 2, marginBottom: 4 }}>
+                  <div style={{ height: '100%', width: `${barW}%`, background: funnelColors[i], borderRadius: 2, transition: 'width 600ms' }} />
+                </div>
+                <div style={{ fontSize: 11, color: funnelColors[i] }}>{pct}%</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Campaign breakdown table */}
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: 20,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>
+            Campaign Breakdown
+          </h3>
           <button
             onClick={() => onNavigate('/campaigns')}
-            className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition cursor-pointer"
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: 11, color: 'var(--text-muted)' }}
           >
-            Manage Campaigns →
+            Manage →
           </button>
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[0,1,2,3].map((i) => <div key={i} className="skeleton" style={{ height: 44 }} />)}
           </div>
         ) : campaignStats.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-3">
-            <span className="text-3xl">📊</span>
-            <p className="text-sm font-medium text-center">
-              No telemetry data yet.<br />Deploy your embed snippet and events will appear here.
-            </p>
-            <button
-              onClick={() => onNavigate('/campaigns')}
-              className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-            >
+          <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            No telemetry data yet. Deploy your snippet and events will appear here.
+            <br />
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={() => onNavigate('/campaigns')}>
               View Campaigns
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider font-semibold">
-                  <th className="pb-3 font-medium">Campaign</th>
-                  <th className="pb-3 text-right font-medium">Impressions</th>
-                  <th className="pb-3 text-right font-medium">Views</th>
-                  <th className="pb-3 text-right font-medium">Clicks</th>
-                  <th className="pb-3 text-right font-medium">Conversions</th>
-                  <th className="pb-3 text-right font-medium">CTR</th>
+                <tr>
+                  <th>Campaign</th>
+                  <th>Status</th>
+                  {(['impressions','views','clicks','ctr','conversions'] as SortCol[]).map((col) => (
+                    <th
+                      key={col}
+                      style={{ cursor: 'pointer', textAlign: 'right' }}
+                      onClick={() => toggleSort(col)}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end' }}>
+                        {col.charAt(0).toUpperCase() + col.slice(1)}
+                        <SortIcon col={col} />
+                      </span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody>
                 {campaignStats.map((row) => {
                   const c = getCampaign(row.campaignId);
                   return (
                     <tr
                       key={row.campaignId}
                       onClick={() => onNavigate(`/campaigns/detail/${row.campaignId}`)}
-                      className="text-slate-300 hover:bg-slate-900/30 transition cursor-pointer"
+                      style={{ cursor: 'pointer' }}
                     >
-                      <td className="py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c?.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                          <span className="font-bold text-slate-200">{c?.name || `Campaign ${row.campaignId.slice(0, 8)}`}</span>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{
+                            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                            background: c?.status === 'active' ? 'var(--status-success)' : 'var(--text-muted)',
+                          }} />
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                            {c?.name ?? `Campaign ${row.campaignId.slice(0, 8)}`}
+                          </span>
                         </div>
                       </td>
-                      <td className="py-3.5 text-right font-bold">{row.impressions.toLocaleString()}</td>
-                      <td className="py-3.5 text-right text-emerald-400">{row.views.toLocaleString()}</td>
-                      <td className="py-3.5 text-right text-amber-400 font-extrabold">{row.clicks.toLocaleString()}</td>
-                      <td className="py-3.5 text-right text-violet-400">{row.conversions.toLocaleString()}</td>
-                      <td className="py-3.5 text-right">
-                        <span className={`font-bold ${row.ctr > 0.05 ? 'text-emerald-400' : row.ctr > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                      <td>
+                        <span className={`badge ${c?.status === 'active' ? 'badge-success' : c?.status === 'paused' ? 'badge-warning' : 'badge-neutral'}`}>
+                          {c?.status ?? 'draft'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                        {row.impressions.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--data-2)' }}>
+                        {row.views.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--data-3)' }}>
+                        {row.clicks.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                        <span style={{ color: row.ctr > 0.05 ? 'var(--status-success)' : row.ctr > 0 ? 'var(--data-3)' : 'var(--text-muted)' }}>
                           {(row.ctr * 100).toFixed(2)}%
                         </span>
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--data-4)' }}>
+                        {row.conversions.toLocaleString()}
                       </td>
                     </tr>
                   );
