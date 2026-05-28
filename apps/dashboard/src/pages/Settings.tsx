@@ -1,5 +1,10 @@
 import React from 'react';
-import { Shield, Key, Bell, Puzzle, AlertTriangle, Copy, Check, Save, Code, Globe } from 'lucide-react';
+import {
+  Shield, Key, Bell, Puzzle, AlertTriangle, Copy, Check, Save, Code, Globe,
+  ChevronRight, RefreshCw, Eye, EyeOff, ExternalLink, Zap, BarChart2,
+  Webhook, Download, Pause, Trash2, Info, Clock, Mail, Smartphone,
+  Building2, Link2, Languages, CreditCard, Activity,
+} from 'lucide-react';
 import { useList } from '@refinedev/core';
 
 const STORAGE_KEY = '_sp_settings';
@@ -9,101 +14,156 @@ function loadSettings() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as Record<string, any>;
   } catch {}
-  return { name: 'My Organization', plan: 'free', affiliateLink: 'https://affiliate.example.com', timezone: 'UTC' };
+  return {
+    orgName: 'My Organization',
+    orgSlug: 'my-organization',
+    website: '',
+    supportEmail: '',
+    timezone: 'UTC',
+    dateFormat: 'MMM D, YYYY',
+    currency: 'USD',
+    defaultTrigger: 'scroll_pct',
+    defaultScrollPct: 40,
+    defaultFreqCap: 7,
+    affiliateLink: 'https://affiliate.example.com',
+    webhookUrl: '',
+    webhookSecret: 'whsec_placeholder_32chars_min',
+    notif_weekly: false,
+    notif_conversion: true,
+    notif_ab_winner: false,
+    notif_campaign_status: true,
+    notif_snippet_error: true,
+    notif_usage_80: true,
+    notif_usage_95: true,
+    notif_invoice: true,
+    notif_trial: false,
+    notif_channels_email: true,
+    notif_channels_inapp: true,
+  };
+}
+
+function slugify(str: string) {
+  return str.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
 type Tab = 'general' | 'apikeys' | 'notifications' | 'integrations' | 'danger';
 
-const TABS: { id: Tab; label: string; icon: React.FC<any> }[] = [
-  { id: 'general',       label: 'General',       icon: Shield },
+const TABS: { id: Tab; label: string; icon: React.FC<any>; danger?: boolean }[] = [
+  { id: 'general',       label: 'General',       icon: Building2 },
   { id: 'apikeys',       label: 'API Keys',       icon: Key },
   { id: 'notifications', label: 'Notifications',  icon: Bell },
   { id: 'integrations',  label: 'Integrations',   icon: Puzzle },
-  { id: 'danger',        label: 'Danger Zone',    icon: AlertTriangle },
-];
-
-const CONNECTED_SERVICES = [
-  { name: 'Stripe',       status: 'connected',   desc: 'Billing & subscriptions' },
-  { name: 'Clerk',        status: 'connected',   desc: 'Authentication & users' },
-  { name: 'Cloudflare',   status: 'connected',   desc: 'CDN & Workers' },
-  { name: 'PostHog',      status: 'pending',     desc: 'Product analytics' },
-  { name: 'Sentry',       status: 'pending',     desc: 'Error tracking' },
-  { name: 'Slack',        status: 'coming_soon', desc: 'Notifications' },
+  { id: 'danger',        label: 'Danger Zone',    icon: AlertTriangle, danger: true },
 ];
 
 function getSnippetJS(publicKey: string) {
-  return `<script>
-(function(w,d,s,p){
-  p=w.__sp=w.__sp||{};
-  if(p.loaded)return; p.loaded=true;
-  var el=d.createElement(s); el.async=true; el.defer=true;
-  el.src='https://cdn.scrollpop.io/v1/${publicKey}/p.js';
-  d.head.appendChild(el);
-})(window,document,'script');
-<\/script>`;
+  return `<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.io/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
 }
-
 function getWpFunctionsPhp(publicKey: string) {
-  return `<?php
-function scrollpop_embed_script() {
-    $public_key = '${publicKey}';
-    ?>
-    <script>
-    (function(w,d,s,p){
-      p=w.__sp=w.__sp||{};
-      if(p.loaded)return; p.loaded=true;
-      var el=d.createElement(s); el.async=true; el.defer=true;
-      el.src='https://cdn.scrollpop.io/v1/<?php echo esc_js( $public_key ); ?>/p.js';
-      d.head.appendChild(el);
-    })(window,document,'script');
-    <\/script>
-    <?php
+  return `<?php\nfunction scrollpop_embed_script() {\n    $public_key = '${publicKey}';\n    ?>\n    <script>\n    (function(w,d,s,p){\n      p=w.__sp=w.__sp||{};\n      if(p.loaded)return; p.loaded=true;\n      var el=d.createElement(s); el.async=true; el.defer=true;\n      el.src='https://cdn.scrollpop.io/v1/<?php echo esc_js( $public_key ); ?>/p.js';\n      d.head.appendChild(el);\n    })(window,document,'script');\n    <\/script>\n    <?php\n}\nadd_action( 'wp_head', 'scrollpop_embed_script' );`;
 }
-add_action( 'wp_head', 'scrollpop_embed_script' );`;
-}
-
 function getShopifyThemeLiquid(publicKey: string) {
-  return `{%- comment -%} ScrollPop — place just before </head> {%- endcomment -%}
-<script>
-(function(w,d,s,p){
-  p=w.__sp=w.__sp||{};
-  if(p.loaded)return; p.loaded=true;
-  var el=d.createElement(s); el.async=true; el.defer=true;
-  el.src='https://cdn.scrollpop.io/v1/${publicKey}/p.js';
-  d.head.appendChild(el);
-})(window,document,'script');
-<\/script>`;
+  return `{%- comment -%} ScrollPop — place just before </head> {%- endcomment -%}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.io/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
 }
-
 function getShopifyAppEmbedBlock(publicKey: string) {
-  return `{% comment %} sections/scrollpop-embed.liquid {% endcomment %}
-{% if section.settings.public_key != blank %}
-<script>
-(function(w,d,s,p){
-  p=w.__sp=w.__sp||{};
-  if(p.loaded)return; p.loaded=true;
-  var el=d.createElement(s); el.async=true; el.defer=true;
-  el.src='https://cdn.scrollpop.io/v1/{{ section.settings.public_key }}/p.js';
-  d.head.appendChild(el);
-})(window,document,'script');
-<\/script>
-{% endif %}
+  return `{% comment %} sections/scrollpop-embed.liquid {% endcomment %}\n{% if section.settings.public_key != blank %}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.io/v1/{{ section.settings.public_key }}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>\n{% endif %}\n\n{% schema %}\n{\n  "name": "ScrollPop",\n  "target": "head",\n  "settings": [\n    {\n      "type": "text",\n      "id": "public_key",\n      "label": "ScrollPop Public Key",\n      "default": "${publicKey}"\n    }\n  ]\n}\n{% endschema %}`;
+}
 
-{% schema %}
-{
-  "name": "ScrollPop",
-  "target": "head",
-  "settings": [
-    {
-      "type": "text",
-      "id": "public_key",
-      "label": "ScrollPop Public Key",
-      "default": "${publicKey}"
-    }
-  ]
+// ── Sub-components ────────────────────────────────────────────────────────
+
+function SectionCard({ title, subtitle, children, noPad }: { title: string; subtitle?: string; children: React.ReactNode; noPad?: boolean }) {
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
+      {(title || subtitle) && (
+        <div style={{ padding: '18px 24px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: subtitle ? 3 : 0 }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{subtitle}</div>}
+        </div>
+      )}
+      <div style={noPad ? {} : { padding: 24 }}>{children}</div>
+    </div>
+  );
 }
-{% endschema %}`
+
+function FieldRow({ label, hint, children, half }: { label: string; hint?: string; children: React.ReactNode; half?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxWidth: half ? 320 : '100%' }}>
+      <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>{label}</label>
+      {children}
+      {hint && <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  );
 }
+
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      aria-label={label}
+      style={{
+        width: 36, height: 20, borderRadius: 10, flexShrink: 0,
+        background: checked ? 'var(--accent-500)' : 'var(--bg-overlay)',
+        border: `1px solid ${checked ? 'var(--accent-600)' : 'var(--border-default)'}`,
+        cursor: 'pointer', position: 'relative', transition: 'background 200ms',
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 2, left: checked ? 17 : 2,
+        width: 14, height: 14, borderRadius: '50%', background: '#fff',
+        transition: 'left 180ms var(--ease-spring)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+      }} />
+    </button>
+  );
+}
+
+function NotifRow({ label, desc, settingKey, settings, onChange, channels }: {
+  label: string; desc: string; settingKey: string;
+  settings: any; onChange: (k: string, v: any) => void; channels?: boolean;
+}) {
+  const isOn = !!(settings as any)[settingKey];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ flex: 1, minWidth: 0, paddingRight: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
+      </div>
+      {channels && (
+        <div style={{ display: 'flex', gap: 6, marginRight: 16 }}>
+          <span title="Email" style={{ opacity: isOn ? 0.9 : 0.25, transition: 'opacity 200ms' }}><Mail size={13} style={{ color: 'var(--text-muted)' }} /></span>
+          <span title="In-app" style={{ opacity: isOn ? 0.9 : 0.25, transition: 'opacity 200ms' }}><Smartphone size={13} style={{ color: 'var(--text-muted)' }} /></span>
+        </div>
+      )}
+      <Toggle checked={isOn} onChange={(v) => onChange(settingKey, v)} label={label} />
+    </div>
+  );
+}
+
+function CodeBlock({ code, copyKey, copiedKey, onCopy }: { code: string; copyKey: string; copiedKey: string | null; onCopy: (text: string, key: string) => void }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <pre style={{
+        fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '19px',
+        background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
+        borderRadius: 8, padding: 16, overflowX: 'auto',
+        color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre',
+      }}>
+        {code}
+      </pre>
+      <button
+        className="btn btn-icon btn-sm"
+        onClick={() => onCopy(code, copyKey)}
+        style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-overlay)', border: '1px solid var(--border-subtle)' }}
+        title="Copy code"
+      >
+        {copiedKey === copyKey ? <Check size={12} style={{ color: 'var(--status-success)' }} /> : <Copy size={12} />}
+      </button>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────
 
 export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState<Tab>('general');
@@ -113,17 +173,112 @@ export const Settings: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = React.useState('');
   const [activePlatform, setActivePlatform] = React.useState<'wordpress' | 'shopify' | 'html'>('wordpress');
   const [selectedSiteId, setSelectedSiteId] = React.useState<string>('');
+  const [showSecretKey, setShowSecretKey] = React.useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = React.useState(false);
+  const [testingWebhook, setTestingWebhook] = React.useState(false);
+
+  const [toastMsg, setToastMsg] = React.useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const [secretKey, setSecretKey] = React.useState(() => {
+    return localStorage.getItem('_sp_secret_key') ?? '';
+  });
+
+  const handleRotateSecretKey = () => {
+    const newKey = `sk_live_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+    setSecretKey(newKey);
+    localStorage.setItem('_sp_secret_key', newKey);
+    showToast("Secret API key successfully rotated!");
+  };
+
+  const handleTestWebhook = async () => {
+    if (!settings.webhookUrl) {
+      showToast("Please enter a webhook endpoint URL first.");
+      return;
+    }
+    setTestingWebhook(true);
+    try {
+      const response = await fetch(settings.webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-ScrollPop-Signature': 'sha256=mock_signature_for_testing_purposes',
+        },
+        body: JSON.stringify({
+          event: 'conversion',
+          timestamp: new Date().toISOString(),
+          campaign: { id: 'camp_test_123', name: 'Test Campaign' },
+          visitor: { id: 'vis_test_456', device: 'desktop', country: 'US' },
+        }),
+      });
+      if (response.ok) {
+        showToast("✅ Test event sent successfully! Status: " + response.status);
+      } else {
+        showToast("⚠️ Webhook returned status code: " + response.status);
+      }
+    } catch (err: any) {
+      showToast("❌ Failed to connect to webhook: " + err.message);
+    } finally {
+      setTestingWebhook(false);
+    }
+  };
+
+  const handleRequestExport = () => {
+    showToast("📤 Export archive requested. We will email you within 24 hours.");
+  };
+
+  const handlePauseAll = () => {
+    if (window.confirm("Are you sure you want to pause all active campaigns immediately? This will disable popups across all live sites.")) {
+      try {
+        const raw = localStorage.getItem('campaigns') ?? '[]';
+        const list = JSON.parse(raw);
+        const updated = list.map((c: any) => ({ ...c, isActive: false }));
+        localStorage.setItem('campaigns', JSON.stringify(updated));
+      } catch {}
+      showToast("⏸ All live campaigns have been successfully paused.");
+    }
+  };
+
+  const handleResetAnalytics = () => {
+    if (window.confirm("WARNING: This will permanently delete all campaign view, click, and conversion data. Campaign designs are preserved. This action CANNOT be undone. Proceed?")) {
+      localStorage.setItem('_sp_views_used', '0');
+      showToast("📊 Analytics and view metrics reset successfully.");
+    }
+  };
+
+  const handleDeleteOrg = () => {
+    if (deleteConfirm !== 'DELETE') return;
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('_sp_profile_v2');
+    localStorage.removeItem('_sp_sessions');
+    localStorage.removeItem('_sp_auth');
+    localStorage.removeItem('_sp_2fa');
+    localStorage.removeItem('desktop_user');
+    localStorage.removeItem('desktop_token');
+    showToast("🗑 Organization and all workspace data permanently deleted.");
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+  };
 
   const { data: sitesData } = useList({ resource: 'sites' });
   const sites = (sitesData?.data ?? []) as any[];
-
   const selectedSite = sites.find((s) => s.id === selectedSiteId) ?? sites[0] ?? null;
   const publicKey = selectedSite?.publicKey ?? 'YOUR_PUBLIC_KEY';
 
+  const persistSettings = (updated: Record<string, any>) => {
+    setSettings(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    persistSettings(settings);
     setIsSaved(true);
+    showToast("Settings successfully saved.");
     setTimeout(() => setIsSaved(false), 2500);
   };
 
@@ -133,499 +288,611 @@ export const Settings: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const handleNotifChange = (key: string, value: boolean) => {
+    persistSettings({ ...settings, [key]: value });
+  };
+
   return (
-    <div style={{ maxWidth: 860 }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)' }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>Settings</h1>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-          Manage organization, credentials, and integrations.
-        </p>
+    <section style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
+      {/* Left panel — sticky */}
+      <div style={{
+        width: 240, flexShrink: 0,
+        padding: '32px 24px',
+        borderRight: '1px solid var(--border-subtle)',
+        height: '100%', overflowY: 'auto',
+        background: 'var(--bg-surface)',
+      }}>
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 4px', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Settings</h1>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+            Organization &amp; preferences
+          </p>
+        </div>
+        {TABS.map(({ id, label, icon: Icon, danger }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`nav-item${activeTab === id ? ' active' : ''}`}
+            style={{ width: '100%', marginBottom: 2, color: danger && activeTab !== id ? 'var(--status-error)' : undefined }}
+          >
+            <Icon size={14} />
+            <span>{label}</span>
+          </button>
+        ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 24 }}>
-        {/* Tab rail */}
-        <div style={{ width: 160, flexShrink: 0 }}>
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`nav-item${activeTab === id ? ' active' : ''}`}
-              style={{
-                width: '100%',
-                marginBottom: 2,
-                color: id === 'danger' && activeTab !== id ? 'var(--status-error)' : undefined,
-              }}
-            >
-              <Icon size={14} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+      {/* Content — centered in remaining space */}
+      <div style={{ flex: 1, overflowY: 'auto', height: '100%', padding: '32px 48px 120px', display: 'flex', justifyContent: 'center', minWidth: 0 }}>
+        <div style={{ width: '100%', maxWidth: 720 }}>
+          <form onSubmit={handleSave}>
+            {/* ── GENERAL ── */}
+            {activeTab === 'general' && (
+              <div>
+              {/* Organization */}
+              <SectionCard title="Organization" subtitle="Your workspace identity visible to team members.">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <FieldRow label="Organization Name">
+                    <input
+                      className="input"
+                      type="text"
+                      value={settings.orgName ?? ''}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setSettings({ ...settings, orgName: name, orgSlug: slugify(name) });
+                      }}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Slug" hint="Used in API endpoints and URLs.">
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        className="input"
+                        type="text"
+                        value={settings.orgSlug ?? ''}
+                        onChange={(e) => setSettings({ ...settings, orgSlug: slugify(e.target.value) })}
+                        style={{ paddingLeft: 80, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                      />
+                      <span style={{
+                        position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                        fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+                        pointerEvents: 'none',
+                      }}>
+                        scrollpop.io/
+                      </span>
+                    </div>
+                  </FieldRow>
+                  <FieldRow label="Website URL">
+                    <input
+                      className="input"
+                      type="url"
+                      placeholder="https://yourcompany.com"
+                      value={settings.website ?? ''}
+                      onChange={(e) => setSettings({ ...settings, website: e.target.value })}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Support Email">
+                    <input
+                      className="input"
+                      type="email"
+                      placeholder="support@yourcompany.com"
+                      value={settings.supportEmail ?? ''}
+                      onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })}
+                    />
+                  </FieldRow>
+                </div>
+              </SectionCard>
 
-        {/* Content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* General */}
-          {activeTab === 'general' && (
-            <form onSubmit={handleSave}>
-              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 24 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 20px', letterSpacing: '-0.01em' }}>General</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
-                  <div>
-                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Organization Name</label>
-                    <input className="input" type="text" value={settings.name ?? ''} onChange={(e) => setSettings({ ...settings, name: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Default Timezone</label>
+              {/* Localization */}
+              <SectionCard title="Localization" subtitle="Regional preferences for dates, times, and currency.">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                  <FieldRow label="Timezone">
                     <select className="input" value={settings.timezone ?? 'UTC'} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}>
-                      {['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo'].map((tz) => (
+                      {['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Singapore', 'Australia/Sydney'].map((tz) => (
                         <option key={tz} value={tz}>{tz}</option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Affiliate Link Base URL</label>
-                    <input className="input" type="url" placeholder="https://affiliate.example.com" value={settings.affiliateLink ?? ''} onChange={(e) => setSettings({ ...settings, affiliateLink: e.target.value })} />
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      Used as the default CTA URL in new campaigns.
-                    </p>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Current Plan</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span className="badge badge-accent" style={{ textTransform: 'capitalize' }}>{settings.plan ?? 'free'}</span>
-                      <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--accent-300)' }}>
-                        Manage billing →
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-                <button type="submit" className="btn btn-primary">
-                  {isSaved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Changes</>}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* API Keys */}
-          {activeTab === 'apikeys' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Site public keys */}
-              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 24 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 4px', letterSpacing: '-0.01em' }}>Site Public Keys</h3>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 20px' }}>
-                  Each site has a unique public key used in the embed snippet. These are safe to expose client-side.
-                </p>
-                {sites.length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>
-                    No sites registered yet. <a href="/sites" style={{ color: 'var(--accent-300)' }}>Add a site →</a>
-                  </div>
-                ) : (
-                  sites.map((site: any) => (
-                    <div key={site.id} style={{ marginBottom: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                        <Globe size={12} style={{ color: 'var(--text-muted)' }} />
-                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{site.name}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{site.domain}</span>
-                      </div>
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                        borderRadius: 6, padding: '8px 12px',
-                      }}>
-                        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {site.publicKey ?? 'sp_pub_...'}
-                        </code>
-                        <button
-                          className="btn btn-icon btn-sm"
-                          onClick={() => handleCopy(site.publicKey ?? '', `site-${site.id}`)}
-                          title="Copy public key"
-                        >
-                          {copiedKey === `site-${site.id}`
-                            ? <Check size={13} style={{ color: 'var(--status-success)' }} />
-                            : <Copy size={13} />}
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Webhook */}
-              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 24 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 4px', letterSpacing: '-0.01em' }}>Webhook Endpoint</h3>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 16px' }}>
-                  POST events sent here: impression, click, conversion, dismiss.
-                </p>
-                <input
-                  className="input"
-                  type="url"
-                  placeholder="https://your-server.com/webhooks/scrollpop"
-                  value={settings.webhookUrl ?? ''}
-                  onChange={(e) => {
-                    const updated = { ...settings, webhookUrl: e.target.value };
-                    setSettings(updated);
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-                  }}
-                  style={{ maxWidth: 480 }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Notifications */}
-          {activeTab === 'notifications' && (
-            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 24 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 20px', letterSpacing: '-0.01em' }}>Notifications</h3>
-              {[
-                { key: 'notif_weekly', label: 'Weekly performance digest', desc: 'Sent every Monday morning' },
-                { key: 'notif_conversion', label: 'Conversion milestones', desc: 'When a campaign hits 100, 1k, 10k conversions' },
-                { key: 'notif_error', label: 'Snippet errors', desc: 'If your embed script fails to load' },
-                { key: 'notif_billing', label: 'Usage warnings', desc: 'When approaching plan limits at 80% and 95%' },
-              ].map(({ key, label, desc }) => (
-                <div key={key} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '12px 0', borderBottom: '1px solid var(--border-subtle)',
-                }}>
-                  <div>
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const updated = { ...settings, [key]: !(settings as any)[key] };
-                      setSettings(updated);
-                      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-                    }}
-                    style={{
-                      width: 36, height: 20, borderRadius: 10,
-                      background: (settings as any)[key] ? 'var(--accent-500)' : 'var(--bg-raised)',
-                      border: `1px solid ${(settings as any)[key] ? 'var(--accent-600)' : 'var(--border-default)'}`,
-                      cursor: 'pointer',
-                      position: 'relative',
-                      transition: 'background 200ms',
-                    }}
-                    aria-label={label}
-                  >
-                    <div style={{
-                      position: 'absolute',
-                      top: 2, left: (settings as any)[key] ? 18 : 2,
-                      width: 14, height: 14, borderRadius: '50%',
-                      background: '#fff',
-                      transition: 'left 200ms var(--ease-spring)',
-                    }} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Integrations */}
-          {activeTab === 'integrations' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-              {/* Platform guide header */}
-              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 24 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 4px', letterSpacing: '-0.01em' }}>Platform Setup</h3>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 20px' }}>
-                  Install the ScrollPop snippet on your platform. Select a site to get the correct keys and code.
-                </p>
-
-                {/* Site selector */}
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Site</label>
-                  {sites.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      No sites yet. <a href="/sites" style={{ color: 'var(--accent-300)' }}>Register a site →</a>
-                    </div>
-                  ) : (
-                    <select
-                      className="input"
-                      style={{ maxWidth: 320 }}
-                      value={selectedSiteId || selectedSite?.id || ''}
-                      onChange={(e) => setSelectedSiteId(e.target.value)}
-                    >
-                      {sites.map((s: any) => (
-                        <option key={s.id} value={s.id}>{s.name} — {s.domain}</option>
+                  </FieldRow>
+                  <FieldRow label="Date Format">
+                    <select className="input" value={settings.dateFormat ?? 'MMM D, YYYY'} onChange={(e) => setSettings({ ...settings, dateFormat: e.target.value })}>
+                      <option value="MMM D, YYYY">Jan 1, 2026</option>
+                      <option value="MM/DD/YYYY">01/01/2026</option>
+                      <option value="DD/MM/YYYY">01/01/2026 (EU)</option>
+                      <option value="YYYY-MM-DD">2026-01-01</option>
+                    </select>
+                  </FieldRow>
+                  <FieldRow label="Currency">
+                    <select className="input" value={settings.currency ?? 'USD'} onChange={(e) => setSettings({ ...settings, currency: e.target.value })}>
+                      {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'].map((c) => (
+                        <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
-                  )}
+                  </FieldRow>
                 </div>
+              </SectionCard>
 
-                {/* Public key display */}
-                {selectedSite && (
-                  <div style={{ marginBottom: 20 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Public Key</label>
+              {/* Campaign Defaults */}
+              <SectionCard title="Campaign Defaults" subtitle="Pre-filled values when creating new campaigns.">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <FieldRow label="Default Trigger">
+                    <select className="input" value={settings.defaultTrigger ?? 'scroll_pct'} onChange={(e) => setSettings({ ...settings, defaultTrigger: e.target.value })}>
+                      <option value="scroll_pct">Scroll Percentage</option>
+                      <option value="dwell_time">Dwell Time</option>
+                      <option value="exit_intent">Exit Intent</option>
+                      <option value="inactivity">Inactivity</option>
+                      <option value="time_delay">Time Delay</option>
+                    </select>
+                  </FieldRow>
+                  <FieldRow label="Scroll Depth Threshold" hint="Default % scroll before popup fires.">
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        className="input"
+                        type="number"
+                        min={5} max={95} step={5}
+                        value={settings.defaultScrollPct ?? 40}
+                        onChange={(e) => setSettings({ ...settings, defaultScrollPct: parseInt(e.target.value, 10) })}
+                        style={{ paddingRight: 36 }}
+                      />
+                      <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text-muted)' }}>%</span>
+                    </div>
+                  </FieldRow>
+                  <FieldRow label="Frequency Cap (days)" hint="Don't show the same popup within N days.">
+                    <input
+                      className="input"
+                      type="number"
+                      min={0} max={90}
+                      value={settings.defaultFreqCap ?? 7}
+                      onChange={(e) => setSettings({ ...settings, defaultFreqCap: parseInt(e.target.value, 10) })}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Affiliate Base URL" hint="Default CTA URL pre-filled in new campaigns.">
+                    <input
+                      className="input"
+                      type="url"
+                      placeholder="https://affiliate.example.com"
+                      value={settings.affiliateLink ?? ''}
+                      onChange={(e) => setSettings({ ...settings, affiliateLink: e.target.value })}
+                    />
+                  </FieldRow>
+                </div>
+              </SectionCard>
+
+              </div>
+            )}
+
+          {/* ── API KEYS ── */}
+          {activeTab === 'apikeys' && (
+            <div>
+              {/* Secret API Key */}
+              <SectionCard
+                title="Secret API Key"
+                subtitle="Used to authenticate server-side API calls. Never expose this in client-side code."
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  <span className="badge badge-success" style={{ fontSize: 10 }}>Live</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Rate limit: 1,000 req/min</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={11} /> Created May 2026
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
+                  borderRadius: 8, padding: '10px 14px',
+                }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {showSecretKey ? secretKey : `sk_live_${'•'.repeat(32)}`}
+                  </code>
+                  <button className="btn btn-icon btn-sm" onClick={() => setShowSecretKey(v => !v)} title={showSecretKey ? 'Hide' : 'Reveal'}>
+                    {showSecretKey ? <EyeOff size={13} /> : <Eye size={13} />}
+                  </button>
+                  <button className="btn btn-icon btn-sm" onClick={() => handleCopy(secretKey, 'secret_key')} title="Copy">
+                    {copiedKey === 'secret_key' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" style={{ gap: 5 }} onClick={handleRotateSecretKey} title="Rotate key">
+                    <RefreshCw size={12} /> Rotate
+                  </button>
+                </div>
+                <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 6, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <Info size={13} style={{ color: 'var(--status-warning)', marginTop: 1, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    Rotating generates a new key immediately. Your previous key will stop working within 60 seconds. Update your server environment variables before rotating.
+                  </span>
+                </div>
+              </SectionCard>
+
+              {/* Site Public Keys */}
+              <SectionCard title="Site Public Keys" subtitle="Safe to expose in client-side embed code. One key per registered site.">
+                {sites.length === 0 ? (
+                  <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                    <Globe size={28} style={{ color: 'var(--text-muted)', marginBottom: 8 }} />
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>No sites registered yet.</div>
+                    <a href="/sites" style={{ fontSize: 13, color: 'var(--accent-300)' }}>Register your first site →</a>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {sites.map((site: any) => (
+                      <div key={site.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <Globe size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{site.name}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{site.domain}</span>
+                          <span className={`badge ${site.isActive ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: 9, marginLeft: 'auto' }}>
+                            {site.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          background: 'var(--bg-raised)', borderRadius: 6, padding: '8px 12px',
+                        }}>
+                          <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {site.publicKey ?? 'sp_pub_...'}
+                          </code>
+                          <button className="btn btn-icon btn-sm" onClick={() => handleCopy(site.publicKey ?? '', `site-${site.id}`)} title="Copy">
+                            {copiedKey === `site-${site.id}` ? <Check size={12} style={{ color: 'var(--status-success)' }} /> : <Copy size={12} />}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+
+              {/* Webhook */}
+              <SectionCard title="Webhook Endpoint" subtitle="Receive real-time event payloads from ScrollPop to your server.">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <FieldRow label="Endpoint URL" hint="POST requests will be sent here for impression, click, conversion, and dismiss events.">
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="input"
+                        type="url"
+                        placeholder="https://your-server.com/webhooks/scrollpop"
+                        value={settings.webhookUrl ?? ''}
+                        onChange={(e) => persistSettings({ ...settings, webhookUrl: e.target.value })}
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={handleTestWebhook}
+                        disabled={testingWebhook || !settings.webhookUrl}
+                        style={{ minWidth: 120, fontSize: 12 }}
+                      >
+                        {testingWebhook ? "Sending..." : "Send test event"}
+                      </button>
+                    </div>
+                  </FieldRow>
+
+                  <FieldRow label="Signing Secret" hint="Verify webhook authenticity by checking the X-ScrollPop-Signature header.">
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                      borderRadius: 6, padding: '8px 12px', maxWidth: 480,
+                      borderRadius: 8, padding: '10px 14px',
                     }}>
-                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)', flex: 1 }}>
-                        {publicKey}
+                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {showWebhookSecret ? settings.webhookSecret : `whsec_${'•'.repeat(28)}`}
                       </code>
-                      <button className="btn btn-icon btn-sm" onClick={() => handleCopy(publicKey, 'pubkey')} title="Copy">
-                        {copiedKey === 'pubkey' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
+                      <button className="btn btn-icon btn-sm" onClick={() => setShowWebhookSecret(v => !v)}>
+                        {showWebhookSecret ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                      <button className="btn btn-icon btn-sm" onClick={() => handleCopy(settings.webhookSecret ?? '', 'wh_secret')}>
+                        {copiedKey === 'wh_secret' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
                       </button>
                     </div>
+                  </FieldRow>
+
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>Events delivered</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {['impression', 'view', 'click', 'dismiss', 'conversion'].map((evt) => (
+                        <span key={evt} className="badge badge-neutral" style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{evt}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+            </div>
+          )}
+
+          {/* ── NOTIFICATIONS ── */}
+          {activeTab === 'notifications' && (
+            <div>
+              {/* Channel Preferences */}
+              <SectionCard title="Delivery Channels" subtitle="Choose how you receive notifications.">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {[
+                    { key: 'notif_channels_email', label: 'Email notifications', desc: 'Sent to your account email address', icon: Mail },
+                    { key: 'notif_channels_inapp', label: 'In-app notifications', desc: 'Shown in the notification center', icon: Smartphone },
+                  ].map(({ key, label, desc, icon: Icon }, i, arr) => (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon size={15} style={{ color: 'var(--text-muted)' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{label}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
+                        </div>
+                      </div>
+                      <Toggle checked={!!(settings as any)[key]} onChange={(v) => handleNotifChange(key, v)} label={label} />
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+
+              {/* Activity */}
+              <SectionCard title="Campaign Activity" subtitle="Notifications about campaign performance and events.">
+                <div>
+                  <NotifRow label="Conversion milestones" desc="When a campaign hits 100, 1k, 10k, or 100k conversions" settingKey="notif_conversion" settings={settings} onChange={handleNotifChange} channels />
+                  <NotifRow label="A/B test winner declared" desc="When a variant reaches statistical significance (≥95% confidence)" settingKey="notif_ab_winner" settings={settings} onChange={handleNotifChange} channels />
+                  <NotifRow label="Campaign status changes" desc="When a campaign goes live, pauses, or expires" settingKey="notif_campaign_status" settings={settings} onChange={handleNotifChange} channels />
+                </div>
+              </SectionCard>
+
+              {/* Alerts */}
+              <SectionCard title="Alerts" subtitle="Critical issues that may affect your campaigns.">
+                <div>
+                  <NotifRow label="Snippet load errors" desc="If your embed script fails to load on a registered site" settingKey="notif_snippet_error" settings={settings} onChange={handleNotifChange} channels />
+                  <NotifRow label="Usage approaching 80%" desc="Early warning before you approach your plan limit" settingKey="notif_usage_80" settings={settings} onChange={handleNotifChange} channels />
+                  <NotifRow label="Usage approaching 95%" desc="Final warning — you're close to hitting your plan cap" settingKey="notif_usage_95" settings={settings} onChange={handleNotifChange} channels />
+                </div>
+              </SectionCard>
+
+              {/* Billing */}
+              <SectionCard title="Billing & Reports" subtitle="Invoices, renewals, and digest emails.">
+                <div>
+                  <NotifRow label="Invoice issued" desc="When a new invoice is generated for your subscription" settingKey="notif_invoice" settings={settings} onChange={handleNotifChange} channels />
+                  <NotifRow label="Trial ending soon" desc="7 days and 1 day before your trial expires" settingKey="notif_trial" settings={settings} onChange={handleNotifChange} channels />
+                  <NotifRow label="Weekly performance digest" desc="Summary of views, clicks, and conversions every Monday" settingKey="notif_weekly" settings={settings} onChange={handleNotifChange} channels />
+                </div>
+              </SectionCard>
+            </div>
+          )}
+
+          {/* ── INTEGRATIONS ── */}
+          {activeTab === 'integrations' && (
+            <div>
+              {/* Platform Setup */}
+              <SectionCard title="Platform Setup" subtitle="Install the ScrollPop snippet on your platform.">
+                {/* Site selector */}
+                <div style={{ marginBottom: 20 }}>
+                  <FieldRow label="Site" half>
+                    {sites.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        No sites yet. <a href="/sites" style={{ color: 'var(--accent-300)' }}>Register a site →</a>
+                      </div>
+                    ) : (
+                      <select className="input" value={selectedSiteId || selectedSite?.id || ''} onChange={(e) => setSelectedSiteId(e.target.value)}>
+                        {sites.map((s: any) => <option key={s.id} value={s.id}>{s.name} — {s.domain}</option>)}
+                      </select>
+                    )}
+                  </FieldRow>
+                </div>
+
+                {selectedSite && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8, marginBottom: 20 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Public Key</span>
+                    <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)', flex: 1 }}>{publicKey}</code>
+                    <button className="btn btn-icon btn-sm" onClick={() => handleCopy(publicKey, 'pubkey')}>
+                      {copiedKey === 'pubkey' ? <Check size={12} style={{ color: 'var(--status-success)' }} /> : <Copy size={12} />}
+                    </button>
                   </div>
                 )}
 
                 {/* Platform tabs */}
-                <div style={{ display: 'flex', gap: 2, marginBottom: 20, background: 'var(--bg-raised)', borderRadius: 6, padding: 3, width: 'fit-content' }}>
+                <div style={{ display: 'flex', gap: 2, marginBottom: 24, background: 'var(--bg-raised)', borderRadius: 6, padding: 3, width: 'fit-content', border: '1px solid var(--border-subtle)' }}>
                   {(['wordpress', 'shopify', 'html'] as const).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setActivePlatform(p)}
-                      style={{
-                        padding: '5px 14px', borderRadius: 4, fontSize: 12, fontWeight: 500,
-                        background: activePlatform === p ? 'var(--bg-overlay)' : 'transparent',
-                        color: activePlatform === p ? 'var(--text-primary)' : 'var(--text-muted)',
-                        border: 'none', cursor: 'pointer',
-                      }}
-                    >
+                    <button key={p} onClick={() => setActivePlatform(p)} style={{
+                      padding: '5px 16px', borderRadius: 4, fontSize: 12, fontWeight: 500,
+                      background: activePlatform === p ? 'var(--bg-surface)' : 'transparent',
+                      color: activePlatform === p ? 'var(--text-primary)' : 'var(--text-muted)',
+                      border: activePlatform === p ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                      cursor: 'pointer', boxShadow: activePlatform === p ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                      transition: 'all 100ms',
+                    }}>
                       {p === 'wordpress' ? 'WordPress' : p === 'shopify' ? 'Shopify' : 'HTML / Generic'}
                     </button>
                   ))}
                 </div>
 
-                {/* WordPress */}
                 {activePlatform === 'wordpress' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Code size={13} />
-                        Option A — Add to <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>functions.php</code>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Code size={13} /> Option A — Add to <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--bg-raised)', padding: '1px 5px', borderRadius: 3 }}>functions.php</code>
                       </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                        Add this to your child theme's <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>functions.php</code>. Works with any WordPress theme.
-                      </p>
-                      <div style={{ position: 'relative' }}>
-                        <pre style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '18px',
-                          background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                          borderRadius: 6, padding: 16, overflowX: 'auto',
-                          color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre',
-                        }}>
-                          {getWpFunctionsPhp(publicKey)}
-                        </pre>
-                        <button
-                          className="btn btn-icon btn-sm"
-                          onClick={() => handleCopy(getWpFunctionsPhp(publicKey), 'wp_php')}
-                          style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-overlay)' }}
-                          title="Copy"
-                        >
-                          {copiedKey === 'wp_php' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
-                        </button>
-                      </div>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>Add to your child theme. Works with any WordPress theme.</p>
+                      <CodeBlock code={getWpFunctionsPhp(publicKey)} copyKey="wp_php" copiedKey={copiedKey} onCopy={handleCopy} />
                     </div>
-
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Code size={13} />
-                        Option B — Insert Headers and Footers plugin
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Code size={13} /> Option B — Insert Headers and Footers plugin
                       </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                        Install "Insert Headers and Footers" in WP Admin, then paste this into the <em>Header</em> field.
-                      </p>
-                      <div style={{ position: 'relative' }}>
-                        <pre style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '18px',
-                          background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                          borderRadius: 6, padding: 16, overflowX: 'auto',
-                          color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre',
-                        }}>
-                          {getSnippetJS(publicKey)}
-                        </pre>
-                        <button
-                          className="btn btn-icon btn-sm"
-                          onClick={() => handleCopy(getSnippetJS(publicKey), 'wp_snippet')}
-                          style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-overlay)' }}
-                          title="Copy"
-                        >
-                          {copiedKey === 'wp_snippet' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
-                        </button>
-                      </div>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>Install the "Insert Headers and Footers" plugin, paste this into the <em>Header</em> field.</p>
+                      <CodeBlock code={getSnippetJS(publicKey)} copyKey="wp_snippet" copiedKey={copiedKey} onCopy={handleCopy} />
                     </div>
-
-                    <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
-                      <strong style={{ color: 'var(--text-secondary)' }}>Plugin coming soon.</strong> A dedicated WordPress plugin with automatic updates, campaign analytics widget, and WooCommerce integration is in development.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8 }}>
+                      <Zap size={14} style={{ color: 'var(--accent-500)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <strong>WordPress plugin coming soon</strong> — one-click install, auto-updates, and WooCommerce integration.
+                      </span>
                     </div>
                   </div>
                 )}
 
-                {/* Shopify */}
                 {activePlatform === 'shopify' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Code size={13} />
-                        Option A — Edit <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>theme.liquid</code>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Code size={13} /> Option A — Edit <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--bg-raised)', padding: '1px 5px', borderRadius: 3 }}>theme.liquid</code>
                       </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                        In Shopify Admin → Online Store → Themes → Edit code, open <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>layout/theme.liquid</code> and paste before <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>&lt;/head&gt;</code>.
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+                        Open Shopify Admin → Online Store → Themes → Edit code. Paste before <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>&lt;/head&gt;</code>.
                       </p>
-                      <div style={{ position: 'relative' }}>
-                        <pre style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '18px',
-                          background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                          borderRadius: 6, padding: 16, overflowX: 'auto',
-                          color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre',
-                        }}>
-                          {getShopifyThemeLiquid(publicKey)}
-                        </pre>
-                        <button
-                          className="btn btn-icon btn-sm"
-                          onClick={() => handleCopy(getShopifyThemeLiquid(publicKey), 'shopify_theme')}
-                          style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-overlay)' }}
-                          title="Copy"
-                        >
-                          {copiedKey === 'shopify_theme' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
-                        </button>
-                      </div>
+                      <CodeBlock code={getShopifyThemeLiquid(publicKey)} copyKey="shopify_theme" copiedKey={copiedKey} onCopy={handleCopy} />
                     </div>
-
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Code size={13} />
-                        Option B — App Embed Block (Shopify CLI)
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Code size={13} /> Option B — App Embed Block (Shopify CLI)
                       </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                        Create <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>sections/scrollpop-embed.liquid</code> in your theme with this content. Enables merchants to enable/disable without touching code.
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+                        Create <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>sections/scrollpop-embed.liquid</code>. Lets merchants toggle without editing code.
                       </p>
-                      <div style={{ position: 'relative' }}>
-                        <pre style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '18px',
-                          background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                          borderRadius: 6, padding: 16, overflowX: 'auto',
-                          color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre',
-                        }}>
-                          {getShopifyAppEmbedBlock(publicKey)}
-                        </pre>
-                        <button
-                          className="btn btn-icon btn-sm"
-                          onClick={() => handleCopy(getShopifyAppEmbedBlock(publicKey), 'shopify_embed')}
-                          style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-overlay)' }}
-                          title="Copy"
-                        >
-                          {copiedKey === 'shopify_embed' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
-                        </button>
-                      </div>
+                      <CodeBlock code={getShopifyAppEmbedBlock(publicKey)} copyKey="shopify_embed" copiedKey={copiedKey} onCopy={handleCopy} />
                     </div>
-
-                    <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
-                      <strong style={{ color: 'var(--text-secondary)' }}>Shopify App coming soon.</strong> A native Shopify app with one-click install, automatic site registration, and Shopify Flow integration is in development.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8 }}>
+                      <Zap size={14} style={{ color: 'var(--accent-500)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <strong>Native Shopify App coming soon</strong> — one-click install, automatic site registration, and Shopify Flow integration.
+                      </span>
                     </div>
                   </div>
                 )}
 
-                {/* Generic HTML */}
                 {activePlatform === 'html' && (
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Code size={13} />
-                      Embed snippet — paste before <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>&lt;/head&gt;</code>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Code size={13} /> Paste before <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--bg-raised)', padding: '1px 5px', borderRadius: 3 }}>&lt;/head&gt;</code>
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                      Works on any HTML page, React app, Next.js, static site generator, or donation platform.
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+                      Works on any HTML page, React app, Next.js, Vue, static site, or donation platform.
                     </p>
-                    <div style={{ position: 'relative' }}>
-                      <pre style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '18px',
-                        background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                        borderRadius: 6, padding: 16, overflowX: 'auto',
-                        color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre',
-                      }}>
-                        {getSnippetJS(publicKey)}
-                      </pre>
-                      <button
-                        className="btn btn-icon btn-sm"
-                        onClick={() => handleCopy(getSnippetJS(publicKey), 'html_snippet')}
-                        style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-overlay)' }}
-                        title="Copy"
-                      >
-                        {copiedKey === 'html_snippet' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
-                      </button>
-                    </div>
+                    <CodeBlock code={getSnippetJS(publicKey)} copyKey="html_snippet" copiedKey={copiedKey} onCopy={handleCopy} />
                   </div>
                 )}
-              </div>
+              </SectionCard>
 
-              {/* Connected services */}
-              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 24 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 4px', letterSpacing: '-0.01em' }}>Connected Services</h3>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 16px' }}>Infrastructure integrations managed by the platform.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-                  {CONNECTED_SERVICES.map(({ name, status, desc }) => (
+              {/* Connected Services */}
+              <SectionCard title="Connected Services" subtitle="Infrastructure services powering your ScrollPop workspace.">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+                  {[
+                    { name: 'Stripe', desc: 'Billing & subscriptions', status: 'connected', detail: 'Webhooks active' },
+                    { name: 'Clerk', desc: 'Authentication & users', status: 'connected', detail: 'Multi-tenant orgs' },
+                    { name: 'Cloudflare', desc: 'CDN, Workers & KV', status: 'connected', detail: '23ms avg latency' },
+                    { name: 'Upstash Redis', desc: 'Event ingest buffer', status: 'connected', detail: '~12k ops/day' },
+                    { name: 'PostHog', desc: 'Product analytics', status: 'pending', detail: 'Setup required' },
+                    { name: 'Sentry', desc: 'Error tracking', status: 'pending', detail: 'Setup required' },
+                    { name: 'Zapier', desc: 'Workflow automation', status: 'coming_soon', detail: 'Q3 2026' },
+                    { name: 'Slack', desc: 'Team notifications', status: 'coming_soon', detail: 'Q3 2026' },
+                    { name: 'Google Analytics', desc: 'UA / GA4 events', status: 'coming_soon', detail: 'Q4 2026' },
+                  ].map(({ name, desc, status, detail }) => (
                     <div key={name} style={{
-                      background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                      borderRadius: 6, padding: '12px 14px',
-                      opacity: status === 'coming_soon' ? 0.5 : 1,
+                      border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '14px 16px',
+                      background: status === 'coming_soon' ? 'var(--bg-raised)' : 'var(--bg-surface)',
+                      opacity: status === 'coming_soon' ? 0.6 : 1,
+                      display: 'flex', flexDirection: 'column', gap: 6,
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{name}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
                         <span className={`badge ${status === 'connected' ? 'badge-success' : status === 'pending' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: 9 }}>
                           {status === 'coming_soon' ? 'soon' : status}
                         </span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
+                      <div style={{ fontSize: 10, color: status === 'connected' ? 'var(--status-success)' : 'var(--text-muted)', fontWeight: 500 }}>{detail}</div>
                     </div>
                   ))}
                 </div>
-              </div>
+              </SectionCard>
             </div>
           )}
 
-          {/* Danger Zone */}
+          {/* ── DANGER ZONE ── */}
           {activeTab === 'danger' && (
-            <div style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid #7f1d1d',
-              borderRadius: 8,
-              padding: 24,
-            }}>
-              <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 8px', color: 'var(--status-error)', letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <AlertTriangle size={16} />
-                Danger Zone
-              </h3>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px' }}>
-                These actions are permanent and cannot be undone.
-              </p>
-
-              <div style={{ padding: '16px', background: 'rgba(239,68,68,0.05)', borderRadius: 6, border: '1px solid rgba(239,68,68,0.15)' }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
-                  Delete Organization
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Export */}
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Export Your Data</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Download a full archive of your campaigns, sites, analytics, and settings as a ZIP file. Available within 24 hours.</div>
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
-                  Permanently delete your organization, all campaigns, sites, and data. This cannot be reversed.
-                </p>
-                <div style={{ marginBottom: 10 }}>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-                    Type <strong style={{ color: 'var(--text-secondary)' }}>DELETE</strong> to confirm
-                  </label>
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder="DELETE"
-                    value={deleteConfirm}
-                    onChange={(e) => setDeleteConfirm(e.target.value)}
-                    style={{ maxWidth: 240, borderColor: deleteConfirm === 'DELETE' ? 'var(--status-error)' : undefined }}
-                  />
-                </div>
-                <button
-                  className="btn btn-destructive btn-sm"
-                  disabled={deleteConfirm !== 'DELETE'}
-                  style={{ opacity: deleteConfirm !== 'DELETE' ? 0.5 : 1 }}
-                >
-                  Delete Organization
+                <button type="button" onClick={handleRequestExport} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0 }}>
+                  <Download size={13} /> Request Export
                 </button>
               </div>
+
+              {/* Pause all campaigns */}
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Pause All Campaigns</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Immediately pause every active campaign across all your sites. Campaigns can be individually reactivated afterward.</div>
+                </div>
+                <button type="button" onClick={handlePauseAll} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0, color: 'var(--status-warning)', borderColor: 'rgba(245,158,11,0.3)' }}>
+                  <Pause size={13} /> Pause All
+                </button>
+              </div>
+
+              {/* Reset analytics */}
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Reset Analytics</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Permanently erase all impression, click, and conversion event data. Campaign configurations are preserved. Cannot be undone.</div>
+                </div>
+                <button type="button" onClick={handleResetAnalytics} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0, color: 'var(--status-error)', borderColor: 'rgba(239,68,68,0.3)' }}>
+                  <BarChart2 size={13} /> Reset Data
+                </button>
+              </div>
+
+              {/* Delete Organization */}
+              <div style={{ background: 'var(--bg-surface)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 10, padding: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <AlertTriangle size={16} style={{ color: 'var(--status-error)' }} />
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--status-error)' }}>Delete Organization</div>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.6 }}>
+                  Permanently delete your organization, all campaigns, sites, analytics, and billing data. This cannot be undone. Your Stripe subscription will be cancelled immediately.
+                </p>
+                <div style={{ padding: '16px', background: 'rgba(239,68,68,0.04)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.1)' }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>
+                    Type <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--status-error)' }}>DELETE</strong> to unlock the button
+                  </label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      className="input"
+                      type="text"
+                      placeholder="DELETE"
+                      value={deleteConfirm}
+                      onChange={(e) => setDeleteConfirm(e.target.value)}
+                      style={{ maxWidth: 200, borderColor: deleteConfirm === 'DELETE' ? 'var(--status-error)' : undefined }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleDeleteOrg}
+                      className="btn btn-destructive"
+                      disabled={deleteConfirm !== 'DELETE'}
+                      style={{ gap: 6, opacity: deleteConfirm !== 'DELETE' ? 0.4 : 1, cursor: deleteConfirm !== 'DELETE' ? 'not-allowed' : 'pointer' }}
+                    >
+                      <Trash2 size={13} /> Delete Organization
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
+
+          {/* Global Save Changes Button */}
+          {activeTab !== 'danger' && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '1px solid var(--border-subtle)', marginTop: 24, marginBottom: 32 }}>
+              <button type="submit" className="btn btn-primary" style={{ gap: 7, minWidth: 130 }}>
+                {isSaved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Changes</>}
+              </button>
+            </div>
+          )}
+          </form>
         </div>
-      </div>
-    </div>
+        </div>
+
+      {/* Floating Premium Toast notification */}
+      {toastMsg && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
+          background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
+          borderRadius: 10, padding: '14px 20px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+          display: 'flex', alignItems: 'center', gap: 10,
+          animation: 'slide-up 200ms ease-out',
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-500)' }} />
+          <span style={{ fontSize: 13, fontWeight: 550, color: 'var(--text-primary)' }}>{toastMsg}</span>
+        </div>
+      )}
+    </section>
   );
 };

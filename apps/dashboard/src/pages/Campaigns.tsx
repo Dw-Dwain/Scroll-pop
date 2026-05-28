@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { Plus, Search, Layers, Pencil, Trash2, MoreHorizontal, Play, Pause } from 'lucide-react';
+import { Plus, Search, Layers, Pencil, Trash2, Play, Pause, MoreHorizontal } from 'lucide-react';
 import { useCustom, useDelete, useList, useUpdate, useApiUrl } from '@refinedev/core';
 
 interface CampaignsProps {
@@ -8,16 +8,69 @@ interface CampaignsProps {
 
 type CampaignStat = { campaignId: string; impressions: number; clicks: number; ctr: number };
 
-function StatusDot({ status }: { status: string }) {
-  const color =
-    status === 'active' ? 'var(--status-success)' :
-    status === 'paused' ? 'var(--status-warning)' :
-    'var(--text-muted)';
+// ── Mini popup preview thumbnail ───────────────────────────────────────────────
+function PopupPreview({ kind, status }: { kind: string; status: string }) {
+  const palette: Record<string, { bg: string; accent: string }> = {
+    modal:      { bg: '#f5f3ff', accent: '#6366f1' },
+    bar:        { bg: '#f0fdf4', accent: '#22c55e' },
+    banner:     { bg: '#fff7ed', accent: '#f59e0b' },
+    fullscreen: { bg: '#fdf4ff', accent: '#a855f7' },
+    floating:   { bg: '#eff6ff', accent: '#3b82f6' },
+  };
+  const { bg, accent } = palette[kind] ?? { bg: '#f4f4f5', accent: '#6366f1' };
+
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)' }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
-      <span style={{ textTransform: 'capitalize', color: 'var(--text-muted)', fontSize: 11 }}>{status ?? 'draft'}</span>
-    </span>
+    <div style={{
+      height: 130,
+      background: bg,
+      borderRadius: '8px 8px 0 0',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* mock page lines */}
+      <div style={{ position: 'absolute', inset: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 5, pointerEvents: 'none' }}>
+        <div style={{ height: 5, background: 'rgba(0,0,0,0.08)', borderRadius: 3, width: '65%' }} />
+        <div style={{ height: 4, background: 'rgba(0,0,0,0.06)', borderRadius: 3, width: '45%' }} />
+        <div style={{ height: 4, background: 'rgba(0,0,0,0.06)', borderRadius: 3, width: '55%' }} />
+        <div style={{ height: 4, background: 'rgba(0,0,0,0.05)', borderRadius: 3, width: '40%', marginTop: 2 }} />
+      </div>
+
+      {/* popup shape */}
+      {kind === 'bar' ? (
+        <div style={{ position: 'absolute', top: 10, left: 10, right: 10, height: 22, background: accent, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontSize: 8, color: '#fff', fontWeight: 700, letterSpacing: '0.06em', fontFamily: 'monospace' }}>ANNOUNCEMENT BAR</span>
+        </div>
+      ) : kind === 'floating' ? (
+        <div style={{ position: 'absolute', bottom: 14, right: 14, width: 56, height: 30, background: accent, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.18)' }}>
+          <span style={{ fontSize: 8, color: '#fff', fontWeight: 700 }}>⚡ offer</span>
+        </div>
+      ) : kind === 'fullscreen' ? (
+        <div style={{ position: 'absolute', inset: 6, background: accent, borderRadius: 4, opacity: 0.85, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontSize: 9, color: '#fff', fontWeight: 700, letterSpacing: '0.04em' }}>FULLSCREEN</span>
+        </div>
+      ) : (
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 88, height: 62, background: '#fff', borderRadius: 7, boxShadow: '0 4px 20px rgba(0,0,0,0.14)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ height: 9, background: accent }} />
+          <div style={{ flex: 1, padding: '5px 7px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ height: 3, background: '#e5e7eb', borderRadius: 1, width: '80%' }} />
+            <div style={{ height: 3, background: '#f3f4f6', borderRadius: 1, width: '60%' }} />
+            <div style={{ height: 7, background: accent, borderRadius: 3, marginTop: 4, opacity: 0.9 }} />
+          </div>
+        </div>
+      )}
+
+      {/* status badge */}
+      <div style={{
+        position: 'absolute', top: 8, left: 8,
+        padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 600,
+        fontFamily: 'monospace', letterSpacing: '0.05em', textTransform: 'uppercase',
+        background: status === 'active' ? 'rgba(34,197,94,0.12)' : status === 'paused' ? 'rgba(245,158,11,0.12)' : 'rgba(113,113,122,0.1)',
+        color: status === 'active' ? '#16a34a' : status === 'paused' ? '#d97706' : '#71717a',
+        border: `1px solid ${status === 'active' ? 'rgba(34,197,94,0.2)' : status === 'paused' ? 'rgba(245,158,11,0.2)' : 'rgba(113,113,122,0.2)'}`,
+      }}>
+        {status ?? 'draft'}
+      </div>
+    </div>
   );
 }
 
@@ -31,7 +84,6 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
   const deferredQuery = useDeferredValue(query);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'draft'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'name' | 'ctr'>('newest');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const { data: analyticsResult } = useCustom({ url: `${apiUrl}/analytics/campaigns`, method: 'get' });
@@ -63,21 +115,6 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
     return sorted;
   }, [campaignsData, deferredQuery, statusFilter, sortBy, analyticsMap]);
 
-  const allSelected = rows.length > 0 && rows.every((r: any) => selected.has(r.id));
-
-  const toggleSelectAll = () => {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(rows.map((r: any) => r.id)));
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
   const handleToggleStatus = (id: string, currentStatus: string) => {
     updateCampaign(
       { resource: `campaigns/${id}/${currentStatus === 'active' ? 'pause' : 'activate'}`, id: '', values: {} },
@@ -91,21 +128,15 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleBulkDelete = () => {
-    if (!confirm(`Delete ${selected.size} campaign(s)?`)) return;
-    selected.forEach((id) => deleteCampaign({ resource: 'campaigns', id }, { onSuccess: () => refetch() }));
-    setSelected(new Set());
-  };
-
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ maxWidth: 1400, width: '100%' }}>
       {/* Header */}
       <div style={{
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)',
       }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, marginBottom: 4, letterSpacing: '-0.01em' }}>Campaigns</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, marginBottom: 4, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Campaigns</h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
             {rows.length} campaign{rows.length !== 1 ? 's' : ''}
             {statusFilter !== 'all' ? ` · ${statusFilter}` : ''}
@@ -118,18 +149,20 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
       </div>
 
       {/* Filter strip */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        {/* Status filter */}
-        <div style={{ display: 'flex', border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-raised)', borderRadius: 6, padding: 2, gap: 1 }}>
           {(['all', 'active', 'paused', 'draft'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
               style={{
-                padding: '5px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                background: statusFilter === s ? 'var(--bg-raised)' : 'transparent',
+                padding: '4px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                background: statusFilter === s ? '#fff' : 'transparent',
                 color: statusFilter === s ? 'var(--text-primary)' : 'var(--text-muted)',
-                border: 'none', textTransform: 'capitalize',
+                border: statusFilter === s ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                borderRadius: 4, textTransform: 'capitalize',
+                boxShadow: statusFilter === s ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 0.1s',
               }}
             >
               {s}
@@ -137,7 +170,6 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
           ))}
         </div>
 
-        {/* Sort */}
         <select
           className="input"
           value={sortBy}
@@ -149,8 +181,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
           <option value="ctr">Highest CTR</option>
         </select>
 
-        {/* Search */}
-        <div style={{ position: 'relative', flex: 1, maxWidth: 280 }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
           <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             className="input"
@@ -162,24 +193,24 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Cards grid */}
       {isLoading ? (
-        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="skeleton" style={{ height: 48, margin: '1px 0', borderRadius: 0 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="skeleton" style={{ height: 240, borderRadius: 8 }} />
           ))}
         </div>
       ) : rows.length === 0 ? (
         <div style={{
           background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8,
-          padding: '48px 24px', textAlign: 'center',
+          padding: '56px 24px', textAlign: 'center',
         }}>
           <Layers size={28} style={{ color: 'var(--text-muted)', display: 'block', margin: '0 auto 12px' }} />
           <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
             {campaignsData?.data?.length === 0 ? 'No campaigns yet.' : 'No campaigns match your filters.'}
           </p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            {campaignsData?.data?.length === 0 ? 'Create your first campaign to get started.' : 'Try adjusting your search or filters.'}
+            {campaignsData?.data?.length === 0 ? 'Create your first campaign to start driving conversions.' : 'Try adjusting your search or filters.'}
           </p>
           {campaignsData?.data?.length === 0 ? (
             <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')}>
@@ -192,177 +223,162 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
           )}
         </div>
       ) : (
-        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, overflow: 'hidden' }}>
-          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <th style={{ width: 40, padding: '10px 12px' }}>
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleSelectAll}
-                    style={{ accentColor: 'var(--accent-500)', cursor: 'pointer' }}
-                  />
-                </th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Campaign
-                </th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Site
-                </th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Format
-                </th>
-                <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Impr.
-                </th>
-                <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  CTR
-                </th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Created
-                </th>
-                <th style={{ width: 80, padding: '10px 16px' }} />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((c: any) => {
-                const stats = analyticsMap[c.id];
-                const site = siteById[c.siteId];
-                const isChecked = selected.has(c.id);
-                return (
-                  <tr
-                    key={c.id}
-                    style={{
-                      borderBottom: '1px solid var(--border-subtle)',
-                      background: isChecked ? 'rgba(99,102,241,0.04)' : 'transparent',
-                      height: 48,
-                    }}
-                  >
-                    <td style={{ padding: '0 12px', width: 40 }}>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleSelect(c.id)}
-                        style={{ accentColor: 'var(--accent-500)', cursor: 'pointer' }}
-                      />
-                    </td>
-                    <td style={{ padding: '0 16px' }}>
-                      <div>
-                        <button
-                          onClick={() => onNavigate(`/campaigns/detail/${c.id}`)}
-                          style={{
-                            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                            fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', display: 'block',
-                          }}
-                        >
-                          {c.name}
-                        </button>
-                        <StatusDot status={c.status ?? 'draft'} />
-                      </div>
-                    </td>
-                    <td style={{ padding: '0 16px', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {site?.domain ?? '—'}
-                    </td>
-                    <td style={{ padding: '0 16px' }}>
-                      <span style={{
-                        fontSize: 11, padding: '2px 7px', borderRadius: 3,
-                        background: 'var(--bg-raised)', color: 'var(--text-muted)',
-                        textTransform: 'capitalize',
-                      }}>
-                        {c.kind?.replace(/_/g, ' ') ?? '—'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                      {stats?.impressions?.toLocaleString() ?? '—'}
-                    </td>
-                    <td style={{ padding: '0 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: stats?.ctr ? 'var(--accent-300)' : 'var(--text-muted)' }}>
-                      {stats?.ctr != null ? `${(stats.ctr * 100).toFixed(2)}%` : '—'}
-                    </td>
-                    <td style={{ padding: '0 16px', fontSize: 11, color: 'var(--text-muted)' }}>
-                      {c.createdAt ? new Date(c.createdAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                    </td>
-                    <td style={{ padding: '0 16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => handleToggleStatus(c.id, c.status)}
-                          className="btn btn-icon"
-                          title={c.status === 'active' ? 'Pause' : 'Activate'}
-                        >
-                          {c.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
-                        </button>
-                        <button
-                          onClick={() => onNavigate(`/campaigns/${c.id}/design`)}
-                          className="btn btn-icon"
-                          title="Edit design"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <div style={{ position: 'relative' }}>
-                          <button
-                            onClick={() => setOpenMenuId(openMenuId === c.id ? null : c.id)}
-                            className="btn btn-icon"
-                          >
-                            <MoreHorizontal size={13} />
-                          </button>
-                          {openMenuId === c.id && (
-                            <div style={{
-                              position: 'absolute', right: 0, top: '100%', marginTop: 4,
-                              background: 'var(--bg-overlay)', border: '1px solid var(--border-default)',
-                              borderRadius: 6, minWidth: 140, zIndex: 50,
-                              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                            }}>
-                              <button
-                                onClick={() => { onNavigate(`/campaigns/detail/${c.id}`); setOpenMenuId(null); }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
-                              >
-                                View details
-                              </button>
-                              <button
-                                onClick={() => { handleDelete(c.id); setOpenMenuId(null); }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--status-error)', background: 'none', border: 'none', cursor: 'pointer' }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {rows.map((c: any) => {
+            const stats = analyticsMap[c.id];
+            const site = siteById[c.siteId];
+            const isMenuOpen = openMenuId === c.id;
 
-      {/* Bulk action bar */}
-      {selected.size > 0 && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg-overlay)', border: '1px solid var(--border-default)',
-          borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 50, minWidth: 320,
-        }}>
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {selected.size} selected
-          </span>
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={() => setSelected(new Set())}
-            className="btn btn-ghost btn-sm"
-          >
-            Deselect all
-          </button>
-          <button
-            onClick={handleBulkDelete}
-            className="btn btn-sm"
-            style={{ color: 'var(--status-error)', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)' }}
-          >
-            <Trash2 size={13} />
-            Delete {selected.size}
-          </button>
+            return (
+              <div
+                key={c.id}
+                style={{
+                  background: '#fff',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  transition: 'box-shadow 0.15s, border-color 0.15s',
+                  cursor: 'default',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
+                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)';
+                }}
+              >
+                {/* Popup preview thumbnail */}
+                <PopupPreview kind={c.kind ?? 'modal'} status={c.status ?? 'draft'} />
+
+                {/* Card body */}
+                <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* Name + site */}
+                  <div>
+                    <button
+                      onClick={() => onNavigate(`/campaigns/detail/${c.id}`)}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
+                        textAlign: 'left', display: 'block', marginBottom: 3,
+                        lineHeight: '1.3',
+                      }}
+                    >
+                      {c.name}
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                      <span>{site?.domain ?? '—'}</span>
+                      {c.kind && (
+                        <>
+                          <span style={{ opacity: 0.4 }}>·</span>
+                          <span style={{ textTransform: 'capitalize', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+                            {c.kind.replace(/_/g, ' ')}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stats row */}
+                  <div style={{ display: 'flex', gap: 16, paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Impr.</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {stats?.impressions != null ? stats.impressions.toLocaleString() : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>CTR</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 500, color: stats?.ctr ? 'var(--accent-500)' : 'var(--text-primary)' }}>
+                        {stats?.ctr != null ? `${(stats.ctr * 100).toFixed(1)}%` : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Created</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                        {c.createdAt ? new Date(c.createdAt).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action footer */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '8px 12px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-raised)',
+                }}>
+                  <button
+                    onClick={() => {
+                      // Cache campaign data so the designer can restore it without the API
+                      try {
+                        sessionStorage.setItem(
+                          `sp_campaign_${c.id}`,
+                          JSON.stringify({ name: c.name, kind: c.kind, config: (c as any).config ?? {} })
+                        );
+                      } catch {}
+                      onNavigate(`/campaigns/${c.id}/design`);
+                    }}
+                    className="btn btn-sm btn-secondary"
+                    style={{ flex: 1, justifyContent: 'center', gap: 5, fontSize: 11 }}
+                    title="Edit design"
+                  >
+                    <Pencil size={12} />
+                    Edit Design
+                  </button>
+
+                  <button
+                    onClick={() => handleToggleStatus(c.id, c.status)}
+                    className="btn btn-icon"
+                    title={c.status === 'active' ? 'Pause campaign' : 'Activate campaign'}
+                    style={{ color: c.status === 'active' ? 'var(--status-warning)' : 'var(--status-success)' }}
+                  >
+                    {c.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
+                  </button>
+
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setOpenMenuId(isMenuOpen ? null : c.id)}
+                      className="btn btn-icon"
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                    {isMenuOpen && (
+                      <div style={{
+                        position: 'absolute', right: 0, bottom: '100%', marginBottom: 4,
+                        background: '#fff', border: '1px solid var(--border-default)',
+                        borderRadius: 6, minWidth: 140, zIndex: 50,
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
+                      }}>
+                        <button
+                          onClick={() => { onNavigate(`/campaigns/detail/${c.id}`); setOpenMenuId(null); }}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-raised)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          View details
+                        </button>
+                        <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+                        <button
+                          onClick={() => { handleDelete(c.id); setOpenMenuId(null); }}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--status-error)', background: 'none', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.05)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          <Trash2 size={12} style={{ marginRight: 6, display: 'inline' }} />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

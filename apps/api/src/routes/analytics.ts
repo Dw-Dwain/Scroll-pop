@@ -155,7 +155,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const daily = Array.from({ length: 60 }, (_, i) => {
       const d = new Date(now);
-      d.setDate(now.getDate() - 59 + i);
+      d.setUTCDate(d.getUTCDate() - 59 + i);
       const key = d.toISOString().split('T')[0]!;
       const data = byDay[key] ?? {};
       return {

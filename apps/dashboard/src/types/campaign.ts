@@ -44,10 +44,17 @@ export type FormDataShape = {
   headline?: string;
   subheadline?: string;
   bodyText?: string;
+  teaserHeadline?: string;
+  teaserPosition?: 'bottom-left' | 'bottom-right';
+  successHeadline?: string;
+  successBody?: string;
   backgroundColor: string;
   textColor: string;
   accentColor: string;
   borderRadius: number;
+  padding?: string;
+  gap?: string;
+  margin?: string;
   boxShadow?: string;
   ctaText?: string;
   ctaStyle?: 'button' | 'text_link';
@@ -57,8 +64,8 @@ export type FormDataShape = {
   dismissText?: string;
   overlayEnabled: boolean;
   overlayOpacity: number;
-  animation: 'fade' | 'slide_up' | 'slide_down' | 'zoom' | 'none';
-  position: 'center' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom';
+  animation: 'fade' | 'slide_up' | 'slide_down' | 'zoom' | 'bounce' | 'elastic' | 'flip_in' | 'none';
+  position: 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
   size: 'sm' | 'md' | 'lg';
   showPoweredBy: boolean;
   triggerType: TriggerType;

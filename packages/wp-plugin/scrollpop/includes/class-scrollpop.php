@@ -29,10 +29,43 @@ class ScrollPop {
         $snippet = new ScrollPop_Snippet();
         $snippet->init();
 
+        // Register REST API endpoints (used by ScrollPop Dashboard to verify connection)
+        add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
+
         // Register activation/deactivation hooks
         register_activation_hook( SCROLLPOP_PLUGIN_FILE, [ $this, 'activate' ] );
         register_deactivation_hook( SCROLLPOP_PLUGIN_FILE, [ $this, 'deactivate' ] );
         register_uninstall_hook( SCROLLPOP_PLUGIN_FILE, [ 'ScrollPop', 'uninstall' ] );
+    }
+
+    /**
+     * Register REST API routes for the ScrollPop dashboard connection verification.
+     * Endpoint: GET /wp-json/scrollpop/v1/status
+     */
+    public function register_rest_routes(): void {
+        register_rest_route( 'scrollpop/v1', '/status', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_status_callback' ],
+            'permission_callback' => '__return_true', // Public — key is opaque, not a secret
+        ] );
+    }
+
+    /**
+     * REST callback: returns plugin status + public key for dashboard verification.
+     */
+    public function rest_status_callback( \WP_REST_Request $request ): \WP_REST_Response {
+        $public_key = self::get_public_key();
+        $enabled    = self::is_enabled();
+
+        return new \WP_REST_Response( [
+            'status'      => 'ok',
+            'plugin'      => 'scrollpop',
+            'version'     => SCROLLPOP_VERSION,
+            'public_key'  => $public_key,
+            'enabled'     => $enabled,
+            'site_url'    => get_site_url(),
+            'site_name'   => get_bloginfo( 'name' ),
+        ], 200 );
     }
 
     public function activate(): void {

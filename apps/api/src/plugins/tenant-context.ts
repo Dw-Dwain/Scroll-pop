@@ -18,6 +18,8 @@ const PUBLIC_ROUTES = [
   '/health',
   '/api/v1/webhooks/clerk',
   '/api/v1/webhooks/stripe',
+  '/api/v1/webhooks/shopify',
+  '/api/v1/shopify/callback',   // Shopify OAuth redirect — verified by HMAC + nonce
   '/api/v1/internal',
   '/v1/',
   '/c/',

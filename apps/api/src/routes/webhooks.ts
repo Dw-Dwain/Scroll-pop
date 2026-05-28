@@ -44,13 +44,11 @@ interface ClerkUserEvent {
 // ─── Stripe Webhook ───────────────────────────────────────────────────────────
 
 function getPlanFromStripePrice(priceId: string): 'starter' | 'growth' | 'scale' | 'agency' | null {
-  const map: Record<string, 'starter' | 'growth' | 'scale' | 'agency'> = {
-    [process.env['STRIPE_PRICE_STARTER'] ?? '']: 'starter',
-    [process.env['STRIPE_PRICE_GROWTH'] ?? '']: 'growth',
-    [process.env['STRIPE_PRICE_SCALE'] ?? '']: 'scale',
-    [process.env['STRIPE_PRICE_AGENCY'] ?? '']: 'agency',
-  };
-  return map[priceId] ?? null;
+  if (priceId === process.env['STRIPE_PRICE_STARTER']) return 'starter';
+  if (priceId === process.env['STRIPE_PRICE_GROWTH']) return 'growth';
+  if (priceId === process.env['STRIPE_PRICE_SCALE']) return 'scale';
+  if (priceId === process.env['STRIPE_PRICE_AGENCY']) return 'agency';
+  return null;
 }
 
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {

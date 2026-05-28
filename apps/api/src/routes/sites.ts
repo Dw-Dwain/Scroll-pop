@@ -13,6 +13,7 @@ const CreateSiteBody = z.object({
 const UpdateSiteBody = z.object({
   name: z.string().min(1).max(100).optional(),
   platform: z.enum(['wordpress', 'shopify', 'html', 'donorbox', 'gofundme', 'other']).optional(),
+  wpSiteUrl: z.string().url().optional(),
 });
 
 export const siteRoutes: FastifyPluginAsync = async (fastify) => {
@@ -98,6 +99,7 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
       .set({
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.platform !== undefined ? { platform: body.platform } : {}),
+        ...(body.wpSiteUrl !== undefined ? { wpSiteUrl: body.wpSiteUrl } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(sites.id, request.params.id), eq(sites.tenantId, request.tenantId)))
@@ -179,13 +181,108 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: { code: 'UPDATE_FAILED', message: 'Failed to verify site' } });
     }
 
-    return reply.send({ 
-      data: { 
-        verified: true, 
-        verifiedAt: updated.verifiedAt, 
-        message: 'Site successfully verified in Local Development!' 
-      } 
+    return reply.send({
+      data: {
+        verified: true,
+        verifiedAt: updated.verifiedAt,
+        message: 'Site successfully verified in Local Development!'
+      }
     });
+  });
+
+  // POST /api/v1/sites/:id/verify-wordpress
+  // Calls the WordPress site's /wp-json/scrollpop/v1/status endpoint to confirm
+  // the plugin is installed and the public key matches.
+  fastify.post<{ Params: { id: string } }>('/sites/:id/verify-wordpress', async (request, reply) => {
+    const site = await db.query.sites.findFirst({
+      where: and(
+        eq(sites.id, request.params.id),
+        eq(sites.tenantId, request.tenantId),
+        isNull(sites.deletedAt)
+      ),
+    });
+
+    if (!site) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Site not found' } });
+
+    // Determine base URL for the WordPress site
+    const wpBase = site.wpSiteUrl ?? `https://${site.domain}`;
+    const statusUrl = `${wpBase.replace(/\/$/, '')}/wp-json/scrollpop/v1/status`;
+
+    let wpResponse: { public_key?: string; enabled?: boolean; plugin?: string; version?: string } = {};
+    try {
+      const res = await fetch(statusUrl, {
+        signal: AbortSignal.timeout(8000),
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) {
+        return reply.code(422).send({
+          error: {
+            code: 'WP_UNREACHABLE',
+            message: `WordPress status endpoint returned HTTP ${res.status}. Make sure the ScrollPop plugin is installed and active.`,
+            statusUrl,
+          },
+        });
+      }
+      wpResponse = await res.json() as typeof wpResponse;
+    } catch (err: any) {
+      return reply.code(422).send({
+        error: {
+          code: 'WP_UNREACHABLE',
+          message: `Could not reach ${statusUrl}. Is the site accessible and the plugin installed?`,
+          detail: err?.message,
+          statusUrl,
+        },
+      });
+    }
+
+    // Verify the plugin returned our public key
+    if (wpResponse.public_key !== site.publicKey) {
+      return reply.code(422).send({
+        error: {
+          code: 'KEY_MISMATCH',
+          message: `Public key mismatch. The plugin has "${wpResponse.public_key ?? '(empty)'}" but this site's key is "${site.publicKey}". Update the key in WordPress Settings → ScrollPop.`,
+        },
+      });
+    }
+
+    if (!wpResponse.enabled) {
+      return reply.code(422).send({
+        error: {
+          code: 'PLUGIN_DISABLED',
+          message: 'ScrollPop plugin is installed but disabled. Enable it in WordPress Settings → ScrollPop.',
+        },
+      });
+    }
+
+    // All good — mark site as verified
+    const [updated] = await db
+      .update(sites)
+      .set({ verifiedAt: new Date(), updatedAt: new Date() })
+      .where(eq(sites.id, site.id))
+      .returning();
+
+    return reply.send({
+      data: {
+        verified: true,
+        verifiedAt: updated?.verifiedAt,
+        wpVersion: wpResponse.version,
+        message: 'WordPress plugin verified successfully!',
+      },
+    });
+  });
+
+  // PATCH /api/v1/sites/:id/wordpress-url — store the WP site URL override
+  fastify.patch<{ Params: { id: string } }>('/sites/:id/wordpress-url', async (request, reply) => {
+    const body = z.object({ wpSiteUrl: z.string().url() }).parse(request.body);
+
+    const [updated] = await db
+      .update(sites)
+      .set({ wpSiteUrl: body.wpSiteUrl, updatedAt: new Date() })
+      .where(and(eq(sites.id, request.params.id), eq(sites.tenantId, request.tenantId)))
+      .returning();
+
+    if (!updated) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Site not found' } });
+    return reply.send({ data: updated });
   });
 };
 

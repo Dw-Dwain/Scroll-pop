@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, MousePointerClick, Percent, ArrowUpRight, TrendingUp, TrendingDown, Plus } from 'lucide-react';
+import { Eye, MousePointerClick, Percent, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
 
 interface DashboardProps {
@@ -241,7 +241,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const activeCampaigns = campaignsData?.data?.filter((c: any) => c.status === 'active') ?? [];
 
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ width: '100%' }}>
       {/* Page header */}
       <div style={{
         display: 'flex',
@@ -269,6 +269,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </button>
         </div>
       </div>
+
+      {/* No-site onboarding banner */}
+      {sitesData && sitesData.data?.length === 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          padding: '16px 20px',
+          marginBottom: 24,
+          background: 'rgba(99,102,241,0.04)',
+          border: '1px solid rgba(99,102,241,0.15)',
+          borderRadius: 8,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+              background: 'rgba(99,102,241,0.08)',
+              border: '1px solid rgba(99,102,241,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Globe size={16} style={{ color: '#6366f1' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                Connect your first site to get started
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                Add a site to install the ScrollPop snippet and start serving campaigns.
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => onNavigate('/sites')}
+            style={{ flexShrink: 0 }}
+          >
+            <Globe size={13} />
+            Link first site
+          </button>
+        </div>
+      )}
 
       {/* KPI strip */}
       {isLoading ? (
@@ -529,8 +571,12 @@ function EventsAreaChart({ daily }: {
     return `M ${coords.join(' L ')}`;
   };
 
-  // Label every 7th day
-  const xLabels = daily.map((d, i) => (i % 7 === 0 ? fmtDay(d.day) : ''));
+  // Always label the first day, last day, and key intervals in between
+  const xLabels = daily.map((d, i) => {
+    if (i === 0 || i === days - 1) return fmtDay(d.day);
+    if (i % 7 === 0 && i < days - 4) return fmtDay(d.day);
+    return '';
+  });
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>

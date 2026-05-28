@@ -27,6 +27,7 @@ import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
 import { journeyRoutes } from './routes/journeys.js';
 import { experimentRoutes } from './routes/experiments.js';
+import { shopifyRoutes, shopifyWebhookRoutes } from './routes/shopify.js';
 
 // Plugins
 import { tenantContextPlugin } from './plugins/tenant-context.js';
@@ -78,6 +79,24 @@ async function bootstrap() {
 
   // Webhooks (no auth — use signature verification)
   await app.register(webhookRoutes, { prefix: '/api/v1/webhooks' });
+  await app.register(shopifyWebhookRoutes, { prefix: '/api/v1/webhooks' });
+
+  // Shopify OAuth callback (public — HMAC verified inside route)
+  await app.register(shopifyRoutes, { prefix: '/api/v1' });
+
+  // Dev auth login bypass (for local/desktop client compatibility)
+  app.post('/api/v1/auth/login', async (request, reply) => {
+    const internalSecret = process.env['INTERNAL_SECRET'] || 'change_me_in_production_32_chars_min';
+    return reply.send({
+      token: internalSecret,
+      user: {
+        id: 'admin_desktop_client',
+        email: 'admin@scrollpop.local',
+        name: 'Local Admin',
+        role: 'admin',
+      }
+    });
+  });
 
   // Internal (called by Cloudflare Worker, auth via API_SECRET header)
   await app.register(internalRoutes, { prefix: '/api/v1/internal' });

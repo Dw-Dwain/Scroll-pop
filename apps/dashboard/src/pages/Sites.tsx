@@ -1,8 +1,334 @@
 import React from 'react';
-import { Plus, Copy, Check, Trash2, Edit, Lock, X, Link2, Code2 } from 'lucide-react';
+import {
+  Plus, Copy, Check, Trash2, Edit, Lock, X, Link2, Code2,
+  ShoppingBag, Globe, ArrowRight, AlertCircle, CheckCircle2,
+  Download, RefreshCw, ExternalLink, Wifi, WifiOff,
+} from 'lucide-react';
 import { useList, useCreate, useDelete, useUpdate } from '@refinedev/core';
 import { usePlan } from '../hooks/usePlan';
 import { LimitBanner } from '../components/PlanGate';
+
+// ─── Platform icons ───────────────────────────────────────────────────────────
+
+const PlatformIcon: React.FC<{ platform: string; size?: number }> = ({ platform, size = 16 }) => {
+  if (platform === 'shopify') return <ShoppingBag size={size} style={{ color: '#96bf48' }} />;
+  if (platform === 'wordpress') return <Globe size={size} style={{ color: '#21759b' }} />;
+  return <Code2 size={size} style={{ color: 'var(--text-muted)' }} />;
+};
+
+const platformLabel = (p: string) => {
+  const map: Record<string, string> = {
+    shopify: 'Shopify', wordpress: 'WordPress', html: 'HTML / JS',
+    donorbox: 'Donorbox', gofundme: 'GoFundMe', other: 'Other CMS',
+  };
+  return map[p] ?? p;
+};
+
+// ─── Shopify Connect Panel ────────────────────────────────────────────────────
+
+const ShopifyConnectPanel: React.FC<{
+  site: any;
+  onDisconnect: () => void;
+}> = ({ site, onDisconnect }) => {
+  const [shopInput, setShopInput] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  const isConnected = !!site.shopifyShop;
+
+  const handleConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopInput.trim()) return;
+    setError('');
+    setLoading(true);
+
+    // Normalise: strip protocol, strip trailing .myshopify.com if user pasted full URL
+    let shop = shopInput.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (!shop.endsWith('.myshopify.com')) shop = `${shop}.myshopify.com`;
+
+    try {
+      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
+      const token = localStorage.getItem('desktop_token') ??
+        document.cookie.match(/clerk-db-jwt=([^;]+)/)?.[1] ?? '';
+
+      const res = await fetch(`${apiBase}/api/v1/shopify/install`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ shop }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error?.message ?? 'Failed to initiate Shopify OAuth');
+        return;
+      }
+      // Redirect user to Shopify permission screen
+      window.location.href = data.data.oauthUrl;
+    } catch (err: any) {
+      setError(err?.message ?? 'Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isConnected) {
+    return (
+      <div style={{ background: 'rgba(150,191,72,0.07)', border: '1px solid rgba(150,191,72,0.3)', borderRadius: 8, padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckCircle2 size={16} style={{ color: '#96bf48' }} />
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Shopify Connected</span>
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--status-error)', fontSize: 11 }} onClick={onDisconnect}>
+            Disconnect
+          </button>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{site.shopifyShop}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <a
+            href={`https://${site.shopifyShop}/admin`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <ExternalLink size={11} /> Shopify Admin
+          </a>
+          <a
+            href={`https://${site.shopifyShop}/admin/themes/current/editor`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <ShoppingBag size={11} /> Theme Editor
+          </a>
+        </div>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '10px 0 0' }}>
+          The ScrollPop snippet is injected via Script Tag. To use App Embed Blocks instead,
+          go to your Theme Editor → App Embeds → ScrollPop.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <ShoppingBag size={14} style={{ color: '#96bf48' }} />
+        <span style={{ fontSize: 13, fontWeight: 500 }}>Connect Shopify Store</span>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
+        Authorize ScrollPop to inject your popup snippet and register webhooks automatically via OAuth 2.0.
+      </p>
+      <form onSubmit={handleConnect} style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="text"
+          className="input"
+          placeholder="yourstore.myshopify.com"
+          value={shopInput}
+          onChange={(e) => setShopInput(e.target.value)}
+          style={{ flex: 1, fontSize: 12 }}
+        />
+        <button type="submit" className="btn btn-primary btn-sm" disabled={loading} style={{ whiteSpace: 'nowrap' }}>
+          {loading ? <RefreshCw size={12} className="spin" /> : <><ShoppingBag size={12} /> Connect</>}
+        </button>
+      </form>
+      {error && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'var(--status-error)' }}>
+          <AlertCircle size={12} /> {error}
+        </div>
+      )}
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '8px 0 0' }}>
+        You'll be redirected to Shopify to grant permissions, then returned here.
+      </p>
+    </div>
+  );
+};
+
+// ─── WordPress Connect Panel ──────────────────────────────────────────────────
+
+const WordPressConnectPanel: React.FC<{
+  site: any;
+  onVerified: () => void;
+}> = ({ site, onVerified }) => {
+  const [verifying, setVerifying] = React.useState(false);
+  const [verifyError, setVerifyError] = React.useState('');
+  const [verifySuccess, setVerifySuccess] = React.useState(false);
+  const [wpUrl, setWpUrl] = React.useState(site.wpSiteUrl ?? `https://${site.domain}`);
+  const [savingUrl, setSavingUrl] = React.useState(false);
+  const [copiedKey, setCopiedKey] = React.useState(false);
+
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(site.publicKey ?? '');
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  const handleSaveUrl = async () => {
+    setSavingUrl(true);
+    try {
+      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
+      const token = localStorage.getItem('desktop_token') ?? '';
+      await fetch(`${apiBase}/api/v1/sites/${site.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ wpSiteUrl: wpUrl }),
+      });
+    } finally {
+      setSavingUrl(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    setVerifyError('');
+    setVerifySuccess(false);
+    try {
+      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
+      const token = localStorage.getItem('desktop_token') ?? '';
+      const res = await fetch(`${apiBase}/api/v1/sites/${site.id}/verify-wordpress`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setVerifyError(data?.error?.message ?? 'Verification failed');
+      } else {
+        setVerifySuccess(true);
+        onVerified();
+      }
+    } catch (err: any) {
+      setVerifyError(err?.message ?? 'Network error');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const pluginDownloadUrl = 'https://cdn.scrollpop.io/plugins/scrollpop-wp.zip';
+
+  return (
+    <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Globe size={14} style={{ color: '#21759b' }} />
+        <span style={{ fontSize: 13, fontWeight: 500 }}>WordPress Plugin Setup</span>
+        {site.verifiedAt && (
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#16a34a' }}>
+            <Wifi size={11} /> Connected
+          </span>
+        )}
+        {!site.verifiedAt && (
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--status-warning)' }}>
+            <WifiOff size={11} /> Not verified
+          </span>
+        )}
+      </div>
+
+      {/* Step 1: Download plugin */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 12 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Step 1 — Install Plugin
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 10px' }}>
+          Download and install the ScrollPop WordPress plugin, then activate it.
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <a
+            href={pluginDownloadUrl}
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <Download size={12} /> Download Plugin (.zip)
+          </a>
+          <a
+            href="https://wordpress.org/support/article/managing-plugins/#manual-upload-via-wordpress-admin"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-ghost btn-sm"
+            style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <ExternalLink size={11} /> Upload guide
+          </a>
+        </div>
+      </div>
+
+      {/* Step 2: Enter public key */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 12 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Step 2 — Enter Site Public Key
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 10px' }}>
+          In WordPress, go to <strong>Settings → ScrollPop</strong> and paste this key:
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '6px 10px' }}>
+          <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-500)', flex: 1 }}>
+            {site.publicKey ?? 'sp_pub_...'}
+          </code>
+          <button className="btn btn-icon" style={{ width: 24, height: 24 }} onClick={handleCopyKey} title="Copy">
+            {copiedKey ? <Check size={12} style={{ color: 'var(--status-success)' }} /> : <Copy size={12} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Step 3: Verify */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 12 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Step 3 — Verify Connection
+        </div>
+
+        {/* Optional WP URL override */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+            WordPress Site URL <span style={{ color: 'var(--text-muted)' }}>(if different from domain)</span>
+          </label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              type="url"
+              className="input"
+              placeholder={`https://${site.domain}`}
+              value={wpUrl}
+              onChange={(e) => setWpUrl(e.target.value)}
+              style={{ flex: 1, fontSize: 12 }}
+            />
+            <button className="btn btn-secondary btn-sm" onClick={handleSaveUrl} disabled={savingUrl} style={{ whiteSpace: 'nowrap' }}>
+              {savingUrl ? <RefreshCw size={12} className="spin" /> : 'Save'}
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+            We'll call: <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{wpUrl.replace(/\/$/, '')}/wp-json/scrollpop/v1/status</code>
+          </p>
+        </div>
+
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={handleVerify}
+          disabled={verifying}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          {verifying
+            ? <><RefreshCw size={12} className="spin" /> Verifying...</>
+            : <><CheckCircle2 size={12} /> Verify Connection</>
+          }
+        </button>
+
+        {verifyError && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 8, fontSize: 12, color: 'var(--status-error)', background: 'rgba(239,68,68,0.07)', padding: '8px 10px', borderRadius: 6 }}>
+            <AlertCircle size={12} style={{ marginTop: 2, flexShrink: 0 }} /> {verifyError}
+          </div>
+        )}
+
+        {verifySuccess && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'var(--status-success)' }}>
+            <CheckCircle2 size={12} /> Plugin verified — snippet is live!
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Sites page ──────────────────────────────────────────────────────────
 
 export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavigate }) => {
   const { data: sitesData, refetch } = useList({ resource: 'sites' });
@@ -16,8 +342,11 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 
   const [isAddOpen, setIsAddOpen] = React.useState(false);
   const [newSite, setNewSite] = React.useState({ name: '', domain: '', platform: 'html' });
+  const [isCreating, setIsCreating] = React.useState(false);
+  const [createError, setCreateError] = React.useState('');
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
-  const [selectedSnippet, setSelectedSnippet] = React.useState<any | null>(null);
+  const [selectedSite, setSelectedSite] = React.useState<any | null>(null);
+  const [activeTab, setActiveTab] = React.useState<'snippet' | 'shopify' | 'wordpress'>('snippet');
   const [embedMode, setEmbedMode] = React.useState<'cdn' | 'dev'>('cdn');
   const [devUrl, setDevUrl] = React.useState('https://whole-ends-divide.loca.lt');
   const [isEditOpen, setIsEditOpen] = React.useState(false);
@@ -25,25 +354,74 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
   const [connectUrl, setConnectUrl] = React.useState('');
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Detect Shopify OAuth success redirect
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('shopify_connected') === '1') {
+      refetch();
+      // Strip query params
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  // Auto-open panel for newly selected platform
+  React.useEffect(() => {
+    if (!selectedSite) return;
+    if (selectedSite.platform === 'shopify') setActiveTab('shopify');
+    else if (selectedSite.platform === 'wordpress') setActiveTab('wordpress');
+    else setActiveTab('snippet');
+  }, [selectedSite?.id]);
+
+  const handleCreate = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (isCreating) return;
+    if (!newSite.name.trim() || !newSite.domain.trim()) {
+      setCreateError('Site name and domain are required.');
+      return;
+    }
+    setCreateError('');
+    setIsCreating(true);
     createSite({
       resource: 'sites',
       values: newSite,
-      successNotification: () => ({ message: 'Site registered', type: 'success' }),
+      successNotification: false,
     }, {
       onSuccess: (data: any) => {
+        setIsCreating(false);
         setIsAddOpen(false);
+        setCreateError('');
         setNewSite({ name: '', domain: '', platform: 'html' });
         refetch();
-        setSelectedSnippet(data.data);
+        const site = data?.data ?? null;
+        if (site) {
+          setSelectedSite(site);
+          if (site.platform === 'shopify') setActiveTab('shopify');
+          else if (site.platform === 'wordpress') setActiveTab('wordpress');
+          else setActiveTab('snippet');
+        }
+      },
+      onError: (error: any) => {
+        setIsCreating(false);
+        const msg = error?.message ?? '';
+        if (msg.includes('409') || msg.toLowerCase().includes('duplicate')) {
+          setCreateError('This domain is already registered. Try a different domain.');
+        } else if (msg.includes('401') || msg.includes('403')) {
+          setCreateError('Authentication error. Please refresh and try again.');
+        } else if (msg) {
+          setCreateError(`Failed to register: ${msg}`);
+        } else {
+          setCreateError('Could not reach the server. Is the API running?');
+        }
       },
     });
   };
 
   const handleDelete = (id: string) => {
     if (!confirm('Remove this site? Associated campaigns will be archived.')) return;
-    deleteSite({ resource: 'sites', id }, { onSuccess: () => refetch() });
+    deleteSite({ resource: 'sites', id }, { onSuccess: () => {
+      refetch();
+      if (selectedSite?.id === id) setSelectedSite(null);
+    }});
   };
 
   const handleVerify = async (id: string) => {
@@ -69,6 +447,22 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
         onSuccess: () => { refetch(); setVerifyingId(null); },
         onError: () => { setVerifyingId(null); },
       });
+    }
+  };
+
+  const handleShopifyDisconnect = async (site: any) => {
+    if (!confirm(`Disconnect ${site.shopifyShop} from ScrollPop? The script tag will be removed.`)) return;
+    try {
+      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
+      const token = localStorage.getItem('desktop_token') ?? '';
+      await fetch(`${apiBase}/api/v1/shopify/disconnect`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ shop: site.shopifyShop }),
+      });
+      refetch();
+    } catch {
+      alert('Failed to disconnect');
     }
   };
 
@@ -114,6 +508,16 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 
   const liveSites = sitesData?.data?.filter((s: any) => s.verifiedAt)?.length ?? 0;
 
+  // Available tabs for a given site
+  const tabsFor = (site: any) => {
+    const tabs: { key: string; label: string }[] = [
+      { key: 'snippet', label: 'Code Snippet' },
+    ];
+    if (site.platform === 'shopify') tabs.push({ key: 'shopify', label: 'Shopify OAuth' });
+    if (site.platform === 'wordpress') tabs.push({ key: 'wordpress', label: 'WordPress Plugin' });
+    return tabs;
+  };
+
   return (
     <div style={{ maxWidth: 1200 }}>
       {/* Header */}
@@ -122,11 +526,11 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
         marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)',
       }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
             Connected Sites
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-            Manage external domains and tracking snippets.
+            Manage external domains, Shopify stores, and WordPress plugins.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -139,7 +543,8 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
           <button
             onClick={() => {
               if (atSiteLimit) { onNavigate?.('/billing'); return; }
-              setSelectedSnippet(null);
+              setSelectedSite(null);
+              setCreateError('');
               setIsAddOpen(true);
             }}
             className="btn btn-primary"
@@ -159,19 +564,23 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
           {sitesData.data.map((site: any) => (
             <div key={site.id} style={{
               background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
+              border: `1px solid ${selectedSite?.id === site.id ? 'var(--accent-400)' : 'var(--border-subtle)'}`,
               borderRadius: 8,
               padding: 20,
               display: 'flex',
               flexDirection: 'column',
               gap: 16,
+              cursor: 'default',
             }}>
               {/* Status + domain */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span className={`badge ${site.verifiedAt ? 'badge-success' : 'badge-warning'}`}>
-                    {site.verifiedAt ? 'CONNECTED' : 'PENDING'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <PlatformIcon platform={site.platform} size={14} />
+                    <span className={`badge ${site.verifiedAt ? 'badge-success' : 'badge-warning'}`}>
+                      {site.verifiedAt ? 'CONNECTED' : 'PENDING'}
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       className="btn btn-icon"
@@ -191,22 +600,23 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                   </div>
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{site.domain ?? site.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, textTransform: 'capitalize' }}>
-                  {site.name !== site.domain ? site.name : site.platform ?? 'HTML'} Environment
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {platformLabel(site.platform)}
+                  {site.name !== site.domain ? ` — ${site.name}` : ''}
                 </div>
               </div>
 
               {/* Stats */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>CAMPAIGNS</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 500 }}>
+                <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Campaigns</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>
                     {String(site.campaignCount ?? '0').padStart(2, '0')}
                   </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>TOTAL VIEWS</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 500 }}>
+                <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Views</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>
                     {site.totalViews
                       ? site.totalViews >= 1000 ? `${(site.totalViews / 1000).toFixed(1)}k` : site.totalViews
                       : '0'}
@@ -226,7 +636,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                   borderRadius: 6,
                   padding: '6px 10px',
                 }}>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-300)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-500)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {site.publicKey ?? 'sp_pub_...'}
                   </code>
                   <button
@@ -245,15 +655,19 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
               {/* Actions */}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
-                  onClick={() => setSelectedSnippet(site)}
-                  className="btn btn-secondary"
+                  onClick={() => {
+                    setSelectedSite(selectedSite?.id === site.id ? null : site);
+                  }}
+                  className={`btn ${selectedSite?.id === site.id ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}
                 >
-                  {site.verifiedAt ? 'Manage Site' : 'Complete Setup'}
+                  {selectedSite?.id === site.id
+                    ? 'Close Setup'
+                    : site.verifiedAt ? 'Manage Site' : 'Complete Setup'}
                 </button>
               </div>
 
-              {!site.verifiedAt && (
+              {!site.verifiedAt && site.platform !== 'shopify' && site.platform !== 'wordpress' && (
                 <button
                   onClick={() => handleVerify(site.id)}
                   disabled={verifyingId === site.id}
@@ -267,6 +681,118 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
           ))}
         </div>
       ) : null}
+
+      {/* Platform-aware setup panel */}
+      {selectedSite && (
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 8,
+          marginBottom: 24,
+          overflow: 'hidden',
+        }}>
+          {/* Panel header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-raised)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <PlatformIcon platform={selectedSite.platform} size={16} />
+              <span style={{ fontSize: 14, fontWeight: 500 }}>{selectedSite.domain}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— {platformLabel(selectedSite.platform)}</span>
+            </div>
+            <button className="btn btn-icon" onClick={() => setSelectedSite(null)}><X size={14} /></button>
+          </div>
+
+          {/* Tabs */}
+          {tabsFor(selectedSite).length > 1 && (
+            <div style={{ display: 'flex', gap: 2, padding: '10px 20px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+              {tabsFor(selectedSite).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as any)}
+                  className={`btn btn-sm ${activeTab === tab.key ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ borderRadius: '4px 4px 0 0', borderBottom: 'none', fontSize: 12 }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ padding: 20 }}>
+            {/* Code Snippet tab */}
+            {activeTab === 'snippet' && (
+              <>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                  Paste this code inside the <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)' }}>&lt;head&gt;</code> tag of your website.
+                </p>
+
+                <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+                  {(['cdn', 'dev'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setEmbedMode(mode)}
+                      className={`btn btn-sm ${embedMode === mode ? 'btn-primary' : 'btn-secondary'}`}
+                    >
+                      {mode === 'cdn' ? 'Production CDN' : 'Local Dev / Tunnel'}
+                    </button>
+                  ))}
+                </div>
+
+                {embedMode === 'dev' && (
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Dev / Tunnel URL</label>
+                    <input type="text" className="input" placeholder="https://your-tunnel.loca.lt"
+                      value={devUrl} onChange={(e) => setDevUrl(e.target.value)} />
+                  </div>
+                )}
+
+                <div style={{ position: 'relative' }}>
+                  <pre className="code-block" style={{ fontSize: 12, lineHeight: '20px', color: 'var(--accent-300)' }}>
+                    {getSnippetHTML(selectedSite.publicKey ?? 'YOUR_KEY', embedMode, devUrl)}
+                  </pre>
+                  <button
+                    onClick={() => copyToClipboard(getSnippetHTML(selectedSite.publicKey ?? '', embedMode, devUrl), 'snippet')}
+                    className="btn btn-icon"
+                    style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-raised)' }}
+                    title="Copy"
+                  >
+                    {copiedKey === 'snippet'
+                      ? <Check size={14} style={{ color: 'var(--status-success)' }} />
+                      : <Copy size={14} />}
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-raised)', borderRadius: 6, fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
+                  <span style={{ color: 'var(--status-info)' }}>ℹ</span>
+                  Need help? Read our Integration Guide or contact technical support.
+                </div>
+              </>
+            )}
+
+            {/* Shopify tab */}
+            {activeTab === 'shopify' && (
+              <ShopifyConnectPanel
+                site={selectedSite}
+                onDisconnect={() => {
+                  handleShopifyDisconnect(selectedSite);
+                  setSelectedSite(null);
+                }}
+              />
+            )}
+
+            {/* WordPress tab */}
+            {activeTab === 'wordpress' && (
+              <WordPressConnectPanel
+                site={selectedSite}
+                onVerified={() => {
+                  refetch();
+                  // Update selectedSite local state to show verified
+                  setSelectedSite({ ...selectedSite, verifiedAt: new Date().toISOString() });
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Connect a new site inline form */}
       <div style={{
@@ -302,85 +828,25 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
           />
           <button type="submit" className="btn btn-primary">Connect</button>
         </form>
-      </div>
 
-      {/* Snippet selected */}
-      {selectedSnippet && (
-        <div style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 8,
-          padding: 20,
-          marginBottom: 24,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Code2 size={16} style={{ color: 'var(--accent-300)' }} />
-              <span style={{ fontSize: 14, fontWeight: 500 }}>Installation Snippet</span>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ef4444' }} />
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#f59e0b' }} />
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#22c55e' }} />
-              </div>
-            </div>
-            <button className="btn btn-icon" onClick={() => setSelectedSnippet(null)}>
-              <X size={14} />
-            </button>
-          </div>
-
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            Paste this code inside the <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)' }}>&lt;head&gt;</code> tag of your website.
-          </p>
-
-          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {(['cdn', 'dev'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setEmbedMode(mode)}
-                className={`btn btn-sm ${embedMode === mode ? 'btn-primary' : 'btn-secondary'}`}
-              >
-                {mode === 'cdn' ? 'Production CDN' : 'Local Dev / Tunnel'}
-              </button>
-            ))}
-          </div>
-
-          {embedMode === 'dev' && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-                Dev / Tunnel URL
-              </label>
-              <input
-                type="text"
-                className="input"
-                placeholder="https://your-tunnel.loca.lt"
-                value={devUrl}
-                onChange={(e) => setDevUrl(e.target.value)}
-              />
-            </div>
-          )}
-
-          <div style={{ position: 'relative' }}>
-            <pre className="code-block" style={{ fontSize: 12, lineHeight: '20px', color: 'var(--accent-300)' }}>
-              {getSnippetHTML(selectedSnippet.publicKey ?? 'YOUR_KEY', embedMode, devUrl)}
-            </pre>
-            <button
-              onClick={() => copyToClipboard(getSnippetHTML(selectedSnippet.publicKey ?? '', embedMode, devUrl), 'snippet')}
-              className="btn btn-icon"
-              style={{ position: 'absolute', top: 8, right: 8, background: 'var(--bg-raised)' }}
-              title="Copy"
-            >
-              {copiedKey === 'snippet'
-                ? <Check size={14} style={{ color: 'var(--status-success)' }} />
-                : <Copy size={14} />}
-            </button>
-          </div>
-
-          <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-raised)', borderRadius: 6, fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
-            <span style={{ color: 'var(--status-info)' }}>ℹ</span>
-            Need help? Read our Integration Guide or contact technical support.
-          </div>
+        {/* Quick platform buttons */}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16 }}>
+          <button
+            onClick={() => { setNewSite({ name: '', domain: '', platform: 'shopify' }); setIsAddOpen(true); }}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+          >
+            <ShoppingBag size={12} style={{ color: '#96bf48' }} /> Connect Shopify
+          </button>
+          <button
+            onClick={() => { setNewSite({ name: '', domain: '', platform: 'wordpress' }); setIsAddOpen(true); }}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+          >
+            <Globe size={12} style={{ color: '#21759b' }} /> Connect WordPress
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Add Site Modal */}
       {isAddOpen && (
@@ -393,32 +859,91 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                   Add a website domain to unlock snippets and campaign targets.
                 </p>
               </div>
-              <button className="btn btn-icon" onClick={() => setIsAddOpen(false)}><X size={14} /></button>
+              <button className="btn btn-icon" onClick={() => { setIsAddOpen(false); setCreateError(''); }}><X size={14} /></button>
             </div>
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Platform</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[
+                    { value: 'html', label: 'HTML / JS', icon: <Code2 size={16} /> },
+                    { value: 'shopify', label: 'Shopify', icon: <ShoppingBag size={16} style={{ color: '#96bf48' }} /> },
+                    { value: 'wordpress', label: 'WordPress', icon: <Globe size={16} style={{ color: '#21759b' }} /> },
+                    { value: 'donorbox', label: 'Donorbox', icon: <Code2 size={16} /> },
+                    { value: 'gofundme', label: 'GoFundMe', icon: <Code2 size={16} /> },
+                    { value: 'other', label: 'Other', icon: <Code2 size={16} /> },
+                  ].map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setNewSite({ ...newSite, platform: p.value })}
+                      style={{
+                        padding: '10px 8px',
+                        border: `1px solid ${newSite.platform === p.value ? 'var(--accent-400)' : 'var(--border-subtle)'}`,
+                        borderRadius: 6,
+                        background: newSite.platform === p.value ? 'rgba(var(--accent-rgb), 0.08)' : 'var(--bg-raised)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 11,
+                        color: newSite.platform === p.value ? 'var(--accent-400)' : 'var(--text-muted)',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {p.icon}
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Site Name</label>
-                <input type="text" required className="input" placeholder="My Affiliate Blog"
+                <input type="text" required className="input" placeholder="My Shopify Store"
                   value={newSite.name} onChange={(e) => setNewSite({ ...newSite, name: e.target.value })} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Domain</label>
-                <input type="text" required className="input" placeholder="mydomain.com"
-                  value={newSite.domain} onChange={(e) => setNewSite({ ...newSite, domain: e.target.value })} />
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+                  {newSite.platform === 'shopify' ? 'Shopify Domain (yourstore.myshopify.com)' : 'Domain'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="input"
+                  placeholder={newSite.platform === 'shopify' ? 'yourstore.myshopify.com' : 'mydomain.com'}
+                  value={newSite.domain}
+                  onChange={(e) => setNewSite({ ...newSite, domain: e.target.value })}
+                />
               </div>
-              <div>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Platform</label>
-                <select className="input" value={newSite.platform} onChange={(e) => setNewSite({ ...newSite, platform: e.target.value })}>
-                  <option value="html">Custom HTML / JS</option>
-                  <option value="wordpress">WordPress</option>
-                  <option value="shopify">Shopify</option>
-                  <option value="donorbox">Donorbox</option>
-                  <option value="other">Other CMS</option>
-                </select>
-              </div>
+              {newSite.platform === 'shopify' && (
+                <div style={{ padding: '10px 12px', background: 'rgba(150,191,72,0.07)', border: '1px solid rgba(150,191,72,0.2)', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ShoppingBag size={12} style={{ color: '#96bf48' }} /> After registration:</strong>
+                  <span style={{ color: 'var(--text-muted)' }}> Click <strong>Complete Setup → Shopify OAuth</strong> to authorize the app and inject your snippet automatically.</span>
+                </div>
+              )}
+              {newSite.platform === 'wordpress' && (
+                <div style={{ padding: '10px 12px', background: 'rgba(33,117,155,0.07)', border: '1px solid rgba(33,117,155,0.2)', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Globe size={12} style={{ color: '#21759b' }} /> After registration:</strong>
+                  <span style={{ color: 'var(--text-muted)' }}> Click <strong>Complete Setup → WordPress Plugin</strong> to download the plugin and verify your connection.</span>
+                </div>
+              )}
+              {createError && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '8px 10px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, fontSize: 12, color: 'var(--status-error)' }}>
+                  <AlertCircle size={12} style={{ marginTop: 2, flexShrink: 0 }} /> {createError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Register Site</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setIsAddOpen(false); setCreateError(''); }}>Cancel</button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isCreating}
+                  onClick={(e) => { e.preventDefault(); handleCreate(); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  {isCreating ? <><RefreshCw size={12} className="spin" /> Registering...</> : 'Register Site'}
+                </button>
               </div>
             </form>
           </div>

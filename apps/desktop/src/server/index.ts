@@ -28,13 +28,15 @@ export async function startServer() {
   await fastify.register(cors, { origin: true, credentials: true });
 
   // ── Auth ──────────────────────────────────────────────────────────────────
-  fastify.post('/api/v1/auth/sign-in', async (request: any, reply) => {
+  const handleSignIn = async (request: any, reply: any) => {
     const { email, password } = request.body as { email: string; password: string };
     if (!email || !password) return reply.code(400).send({ error: { code: 'VALIDATION', message: 'Email and password required' } });
     const result = await signIn(email, password);
     if (!result) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
     return reply.send({ data: result });
-  });
+  };
+  fastify.post('/api/v1/auth/sign-in', handleSignIn);
+  fastify.post('/api/v1/auth/login', handleSignIn);
 
   fastify.post('/api/v1/auth/change-password', { preHandler: authGuard }, async (request: any, reply) => {
     const { currentPassword, newPassword } = request.body as any;
@@ -293,9 +295,23 @@ export async function startServer() {
   // ── Event Ingest ──────────────────────────────────────────────────────────
   fastify.post('/e', async (request: any, reply) => {
     const db = getDb();
-    const { campaignId, siteId, eventType, meta } = request.body as any;
-    if (!campaignId || !siteId || !eventType) return reply.code(400).send({ error: 'Missing required fields' });
-    db.insert(events).values({ id: crypto.randomUUID(), campaignId, siteId, eventType, meta }).run();
+    const body = request.body as any;
+
+    // Support both single event body and { events: [...] } array format
+    const rawEvents = body.events ? body.events : [body];
+
+    for (const evt of rawEvents) {
+      const { campaignId, siteId, eventType, meta } = evt;
+      if (campaignId && siteId && eventType) {
+        db.insert(events).values({
+          id: crypto.randomUUID(),
+          campaignId,
+          siteId,
+          eventType,
+          meta: meta || null
+        }).run();
+      }
+    }
     persist();
     return reply.code(204).send();
   });
@@ -308,7 +324,13 @@ export async function startServer() {
     const pJsPath = fs.existsSync(prodPath) ? prodPath : (fs.existsSync(devPath) ? devPath : null);
     if (!pJsPath) return reply.code(404).send('p.js not found');
     
-    const content = fs.readFileSync(pJsPath, 'utf-8');
+    const normalized = path.normalize(pJsPath);
+    // Assert target path matches the expected asset suffix to prevent path traversal issues
+    if (!normalized.endsWith('p.js')) {
+      return reply.code(400).send('Invalid file path');
+    }
+    
+    const content = fs.readFileSync(normalized, 'utf-8');
     reply.header('Content-Type', 'application/javascript');
     return reply.send(content);
   });

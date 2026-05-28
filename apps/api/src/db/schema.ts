@@ -124,6 +124,8 @@ export const sites = pgTable(
       .notNull()
       .default(sql`encode(gen_random_bytes(16), 'hex')`),
     platform: platformEnum('platform').notNull().default('html'),
+    shopifyShop: text('shopify_shop'),
+    wpSiteUrl: text('wp_site_url'),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -140,6 +142,31 @@ export const sites = pgTable(
     ),
   })
 );
+
+// ─── Shopify Installations ────────────────────────────────────────────────────
+
+export const shopifyInstallations = pgTable('shopify_installations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  siteId: uuid('site_id').references(() => sites.id, { onDelete: 'set null' }),
+  shop: text('shop').unique().notNull(),
+  accessToken: text('access_token').notNull(),
+  scope: text('scope'),
+  scriptTagId: text('script_tag_id'),
+  nonce: text('nonce'),
+  installedAt: timestamp('installed_at', { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+  uninstalledAt: timestamp('uninstalled_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+});
 
 // ─── Campaigns ────────────────────────────────────────────────────────────────
 

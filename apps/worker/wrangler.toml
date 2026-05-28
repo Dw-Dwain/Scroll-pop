@@ -3,20 +3,30 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
+# ── Non-secret vars (safe to commit) ──────────────────────────────────────────
 [vars]
 API_ORIGIN = "https://scroll-pop.onrender.com"
 INTERNAL_SECRET = "change_me_in_production_32_chars_min"
 
+# ── KV Namespace: campaign config cache ───────────────────────────────────────
 [[kv_namespaces]]
 binding = "SCROLLPOP_CONFIG"
 id = "7562d61304e8425b9dcab1260b94e560"
 preview_id = "7562d61304e8425b9dcab1260b94e560"
 
-
-
+# ── Secrets (set via `wrangler secret put <NAME>` — never commit values) ──────
+# Required secrets:
+#   REDIS_URL        — Upstash Redis REST URL  (wrangler secret put REDIS_URL)
+#   REDIS_TOKEN      — Upstash Redis token     (wrangler secret put REDIS_TOKEN)
+#   SENTRY_DSN       — Sentry DSN              (wrangler secret put SENTRY_DSN)
+#
+# To set for production:
+#   pnpm wrangler secret put REDIS_URL --env production
+#   pnpm wrangler secret put REDIS_TOKEN --env production
+#   pnpm wrangler secret put SENTRY_DSN --env production
 
 [env.production]
-vars = { ENVIRONMENT = "production" }
+vars = { ENVIRONMENT = "production", API_ORIGIN = "https://api.scrollpop.io" }
 
 [env.staging]
 vars = { ENVIRONMENT = "staging", API_ORIGIN = "https://api-staging.scrollpop.io" }

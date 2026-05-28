@@ -7,19 +7,24 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  Menu,
-  X,
   Crown,
   Radar,
   FlaskConical,
   Radio,
   ChevronDown,
   User,
+  Menu,
+  X,
+  Plus,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
-import { usePlan, PLAN_LIMITS, PLAN_ORDER } from '../hooks/usePlan';
-import type { PlanId } from '../hooks/usePlan';
+import { usePlan } from '../hooks/usePlan';
+import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
+
+const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -56,11 +61,20 @@ export const Layout: React.FC<LayoutProps> = ({
   onLogout,
   isDemo = false,
 }) => {
-  const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [orgOpen, setOrgOpen] = React.useState(false);
-  const orgRef = React.useRef<HTMLDivElement>(null);
+  const [userMenuOpen, setUserMenuOpen] = React.useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const userMenuRef = React.useRef<HTMLDivElement>(null);
   const [userProfile, setUserProfile] = React.useState(loadProfileFromStorage);
   const { plan, isAdmin } = usePlan();
+
+  // ── Global theme ────────────────────────────────────────────
+  const [isDarkTheme, setIsDarkTheme] = React.useState(() => {
+    try { return localStorage.getItem('sp_theme') === 'dark'; } catch { return false; }
+  });
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDarkTheme ? 'dark' : 'light');
+    try { localStorage.setItem('sp_theme', isDarkTheme ? 'dark' : 'light'); } catch {}
+  }, [isDarkTheme]);
 
   const journeysEnabled = isFeatureEnabled('ff_journeys_ui');
   const opsEnabled = isFeatureEnabled('ff_realtime_ops_dashboard');
@@ -74,7 +88,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (orgRef.current && !orgRef.current.contains(e.target as Node)) setOrgOpen(false);
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setUserMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -93,339 +107,446 @@ export const Layout: React.FC<LayoutProps> = ({
 
   const primaryNav = [
     { label: 'Dashboard',   path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Sites',       path: '/sites',     icon: Globe },
     { label: 'Campaigns',   path: '/campaigns', icon: Megaphone },
     { label: 'Analytics',   path: '/analytics', icon: BarChart2 },
-    { label: 'Sites',       path: '/sites',     icon: Globe },
-    ...(journeysEnabled    ? [{ label: 'Journeys',    path: '/journeys',     icon: Radar,         beta: true }] : []),
-    ...(experimentsEnabled ? [{ label: 'Experiments', path: '/experiments',  icon: FlaskConical,  beta: true }] : []),
-    ...(opsEnabled         ? [{ label: 'Ops Center',  path: '/ops',          icon: Radio }] : []),
-  ];
-
-  const bottomNav = [
-    { label: 'Billing',  path: '/billing',  icon: CreditCard },
-    { label: 'Settings', path: '/settings', icon: Settings },
-    ...(isAdmin ? [{ label: 'Admin', path: '/admin', icon: Crown }] : []),
+    ...(journeysEnabled    ? [{ label: 'Journeys',    path: '/journeys',    icon: Radar,        beta: true }] : []),
+    ...(experimentsEnabled ? [{ label: 'Experiments', path: '/experiments', icon: FlaskConical, beta: true }] : []),
+    ...(opsEnabled         ? [{ label: 'Ops',         path: '/ops',         icon: Radio }] : []),
   ];
 
   const isActive = (path: string) =>
     currentPath === path || (path !== '/dashboard' && currentPath.startsWith(path));
 
-  const NavItem = ({ item }: { item: { label: string; path: string; icon: React.FC<any>; beta?: boolean } }) => {
-    const Icon = item.icon;
-    const active = isActive(item.path);
-    return (
-      <button
-        onClick={() => { onNavigate(item.path); setMobileOpen(false); }}
-        className={`nav-item${active ? ' active' : ''}`}
-      >
-        <Icon size={16} />
-        <span style={{ flex: 1 }}>{item.label}</span>
-        {item.beta && (
-          <span style={{ fontSize: 10, color: 'var(--accent-500)', fontWeight: 500 }}>beta</span>
-        )}
-      </button>
-    );
-  };
-
-  const SidebarContent = () => (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      background: 'linear-gradient(180deg, #111113 0%, #0f0f10 100%)',
-    }}>
-      {/* Wordmark + Org Switcher */}
-      <div style={{ padding: '16px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
-        <div
-          ref={orgRef}
-          style={{ position: 'relative' }}
-        >
-          <button
-            onClick={() => setOrgOpen((v) => !v)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              width: '100%',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '6px 8px',
-              borderRadius: 6,
-              color: 'var(--text-primary)',
-            }}
-            className="nav-item"
-          >
-            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500, fontSize: 15, flex: 1, letterSpacing: '-0.01em' }}>
-              scrollpop
-            </span>
-            <ChevronDown
-              size={14}
-              style={{
-                color: 'var(--text-muted)',
-                transition: 'transform 200ms',
-                transform: orgOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            />
-          </button>
-
-          {orgOpen && (
-            <div style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              right: 0,
-              marginTop: 4,
-              background: 'var(--bg-raised)',
-              border: '1px solid var(--border-default)',
-              borderRadius: 8,
-              padding: '4px',
-              zIndex: 100,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-            }}>
-              <div style={{ padding: '8px 12px 4px', fontSize: 11, color: 'var(--text-muted)' }}>
-                {userProfile?.email ?? 'admin@scrollpop.dev'}
-              </div>
-              <button
-                onClick={() => { onNavigate('/profile'); setOrgOpen(false); }}
-                className="nav-item"
-                style={{ width: '100%', textAlign: 'left', padding: '6px 12px', borderRadius: 4 }}
-              >
-                <User size={14} />
-                <span>Profile</span>
-              </button>
-              <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
-              <button
-                onClick={() => { onLogout(); setOrgOpen(false); }}
-                className="nav-item"
-                style={{ width: '100%', textAlign: 'left', padding: '6px 12px', borderRadius: 4, color: 'var(--status-error)' }}
-              >
-                <LogOut size={14} />
-                <span>Sign Out</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Primary nav */}
-      <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
-        {primaryNav.map((item) => (
-          <NavItem key={item.path} item={item} />
-        ))}
-
-        {/* Bottom nav group (billing, settings, admin) */}
-        <div style={{ height: 1, background: 'var(--border-subtle)', margin: '12px 4px' }} />
-        {bottomNav.map((item) => (
-          <NavItem key={item.path} item={item} />
-        ))}
-      </nav>
-
-      {/* User + Usage bar */}
-      <div style={{
-        borderTop: '1px solid var(--border-subtle)',
-        padding: '12px 12px 16px',
-      }}>
-        {/* Avatar row */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: 12,
-        }}>
-          {isDemo ? (
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: 'var(--accent-600)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 600, color: '#fff', flexShrink: 0,
-            }}>
-              {userProfile?.name ? getInitials(userProfile.name) : 'DA'}
-            </div>
-          ) : (
-            <UserButton afterSignOutUrl="/sign-in" />
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {userProfile?.name ?? 'Admin'}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {userProfile?.email ?? 'admin@scrollpop.dev'}
-            </div>
-          </div>
-        </div>
-
-        {/* Usage bar */}
-        {!isAdmin && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                Plan: <span style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{plan}</span>
-              </span>
-              <span style={{ fontSize: 11, color: usagePct >= 80 ? usageColor : 'var(--text-muted)' }}>
-                {usagePct}%
-              </span>
-            </div>
-            <div className="usage-bar-track">
-              <div
-                className="usage-bar-fill"
-                style={{ width: `${usagePct}%`, background: usageColor }}
-              />
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-              {viewsUsed.toLocaleString()} / {maxViews === Infinity ? '∞' : maxViews.toLocaleString()} views
-            </div>
-          </div>
-        )}
-        {isAdmin && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Crown size={12} style={{ color: 'var(--accent-300)' }} />
-            <span style={{ fontSize: 11, color: 'var(--accent-300)' }}>Admin — unlimited</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  // Full-screen editor paths: campaign wizard + campaign design editor
+  const isFullScreenEditor = currentPath === '/campaigns/new' || /\/campaigns\/.+\/design/.test(currentPath);
+  const isSplitPage = currentPath === '/profile' || currentPath === '/settings';
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-root)' }}>
-      {/* Desktop sidebar */}
-      <aside
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-root)' }}>
+
+      {/* ── Top Navigation Bar ─────────────────────────────────── */}
+      <header style={{
+        height: 'var(--topnav-height, 48px)',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0,
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--topnav-bg, #0a0a0a)',
+        zIndex: 100,
+        padding: '0 16px',
+      }}>
+
+        {/* Logo mark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginRight: 28, flexShrink: 0 }}>
+          {/* Circle icon */}
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="14" cy="14" r="13.5" fill="white" stroke="white" strokeWidth="0.5"/>
+            <rect x="9.5" y="9.5" width="9" height="9" rx="1" fill="#0a0a0a" transform="rotate(45 14 14)"/>
+          </svg>
+          {/* Wordmark */}
+          <div style={{ lineHeight: 1 }}>
+            <div style={{
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 700,
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              color: '#ffffff',
+              textTransform: 'uppercase',
+            }}>
+              SCROLLPOP
+              {isAdmin && <Crown size={9} style={{ color: '#f59e0b', marginLeft: 5, display: 'inline', verticalAlign: 'middle' }} />}
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 400,
+              fontSize: 7.5,
+              letterSpacing: '0.18em',
+              color: 'rgba(255,255,255,0.45)',
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}>
+              CONVERSION STUDIO
+            </div>
+          </div>
+        </div>
+
+        {/* Primary nav — desktop */}
+        <nav
+          className="hidden md:flex"
+          style={{ alignItems: 'center', gap: 2, flex: 1 }}
+        >
+          {primaryNav.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+            return (
+              <button
+                key={item.path}
+                onClick={() => onNavigate(item.path)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '5px 10px',
+                  borderRadius: 6,
+                  background: active ? 'rgba(255,255,255,0.12)' : 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 400,
+                  letterSpacing: active ? '0.01em' : '0.02em',
+                  color: active ? '#ffffff' : 'rgba(255,255,255,0.6)',
+                  transition: 'background 0.12s, color 0.12s',
+                  whiteSpace: 'nowrap',
+                  fontFamily: 'var(--font-sans)',
+                }}
+                onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLButtonElement).style.color = '#ffffff'; } }}
+                onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = 'none'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)'; } }}
+              >
+                <Icon size={14} />
+                {item.label}
+                {(item as any).beta && (
+                  <span style={{ fontSize: 9, color: 'var(--accent-500)', fontWeight: 500, letterSpacing: '0.03em' }}>β</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right section */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0, paddingRight: IS_DESKTOP_MODE ? 150 : 16 }}>
+
+          {/* New Campaign shortcut */}
+          <button
+            onClick={() => onNavigate('/campaigns/new')}
+            className="hidden md:flex"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '5px 12px', borderRadius: 6,
+              background: '#ffffff', color: '#0a0a0a',
+              border: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: 600,
+              fontFamily: 'var(--font-sans)',
+              letterSpacing: '0.03em',
+              transition: 'background 0.12s',
+            }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = '#e4e4e7')}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = '#ffffff')}
+          >
+            <Plus size={12} />
+            New Campaign
+          </button>
+
+          {/* Usage pill — desktop only, non-admin */}
+          {!isAdmin && (
+            <div
+              className="hidden md:flex"
+              style={{ alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 20, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer' }}
+              onClick={() => onNavigate('/billing')}
+              title={`${viewsUsed.toLocaleString()} / ${maxViews === Infinity ? '∞' : maxViews.toLocaleString()} views`}
+            >
+              <div style={{ width: 48, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${usagePct}%`, background: usageColor, borderRadius: 2 }} />
+              </div>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>{plan}</span>
+            </div>
+          )}
+
+          {/* Theme toggle */}
+          <button
+            onClick={() => setIsDarkTheme(d => !d)}
+            className="btn btn-icon hidden md:flex"
+            title={isDarkTheme ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{ color: 'rgba(255,255,255,0.65)' }}
+          >
+            {isDarkTheme ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+
+          {/* Settings + Billing shortcuts */}
+          <button
+            onClick={() => onNavigate('/settings')}
+            className="btn btn-icon hidden md:flex"
+            title="Settings"
+            style={{ color: 'rgba(255,255,255,0.65)' }}
+          >
+            <Settings size={15} />
+          </button>
+
+          {isAdmin && (
+            <button
+              onClick={() => onNavigate('/admin')}
+              className="btn btn-icon hidden md:flex"
+              title="Admin"
+              style={{ color: '#f59e0b' }}
+            >
+              <Crown size={15} />
+            </button>
+          )}
+
+          {/* User / avatar dropdown */}
+          <div ref={userMenuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setUserMenuOpen((v) => !v)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '3px 6px',
+                borderRadius: 6,
+                color: 'rgba(255,255,255,0.65)',
+              }}
+            >
+              {isDemo ? (
+                <div style={{
+                  width: 26, height: 26, borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.15)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 600, color: '#fff', flexShrink: 0,
+                }}>
+                  {userProfile?.name ? getInitials(userProfile.name) : 'DA'}
+                </div>
+              ) : (
+                <UserButton afterSignOutUrl="/sign-in" />
+              )}
+              <ChevronDown size={12} style={{ color: 'rgba(255,255,255,0.4)', transition: 'transform 150ms', transform: userMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+            </button>
+
+            {userMenuOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                right: 0,
+                minWidth: 200,
+                background: 'var(--bg-raised)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 8,
+                padding: 4,
+                zIndex: 200,
+                boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)',
+              }}>
+                <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userProfile?.name ?? 'Admin'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{userProfile?.email ?? 'admin@scrollpop.dev'}</div>
+                  {!isAdmin && (
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{plan} plan</span>
+                        <span style={{ fontSize: 10, color: usagePct >= 80 ? usageColor : 'var(--text-muted)' }}>{usagePct}%</span>
+                      </div>
+                      <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-overlay)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${usagePct}%`, background: usageColor, borderRadius: 2 }} />
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {viewsUsed.toLocaleString()} / {maxViews === Infinity ? '∞' : maxViews.toLocaleString()} views
+                      </div>
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                      <Crown size={10} style={{ color: 'var(--accent-300)' }} />
+                      <span style={{ fontSize: 10, color: 'var(--accent-300)' }}>Admin — unlimited</span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => { onNavigate('/profile'); setUserMenuOpen(false); }}
+                  className="nav-item"
+                  style={{ width: '100%', textAlign: 'left', padding: '6px 10px', borderRadius: 4, fontSize: 13 }}
+                >
+                  <User size={13} />
+                  <span>Profile</span>
+                </button>
+                <button
+                  onClick={() => { onNavigate('/billing'); setUserMenuOpen(false); }}
+                  className="nav-item"
+                  style={{ width: '100%', textAlign: 'left', padding: '6px 10px', borderRadius: 4, fontSize: 13 }}
+                >
+                  <CreditCard size={13} />
+                  <span>Billing</span>
+                </button>
+                <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
+                <button
+                  onClick={() => { onLogout(); setUserMenuOpen(false); }}
+                  className="nav-item"
+                  style={{ width: '100%', textAlign: 'left', padding: '6px 10px', borderRadius: 4, fontSize: 13, color: 'var(--status-error)' }}
+                >
+                  <LogOut size={13} />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile hamburger */}
+          <button className="btn btn-icon flex md:hidden" onClick={() => setMobileMenuOpen(true)}>
+            <Menu size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* ── Main Content ───────────────────────────────────────── */}
+      <main
+        id="sp-main"
         style={{
-          width: 'var(--sidebar-width)',
-          flexShrink: 0,
-          borderRight: '1px solid var(--border-subtle)',
-          overflow: 'hidden',
+          flex: 1,
+          overflowY: (isFullScreenEditor || isSplitPage) ? 'hidden' : 'auto',
+          background: 'var(--bg-root)',
           display: 'flex',
           flexDirection: 'column',
         }}
-        className="hidden md:flex"
       >
-        <SidebarContent />
-      </aside>
-
-      {/* Main content */}
-      <main
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          background: 'var(--bg-root)',
-          minHeight: '100vh',
-        }}
-      >
-        {/* Mobile top bar */}
+        {/* Page content — flex: 1 pushes footer to bottom */}
         <div
+          className={isFullScreenEditor ? '' : 'page-enter'}
           style={{
+            flex: 1,
+            padding: (isFullScreenEditor || isSplitPage) ? '0' : '32px 40px 24px',
+            width: '100%',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--border-subtle)',
-            background: 'var(--bg-base)',
+            flexDirection: 'column',
+            height: isSplitPage ? '100%' : 'auto',
+            overflow: isSplitPage ? 'hidden' : 'visible',
           }}
-          className="md:hidden"
-        >
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 500 }}>
-            scrollpop
-          </span>
-          <button className="btn btn-icon" onClick={() => setMobileOpen(true)}>
-            <Menu size={18} />
-          </button>
-        </div>
-
-        <div
-          className="page-enter"
-          style={{ padding: '24px', maxWidth: 1280, minHeight: 'calc(100vh - 56px)' }}
         >
           {children}
         </div>
       </main>
 
-      {/* Mobile sidebar overlay */}
-      {mobileOpen && (
+      {/* ── Footer ───────────────────────────────────────────── */}
+      {!isFullScreenEditor && (
+        <footer style={{
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          background: '#0a0a0a',
+          padding: '12px 40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexShrink: 0,
+        }}>
+          {/* Left: brand + version */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.8)', textTransform: 'uppercase' }}>
+              SCROLLPOP
+            </span>
+            <span style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.15)' }} />
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-mono)' }}>
+              v0.1.0-beta
+            </span>
+          </div>
+
+          {/* Center: links — internal app pages */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            {[
+              { label: 'Docs',    path: '/docs'    },
+              { label: 'Status',  path: '/status'  },
+              { label: 'Privacy', path: '/privacy' },
+              { label: 'Terms',   path: '/terms'   },
+            ].map(({ label, path }) => (
+              <button
+                key={label}
+                onClick={() => onNavigate(path)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 11,
+                  color: 'rgba(255,255,255,0.4)',
+                  fontFamily: 'var(--font-sans)',
+                  letterSpacing: '0.03em',
+                  padding: 0,
+                  transition: 'color 0.12s',
+                }}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.85)')}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: copyright */}
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: 'var(--font-sans)', letterSpacing: '0.04em' }}>
+            © {new Date().getFullYear()} SCROLLPOP
+          </span>
+        </footer>
+      )}
+
+      {/* ── Mobile nav drawer ─────────────────────────────────── */}
+      {mobileMenuOpen && (
         <>
           <div
-            onClick={() => setMobileOpen(false)}
+            onClick={() => setMobileMenuOpen(false)}
             style={{
               position: 'fixed', inset: 0,
               background: 'rgba(0,0,0,0.5)',
               backdropFilter: 'blur(4px)',
-              zIndex: 40,
+              zIndex: 300,
             }}
           />
-          <aside
-            style={{
-              position: 'fixed', inset: '0 auto 0 0',
-              width: 260,
-              zIndex: 50,
-              borderRight: '1px solid var(--border-subtle)',
-            }}
-          >
-            <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 51 }}>
-              <button className="btn btn-icon" onClick={() => setMobileOpen(false)}>
-                <X size={18} />
-              </button>
+          <div style={{
+            position: 'fixed', inset: '0 auto 0 0',
+            width: 260,
+            zIndex: 310,
+            background: 'var(--bg-base)',
+            borderRight: '1px solid var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 16,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 500 }}>scrollpop</span>
+              <button className="btn btn-icon" onClick={() => setMobileMenuOpen(false)}><X size={16} /></button>
             </div>
-            <SidebarContent />
-          </aside>
+            {primaryNav.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.path);
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => { onNavigate(item.path); setMobileMenuOpen(false); }}
+                  className={`nav-item${active ? ' active' : ''}`}
+                >
+                  <Icon size={15} />
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {(item as any).beta && <span style={{ fontSize: 9, color: 'var(--accent-500)' }}>β</span>}
+                </button>
+              );
+            })}
+            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '8px 0' }} />
+            {[
+              { label: 'Billing', path: '/billing', icon: CreditCard },
+              { label: 'Settings', path: '/settings', icon: Settings },
+              ...(isAdmin ? [{ label: 'Admin', path: '/admin', icon: Crown }] : []),
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => { onNavigate(item.path); setMobileMenuOpen(false); }}
+                  className={`nav-item${isActive(item.path) ? ' active' : ''}`}
+                >
+                  <Icon size={15} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '8px 0' }} />
+            <button
+              onClick={() => { onLogout(); setMobileMenuOpen(false); }}
+              className="nav-item"
+              style={{ color: 'var(--status-error)' }}
+            >
+              <LogOut size={15} />
+              <span>Sign Out</span>
+            </button>
+          </div>
         </>
       )}
-
-      {/* Mobile bottom nav */}
-      <nav
-        className="md:hidden"
-        style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0,
-          height: 56,
-          background: 'var(--bg-base)',
-          borderTop: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-around',
-          zIndex: 30,
-          padding: '0 8px',
-        }}
-      >
-        {[
-          { label: 'Home',      path: '/dashboard', icon: LayoutDashboard },
-          { label: 'Analytics', path: '/analytics', icon: BarChart2 },
-          { label: 'Sites',     path: '/sites',     icon: Globe },
-          { label: 'Settings',  path: '/settings',  icon: Settings },
-        ].map(({ label, path, icon: Icon }) => {
-          const active = isActive(path);
-          return (
-            <button
-              key={path}
-              onClick={() => onNavigate(path)}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                padding: '6px 12px',
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: active ? 'var(--accent-300)' : 'var(--text-muted)',
-                fontSize: 10,
-              }}
-            >
-              <Icon size={18} />
-              {active && <span>{label}</span>}
-            </button>
-          );
-        })}
-        {/* Center new campaign button */}
-        <button
-          onClick={() => onNavigate('/campaigns/new')}
-          style={{
-            width: 48, height: 48,
-            borderRadius: '50%',
-            background: 'var(--accent-500)',
-            border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff',
-            boxShadow: '0 4px 12px rgba(99,102,241,0.4)',
-          }}
-        >
-          <Megaphone size={20} />
-        </button>
-      </nav>
     </div>
   );
 };

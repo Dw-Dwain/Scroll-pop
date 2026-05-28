@@ -19,6 +19,10 @@ import { Settings } from './pages/Settings';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { AdminPanel } from './pages/AdminPanel';
+import { DocsPage } from './pages/DocsPage';
+import { StatusPage } from './pages/StatusPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
 
 const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
 
@@ -117,6 +121,10 @@ const ClerkAppContent: React.FC = () => {
             {currentPath === '/admin' ? <AdminPanel onNavigate={navigate} /> : null}
 
             {/* Showcase routes */}
+            {currentPath === '/docs'    ? <DocsPage    onNavigate={navigate} /> : null}
+            {currentPath === '/status'  ? <StatusPage  onNavigate={navigate} /> : null}
+            {currentPath === '/privacy' ? <PrivacyPage onNavigate={navigate} /> : null}
+            {currentPath === '/terms'   ? <TermsPage   onNavigate={navigate} /> : null}
             {currentPath === '/calendar' ? <CalendarPage /> : null}
             {currentPath === '/gallery' ? <ImageGallery /> : null}
             {currentPath === '/chat' ? <SupportChat /> : null}
@@ -139,6 +147,58 @@ const ClerkAppContent: React.FC = () => {
   );
 };
 
+const ensureDemoSession = () => {
+  try {
+    const sid = sessionStorage.getItem('_sp_sid') ?? (() => {
+      const id = crypto.randomUUID();
+      sessionStorage.setItem('_sp_sid', id);
+      return id;
+    })();
+    const raw = localStorage.getItem('_sp_sessions');
+    let sessions = raw ? JSON.parse(raw) : [];
+    const existing = sessions.find((s: any) => s.id === sid);
+    if (!existing) {
+      const ua = navigator.userAgent;
+      let label = 'Chrome on Windows';
+      let type: 'desktop' | 'mobile' = 'desktop';
+      if (/iPhone|iPad|iPod/i.test(ua)) {
+        label = `Safari on ${/iPad/i.test(ua) ? 'iPad' : 'iPhone'}`;
+        type = 'mobile';
+      } else if (/Android/i.test(ua)) {
+        label = 'Chrome on Android';
+        type = 'mobile';
+      } else {
+        const browser = /Edg\//i.test(ua) ? 'Edge' : /Firefox/i.test(ua) ? 'Firefox' : /Safari/i.test(ua) && !/Chrome/i.test(ua) ? 'Safari' : 'Chrome';
+        const os = /Win/i.test(ua) ? 'Windows' : /Mac/i.test(ua) ? 'macOS' : /Linux/i.test(ua) ? 'Linux' : 'Unknown OS';
+        label = `${browser} on ${os}`;
+      }
+      
+      let location = 'Unknown';
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const parts = tz.split('/');
+        if (parts.length >= 2) {
+          const city = parts[parts.length - 1];
+          if (city) location = city.replace(/_/g, ' ');
+        } else {
+          location = tz;
+        }
+      } catch {}
+
+      const newSession = {
+        id: sid,
+        device: label,
+        deviceType: type,
+        location,
+        createdAt: Date.now(),
+        current: true,
+      };
+      sessions = [newSession, ...sessions.map((s: any) => ({ ...s, current: false }))].slice(0, 10);
+      localStorage.setItem('_sp_sessions', JSON.stringify(sessions));
+    }
+  } catch {}
+};
+
 const DemoAppContent: React.FC = () => {
   // Custom router state inside React
   const [currentPath, setCurrentPath] = React.useState(window.location.pathname);
@@ -149,6 +209,21 @@ const DemoAppContent: React.FC = () => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      ensureDemoSession();
+      if (currentPath === '/' || currentPath === '/dashboard') {
+        try {
+          const prefs = JSON.parse(localStorage.getItem('_sp_prefs') ?? '{}');
+          const view = prefs.defaultView ?? 'dashboard';
+          if (view !== 'dashboard') {
+            navigate(`/${view}`);
+          }
+        } catch {}
+      }
+    }
+  }, [isAuthenticated]);
 
   const navigate = (path: string) => {
     window.history.pushState({}, '', path);
@@ -162,7 +237,13 @@ const DemoAppContent: React.FC = () => {
 
   const handleLogin = () => {
     setIsAuthenticated(true);
-    navigate('/dashboard');
+    try {
+      const prefs = JSON.parse(localStorage.getItem('_sp_prefs') ?? '{}');
+      const view = prefs.defaultView ?? 'dashboard';
+      navigate(`/${view}`);
+    } catch {
+      navigate('/dashboard');
+    }
   };
 
   // Refine Providers
@@ -204,6 +285,11 @@ const DemoAppContent: React.FC = () => {
           {currentPath === '/settings' ? <Settings /> : null}
           {currentPath === '/profile' ? <Profile isDemo={true} onNavigate={navigate} /> : null}
           {currentPath === '/admin' ? <AdminPanel onNavigate={navigate} /> : null}
+
+          {currentPath === '/docs'    ? <DocsPage    onNavigate={navigate} /> : null}
+          {currentPath === '/status'  ? <StatusPage  onNavigate={navigate} /> : null}
+          {currentPath === '/privacy' ? <PrivacyPage onNavigate={navigate} /> : null}
+          {currentPath === '/terms'   ? <TermsPage   onNavigate={navigate} /> : null}
 
           {/* Showcase routes */}
           {currentPath === '/calendar' ? <CalendarPage /> : null}
@@ -254,7 +340,13 @@ const DesktopAppContent: React.FC = () => {
     const secret = (import.meta as any).env.VITE_INTERNAL_SECRET || 'change_me_in_production_32_chars_min';
     localStorage.setItem('desktop_token', secret);
     setIsAuthenticated(true);
-    navigate('/dashboard');
+    try {
+      const prefs = JSON.parse(localStorage.getItem('_sp_prefs') ?? '{}');
+      const view = prefs.defaultView ?? 'dashboard';
+      navigate(`/${view}`);
+    } catch {
+      navigate('/dashboard');
+    }
   };
 
   const desktopGetToken = React.useCallback(async () => localStorage.getItem('desktop_token'), []);
@@ -281,6 +373,10 @@ const DesktopAppContent: React.FC = () => {
           {currentPath === '/billing' ? <Billing /> : null}
           {currentPath === '/settings' ? <Settings /> : null}
           {currentPath === '/profile' ? <Profile isDemo={false} isDesktop={true} onNavigate={navigate} /> : null}
+          {currentPath === '/docs'    ? <DocsPage    onNavigate={navigate} /> : null}
+          {currentPath === '/status'  ? <StatusPage  onNavigate={navigate} /> : null}
+          {currentPath === '/privacy' ? <PrivacyPage onNavigate={navigate} /> : null}
+          {currentPath === '/terms'   ? <TermsPage   onNavigate={navigate} /> : null}
           {currentPath === '/calendar' ? <CalendarPage /> : null}
           {currentPath === '/gallery' ? <ImageGallery /> : null}
           {currentPath === '/chat' ? <SupportChat /> : null}

@@ -40,30 +40,25 @@ function AreaChart({ data, color, fillColor }: { data: number[]; color: string; 
   );
 }
 
-function TrendChart({
-  impressions, views, clicks, conversions,
-}: { impressions: number; views: number; clicks: number; conversions: number }) {
-  const W = 900, H = 160, pad = { t: 20, r: 8, b: 24, l: 40 };
+function TrendChart({ daily }: {
+  daily: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }>;
+}) {
+  const W = 900, H = 160, pad = { t: 24, r: 8, b: 24, l: 40 };
   const w = W - pad.l - pad.r;
   const h = H - pad.t - pad.b;
-  const n = 30;
+  const days = daily.length || 30;
 
-  const makePoints = (total: number, noise: number): number[] =>
-    Array.from({ length: n }, (_, i) => {
-      const v = total * (0.5 + (i / n) * 0.5) * (1 + Math.sin(i * 0.8 + noise) * 0.25);
-      return Math.max(0, v);
-    });
+  const impPts  = daily.map((d) => d.impressions);
+  const viewPts = daily.map((d) => d.views);
+  const clkPts  = daily.map((d) => d.clicks);
+  const cvPts   = daily.map((d) => d.conversions);
 
-  const impData  = makePoints(impressions, 0);
-  const viewData = makePoints(views, 1.2);
-  const clkData  = makePoints(clicks, 2.1);
-  const cvData   = makePoints(conversions, 3.0);
-
-  const maxVal = Math.max(...impData, 1);
+  const maxVal = Math.max(...impPts, ...viewPts, ...clkPts, ...cvPts, 1);
 
   const toPath = (pts: number[], fill = false): string => {
+    if (!pts.length) return '';
     const cs = pts.map((v, i) => ({
-      x: pad.l + (i / (n - 1)) * w,
+      x: pad.l + (i / (pts.length - 1)) * w,
       y: pad.t + h - (v / maxVal) * h,
     }));
     const lp = `M ${cs.map((c) => `${c.x},${c.y}`).join(' L ')}`;
@@ -76,22 +71,50 @@ function TrendChart({
     y: pad.t + h - f * h,
   }));
 
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmtDay = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    return `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}`;
+  };
+
+  const xLabels = daily.map((d, i) => {
+    if (i === 0 || i === days - 1) return fmtDay(d.day);
+    if (i % 7 === 0 && i < days - 4) return fmtDay(d.day);
+    return '';
+  });
+
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
       {yTicks.map((t) => (
         <g key={t.val}>
           <line x1={pad.l} y1={t.y} x2={W - pad.r} y2={t.y} stroke="var(--border-subtle)" strokeWidth={0.5} />
-          <text x={pad.l - 4} y={t.y + 3} textAnchor="end" fontSize={8} fill="var(--text-muted)">
+          <text x={pad.l - 6} y={t.y + 3} textAnchor="end" fontSize={8} fill="var(--text-muted)">
             {t.val >= 1000 ? `${(t.val / 1000).toFixed(0)}k` : t.val}
           </text>
         </g>
       ))}
 
-      <path d={toPath(impData, true)} fill="rgba(99,102,241,0.08)" />
-      <path d={toPath(impData)} fill="none" stroke="var(--data-1)" strokeWidth={1.5} strokeLinecap="round" />
-      <path d={toPath(viewData)} fill="none" stroke="var(--data-2)" strokeWidth={1.5} strokeLinecap="round" />
-      <path d={toPath(clkData)} fill="none" stroke="var(--data-3)" strokeWidth={1.5} strokeLinecap="round" strokeDasharray="3,2" />
-      <path d={toPath(cvData)} fill="none" stroke="var(--data-5)" strokeWidth={1.5} strokeLinecap="round" strokeDasharray="3,2" />
+      {impPts.length > 1 && (
+        <>
+          <path d={toPath(impPts, true)} fill="rgba(99,102,241,0.06)" />
+          <path d={toPath(impPts)} fill="none" stroke="var(--data-1)" strokeWidth={1.5} strokeLinecap="round" />
+        </>
+      )}
+      {viewPts.length > 1 && <path d={toPath(viewPts)} fill="none" stroke="var(--data-2)" strokeWidth={1.5} strokeLinecap="round" />}
+      {clkPts.length > 1 && <path d={toPath(clkPts)} fill="none" stroke="var(--data-3)" strokeWidth={1.5} strokeLinecap="round" strokeDasharray="3,2" />}
+      {cvPts.length > 1 && <path d={toPath(cvPts)} fill="none" stroke="var(--data-5)" strokeWidth={1.5} strokeLinecap="round" strokeDasharray="3,2" />}
+
+      {/* X Labels */}
+      {xLabels.map((l, i) => l ? (
+        <text key={i}
+          x={pad.l + (i / (days - 1)) * w}
+          y={H - 2}
+          textAnchor="middle"
+          fontSize={8}
+          fill="var(--text-muted)"
+        >{l}</text>
+      ) : null)}
 
       {/* Legend */}
       {[
@@ -100,7 +123,7 @@ function TrendChart({
         { label: 'Clicks',      color: 'var(--data-3)' },
         { label: 'Conversions', color: 'var(--data-5)' },
       ].map((l, i) => (
-        <g key={l.label} transform={`translate(${pad.l + i * 110}, ${pad.t - 8})`}>
+        <g key={l.label} transform={`translate(${pad.l + i * 110}, ${pad.t - 14})`}>
           <rect x={0} y={-4} width={10} height={2} rx={1} fill={l.color} />
           <text x={14} y={0} fontSize={9} fill="var(--text-muted)">{l.label}</text>
         </g>
@@ -124,12 +147,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
     url: `${apiUrl}/analytics/campaigns`,
     method: 'get',
   });
+  const { data: dailyResult, isLoading: dailyLoading } = useCustom({
+    url: `${apiUrl}/analytics/daily`,
+    method: 'get',
+  });
 
   const overview = (overviewResult as any)?.data ?? null;
   const rawStats: CampaignStat[] = Array.isArray((statsResult as any)?.data)
     ? (statsResult as any).data
     : [];
-  const isLoading = overviewLoading || statsLoading;
+  const isLoading = overviewLoading || statsLoading || dailyLoading;
+
+  const dailyAll: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }> =
+    (dailyResult as any)?.data?.daily ?? [];
+  const curr30 = dailyAll.slice(30);
 
   const campaignStats = React.useMemo(() => {
     const arr = [...rawStats];
@@ -166,14 +197,14 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ maxWidth: 1400, width: '100%' }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
         marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)',
       }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
             Analytics
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
@@ -205,7 +236,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
       </div>
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
             background: 'var(--bg-surface)',
@@ -234,26 +265,21 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         ))}
       </div>
 
-      {/* Trend chart */}
+      {/* Trend chart + Funnel — 2-col */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, marginBottom: 24 }}>
       <div style={{
         background: 'var(--bg-surface)',
         border: '1px solid var(--border-subtle)',
         borderRadius: 8,
         padding: 20,
-        marginBottom: 24,
       }}>
-        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
           Trend Analysis
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
             Daily traffic and conversion volume
           </span>
         </h3>
-        <TrendChart
-          impressions={overview?.impressions ?? 0}
-          views={overview?.views ?? 0}
-          clicks={overview?.clicks ?? 0}
-          conversions={overview?.conversions ?? 0}
-        />
+        <TrendChart daily={curr30} />
       </div>
 
       {/* Conversion funnel */}
@@ -262,9 +288,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         border: '1px solid var(--border-subtle)',
         borderRadius: 8,
         padding: 20,
-        marginBottom: 24,
       }}>
-        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
           Conversion Funnel
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${funnelStages.length}, 1fr)`, gap: 12 }}>
@@ -292,15 +317,18 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         </div>
       </div>
 
+      </div>{/* end 2-col grid */}
+
       {/* Campaign breakdown table */}
       <div style={{
         background: 'var(--bg-surface)',
         border: '1px solid var(--border-subtle)',
         borderRadius: 8,
         padding: 20,
+        marginBottom: 24,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
             Campaign Breakdown
           </h3>
           <button

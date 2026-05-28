@@ -51,6 +51,10 @@ interface DesignConfig {
   textColor: string;
   accentColor: string;
   borderRadius: number;
+  padding?: string;
+  gap?: string;
+  margin?: string;
+  boxShadow?: string;
   overlayEnabled: boolean;
   overlayOpacity: number;
   headline: string;
@@ -101,7 +105,8 @@ function getEdgeUrl(): string {
     // Fallback 2: Find script tags containing '/p.js'
     const scripts = document.getElementsByTagName('script');
     for (let i = 0; i < scripts.length; i++) {
-      const src = scripts[i]?.src;
+      const script = scripts.item(i);
+      const src = script?.src;
       if (src && src.includes('/p.js')) {
         try {
           const urlObj = new URL(src);
@@ -117,6 +122,8 @@ function getEdgeUrl(): string {
 }
 
 const EDGE_URL = getEdgeUrl();
+
+let activeSiteId = '';
 
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
@@ -161,6 +168,7 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     }
 
     const config: SiteConfig = await res.json() as SiteConfig;
+    activeSiteId = config.siteId;
     console.log('[ScrollPop] Config loaded successfully:', config);
 
     if (!config.campaigns || config.campaigns.length === 0) {
@@ -208,7 +216,9 @@ function evaluateRule(rule: TargetingRule): boolean {
 
     case 'url_regex': {
       try {
-        return new RegExp(value['pattern'] as string).test(url);
+        const pattern = (value['pattern'] as string) || '';
+        if (pattern.length > 100) return false; // Enforce max-length constraint to mitigate ReDoS
+        return new RegExp(pattern).test(url);
       } catch {
         return false;
       }
@@ -262,13 +272,18 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
 
 function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
   switch (trigger.type) {
-    // ✅ SAFE: scroll position — no history manipulation
+    // ✅ SAFE: scroll position — direction-aware (only fires on downward scroll)
     case 'scroll_pct': {
       const targetPct = (trigger.params['pct'] as number) ?? 50;
+      let lastScrollY = window.scrollY;
       const onScroll = () => {
         const scrolled = window.scrollY;
         const total = document.body.scrollHeight - window.innerHeight;
         if (total <= 0) return;
+        // Only fire when user is scrolling DOWN (not when scrolling back up past threshold)
+        const scrollingDown = scrolled > lastScrollY;
+        lastScrollY = scrolled;
+        if (!scrollingDown) return;
         const pct = (scrolled / total) * 100;
         if (pct >= targetPct) {
           window.removeEventListener('scroll', onScroll);
@@ -301,8 +316,11 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
     }
 
     // ✅ SAFE: cursor leaving viewport toward top (NOT popstate/history)
+    // Also handles mobile exit intent via fast upward scroll velocity detection
     case 'exit_intent_mouse': {
       const sensitivity = (trigger.params['sensitivity'] as number) ?? 20;
+
+      // Desktop: cursor near top of viewport
       const onMouseMove = (e: MouseEvent) => {
         if (e.clientY <= sensitivity) {
           document.removeEventListener('mousemove', onMouseMove);
@@ -310,6 +328,31 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
         }
       };
       document.addEventListener('mousemove', onMouseMove);
+
+      // Mobile fallback: rapid upward scroll = user is about to leave
+      // Track scroll velocity; if user scrolls up fast (>120px in 150ms) → exit intent
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (isTouchDevice) {
+        let lastY = window.scrollY;
+        let lastT = Date.now();
+        let mobileFired = false;
+        const onMobileScroll = () => {
+          if (mobileFired) return;
+          const nowY = window.scrollY;
+          const nowT = Date.now();
+          const dy = lastY - nowY;       // positive = scrolling UP
+          const dt = nowT - lastT;       // ms elapsed
+          lastY = nowY;
+          lastT = nowT;
+          // Velocity threshold: upward movement >120px in <150ms
+          if (dy > 120 && dt < 150) {
+            mobileFired = true;
+            window.removeEventListener('scroll', onMobileScroll);
+            fire();
+          }
+        };
+        window.addEventListener('scroll', onMobileScroll, { passive: true });
+      }
       break;
     }
 
@@ -370,6 +413,19 @@ function setFrequencyCap(campaignId: string, frequency: string): void {
   }
 }
 
+function getShadowCSS(shadow: string | undefined): string {
+  switch (shadow) {
+    case 'soft': return '0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03)';
+    case 'medium': return '0 10px 30px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)';
+    case 'floating': return '0 20px 50px -12px rgba(0, 0, 0, 0.15), 0 8px 24px -4px rgba(0, 0, 0, 0.08)';
+    case 'premium': return '0 30px 70px -10px rgba(0, 0, 0, 0.2), 0 12px 30px -4px rgba(0, 0, 0, 0.1)';
+    case 'glass': return '0 8px 32px 0 rgba(0, 0, 0, 0.08)';
+    case 'dark': return '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 20px 2px rgba(99, 102, 241, 0.15)';
+    case 'none': return 'none';
+    default: return '0 20px 60px rgba(0,0,0,0.3)';
+  }
+}
+
 // ─── Popup Rendering (Shadow DOM) ─────────────────────────────────────────────
 
 function renderPopup(campaign: CampaignConfig): void {
@@ -377,6 +433,11 @@ function renderPopup(campaign: CampaignConfig): void {
 
   // Pick weighted affiliate slot
   const slot = pickWeightedSlot(affiliateSlots);
+
+  // Check popup kinds
+  const popupType = (design as any).steps?.main?.popupType || design.kind || 'modal';
+  const isSpinWheel = popupType === 'spinwheel' || design.headline?.toLowerCase().includes('spin') || campaignId.includes('spin');
+  const isScratchCard = popupType === 'scratchcard' || design.headline?.toLowerCase().includes('scratch') || campaignId.includes('scratch');
 
   // Create host element
   const host = document.createElement('div');
@@ -389,89 +450,302 @@ function renderPopup(campaign: CampaignConfig): void {
   // Attach Shadow DOM — CSS isolation
   const shadow = host.attachShadow({ mode: 'closed' });
 
-  const sizeMap = { sm: '360px', md: '480px', lg: '600px' };
-  const width = sizeMap[design.size] ?? '480px';
+  let width = '480px';
+  switch (design.size) {
+    case 'sm': width = '360px'; break;
+    case 'md': width = '480px'; break;
+    case 'lg': width = '600px'; break;
+  }
+  // If Spinwheel or Scratch Card, let's make it a bit wider to look premium
+  if (isSpinWheel) width = '640px';
 
   const positionStyles = getPositionStyles(design);
 
-  shadow.innerHTML = `
-    <style>
-      :host { all: initial; font-family: system-ui, sans-serif; }
-      ${design.overlayEnabled ? `
-      .overlay {
-        position: fixed; inset: 0; z-index: 2147483646;
-        background: rgba(0,0,0,${design.overlayOpacity ?? 0.5});
-        animation: sp-fade-in 0.2s ease;
-      }` : ''}
-      .popup {
-        position: fixed; z-index: 2147483647;
-        background: ${design.backgroundColor};
-        ${design.backgroundImage ? `background-image: url(${design.backgroundImage}); background-size: cover; background-position: center;` : ''}
-        color: ${design.textColor};
-        border-radius: ${design.borderRadius}px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        width: ${width}; max-width: calc(100vw - 32px);
-        ${positionStyles}
-        animation: ${getAnimation(design.animation)};
-        overflow: hidden;
+  const htmlChunks: string[] = [];
+
+  // Build style tag
+  htmlChunks.push('<style>');
+  htmlChunks.push(':host { all: initial; font-family: system-ui, sans-serif; }');
+  if (design.overlayEnabled) {
+    htmlChunks.push('.overlay { position: fixed; inset: 0; z-index: 2147483646; background: rgba(0,0,0,');
+    htmlChunks.push(String(design.overlayOpacity ?? 0.5));
+    htmlChunks.push('); animation: sp-fade-in 0.2s ease; }');
+  }
+  htmlChunks.push('.popup { position: fixed; z-index: 2147483647; background: ');
+  htmlChunks.push(design.backgroundColor);
+  htmlChunks.push('; ');
+  if (design.backgroundImage) {
+    htmlChunks.push('background-image: url(');
+    htmlChunks.push(design.backgroundImage);
+    htmlChunks.push('); background-size: cover; background-position: center; ');
+  }
+  htmlChunks.push('color: ');
+  htmlChunks.push(design.textColor);
+  htmlChunks.push('; border-radius: ');
+  htmlChunks.push(String(design.borderRadius));
+  htmlChunks.push('px; box-shadow: ');
+  htmlChunks.push(getShadowCSS(design.boxShadow));
+  htmlChunks.push('; ');
+  if (design.boxShadow === 'glass') {
+    htmlChunks.push('backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); ');
+  }
+  htmlChunks.push('margin: ');
+  htmlChunks.push(design.margin ?? '0px');
+  htmlChunks.push('; width: ');
+  htmlChunks.push(width);
+  htmlChunks.push('; max-width: calc(100vw - 32px); ');
+  htmlChunks.push(positionStyles);
+  htmlChunks.push(' animation: ');
+  htmlChunks.push(getAnimation(design.animation));
+  htmlChunks.push('; overflow: hidden; }');
+  htmlChunks.push('.popup-inner { padding: ');
+  htmlChunks.push(design.padding ?? '24px');
+  htmlChunks.push('; display: flex; flex-direction: column; gap: ');
+  htmlChunks.push(design.gap ?? '12px');
+  htmlChunks.push('; }');
+  htmlChunks.push('.close-btn { position: absolute; ');
+  htmlChunks.push(design.closeButtonPosition === 'top-right' ? 'top: 12px; right: 12px;' : 'top: 12px; left: 12px;');
+  htmlChunks.push(' background: none; border: none; cursor: pointer; font-size: 18px; color: ');
+  htmlChunks.push(design.textColor);
+  htmlChunks.push('; opacity: 0.6; padding: 4px 8px; border-radius: 4px; z-index: 50; }');
+  htmlChunks.push('.close-btn:hover { opacity: 1; background: rgba(0,0,0,0.1); }');
+  htmlChunks.push('.headline { font-size: 20px; font-weight: 700; margin: 0; line-height: 1.3; }');
+  htmlChunks.push('.subheadline { font-size: 14px; opacity: 0.8; margin: 0; }');
+  htmlChunks.push('.body-text { font-size: 14px; margin: 0; line-height: 1.5; }');
+  htmlChunks.push('.product-image { width: 100%; border-radius: 8px; margin: 0; display: block; }');
+  
+  // Inputs & Email Capture Styles
+  htmlChunks.push('.email-input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; color: #1f2937; background: #ffffff; outline: none; }');
+  htmlChunks.push('.email-input:focus { border-color: ');
+  htmlChunks.push(design.accentColor);
+  htmlChunks.push('; }');
+
+  htmlChunks.push('.cta-btn { display: inline-block; width: 100%; text-align: center; border: none; cursor: pointer; background: ');
+  htmlChunks.push(design.accentColor);
+  htmlChunks.push('; color: #fff; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; text-decoration: none; box-sizing: border-box; transition: opacity 0.15s; }');
+  htmlChunks.push('.cta-btn:hover { opacity: 0.9; }');
+  htmlChunks.push('.cta-link { color: ');
+  htmlChunks.push(design.accentColor);
+  htmlChunks.push('; text-decoration: underline; font-size: 14px; cursor: pointer; }');
+  htmlChunks.push('.dismiss-text { text-align: center; margin-top: 4px; font-size: 12px; opacity: 0.6; cursor: pointer; }');
+  htmlChunks.push('.dismiss-text:hover { opacity: 1; }');
+  htmlChunks.push('.powered-by { text-align: center; margin-top: 4px; font-size: 10px; opacity: 0.4; }');
+
+  // Gamified elements styling
+  htmlChunks.push('.gamified-container { display: flex; flex-direction: row; gap: 20px; align-items: center; justify-content: center; }');
+  htmlChunks.push('.gamified-left { flex: 1; display: flex; flex-direction: column; gap: 10px; }');
+  htmlChunks.push('.gamified-right { display: flex; align-items: center; justify-content: center; shrink-0; }');
+  
+  // Spin Wheel CSS
+  htmlChunks.push('.spin-wrapper { position: relative; width: 220px; height: 220px; background: #1e1b4b; border-radius: 50%; border: 4px solid #312e81; box-shadow: 0 4px 12px rgba(0,0,0,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center; }');
+  htmlChunks.push('.spin-wheel-svg { width: 100%; height: 100%; transform: rotate(0deg); transition: transform 3s cubic-bezier(0.15, 0.85, 0.25, 1); }');
+  htmlChunks.push('.spin-peg { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 14px solid #f59e0b; z-index: 20; }');
+  htmlChunks.push('.spin-center-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; background: #ffffff; border: 3px solid #1e1b4b; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; color: #1e1b4b; cursor: pointer; z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }');
+
+  // Scratch Card CSS
+  htmlChunks.push('.scratch-container { position: relative; width: 260px; height: 150px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; background: #000000; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.4); }');
+  htmlChunks.push('.scratch-canvas { position: absolute; inset: 0; cursor: crosshair; z-index: 10; touch-action: none; }');
+  htmlChunks.push('.scratch-prize { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #ffffff; font-family: monospace; z-index: 1; }');
+
+  // Success Code Copy block
+  htmlChunks.push('.success-coupon-box { display: flex; align-items: center; justify-content: center; gap: 8px; border: 2px dashed ');
+  htmlChunks.push(design.accentColor);
+  htmlChunks.push('; border-radius: 8px; padding: 12px; background: rgba(99, 102, 241, 0.05); font-size: 18px; font-weight: 800; font-family: monospace; letter-spacing: 2px; text-align: center; cursor: pointer; transition: background 0.2s; }');
+  htmlChunks.push('.success-coupon-box:hover { background: rgba(99, 102, 241, 0.1); }');
+  htmlChunks.push('.success-icon { width: 44px; height: 44px; background: #d1fae5; color: #065f46; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px auto; font-size: 20px; }');
+
+  // Real-time Email Correction Styles
+  htmlChunks.push('.email-suggest { font-size: 11px; color: ');
+  htmlChunks.push(design.accentColor);
+  htmlChunks.push('; background: rgba(99, 102, 241, 0.08); padding: 6px 12px; border-radius: 6px; margin-top: -4px; margin-bottom: 4px; cursor: pointer; display: none; align-items: center; gap: 4px; font-weight: 600; }');
+  htmlChunks.push('.email-suggest:hover { background: rgba(99, 102, 241, 0.15); }');
+
+  // Persistent Teaser Badge Styles
+  const isTeaserLeft = design.position === 'bottom-left' || design.position === 'top';
+  htmlChunks.push('.teaser-badge { position: fixed; z-index: 2147483647; ');
+  htmlChunks.push(isTeaserLeft ? 'left: 20px;' : 'right: 20px;');
+  htmlChunks.push(' bottom: 20px; background: ');
+  htmlChunks.push(design.accentColor);
+  htmlChunks.push('; color: #ffffff; padding: 10px 18px; border-radius: 9999px; font-weight: 700; font-size: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); cursor: pointer; display: none; align-items: center; gap: 6px; transition: transform 0.2s, opacity 0.2s; }');
+  htmlChunks.push('.teaser-badge:hover { transform: scale(1.05); }');
+
+  htmlChunks.push('@keyframes sp-fade-in { from { opacity: 0 } to { opacity: 1 } }');
+  htmlChunks.push('@keyframes sp-slide-up { from { opacity: 0; transform: translateY(40px) } to { opacity: 1; transform: translateY(0) } }');
+  htmlChunks.push('@keyframes sp-slide-down { from { opacity: 0; transform: translateY(-40px) } to { opacity: 1; transform: translateY(0) } }');
+  htmlChunks.push('@keyframes sp-zoom { from { opacity: 0; transform: scale(0.9) } to { opacity: 1; transform: scale(1) } }');
+  htmlChunks.push('@keyframes sp-bounce { 0% { opacity:0; transform:translateY(-60px) scale(0.95) } 55% { opacity:1; transform:translateY(12px) scale(1.02) } 75% { transform:translateY(-6px) scale(0.99) } 90% { transform:translateY(3px) scale(1.005) } 100% { opacity:1; transform:translateY(0) scale(1) } }');
+  htmlChunks.push('@keyframes sp-elastic { 0% { opacity:0; transform:scale(0.4) } 55% { opacity:1; transform:scale(1.08) } 75% { transform:scale(0.96) } 90% { transform:scale(1.02) } 100% { opacity:1; transform:scale(1) } }');
+  htmlChunks.push('@keyframes sp-flip-in { 0% { opacity:0; transform:perspective(600px) rotateX(-90deg) translateY(-40px) } 60% { opacity:1; transform:perspective(600px) rotateX(8deg) } 80% { transform:perspective(600px) rotateX(-4deg) } 100% { opacity:1; transform:perspective(600px) rotateX(0deg) translateY(0) } }');
+  htmlChunks.push('</style>');
+
+  // Overlay
+  if (design.overlayEnabled) {
+    htmlChunks.push('<div class="overlay" id="overlay"></div>');
+  }
+
+  // Popup Container
+  htmlChunks.push('<div class="popup" role="dialog" id="popup-card">');
+  if (design.showCloseButton) {
+    htmlChunks.push('<button class="close-btn" id="close-btn" aria-label="Close">✕</button>');
+  }
+
+  // Inner Content
+  htmlChunks.push('<div class="popup-inner" id="popup-view-main">');
+
+  // If gamified, let's wrap with flex layout
+  if (isSpinWheel || isScratchCard) {
+    htmlChunks.push('<div class="gamified-container">');
+    htmlChunks.push('<div class="gamified-left">');
+  }
+
+  htmlChunks.push('<h2 class="headline">');
+  htmlChunks.push(escapeHtml(design.headline));
+  htmlChunks.push('</h2>');
+
+  if (design.subheadline) {
+    htmlChunks.push('<p class="subheadline">');
+    htmlChunks.push(escapeHtml(design.subheadline));
+    htmlChunks.push('</p>');
+  }
+
+  if (design.bodyText) {
+    htmlChunks.push('<p class="body-text">');
+    htmlChunks.push(escapeHtml(design.bodyText));
+    htmlChunks.push('</p>');
+  }
+
+  // Render product image for standard templates if present
+  if (!isSpinWheel && !isScratchCard && slot?.image_url) {
+    htmlChunks.push('<img class="product-image" src="');
+    htmlChunks.push(escapeHtml(slot.image_url));
+    htmlChunks.push('" alt="');
+    htmlChunks.push(escapeHtml(slot.product_name ?? ''));
+    htmlChunks.push('" loading="lazy">');
+  }
+
+  // Render email input field for lead capture templates (anything not stickybar)
+  const showEmailInput = design.position !== 'top' && design.position !== 'bottom' && design.headline !== 'Cookie Consent Notice 🍪';
+  if (showEmailInput) {
+    htmlChunks.push('<div style="width: 100%; display: flex; flex-direction: column; gap: 8px;">');
+    htmlChunks.push('<input type="email" class="email-input" id="email-input" placeholder="Enter your email for active coupon key..." required>');
+    htmlChunks.push('</div>');
+  }
+
+  if (slot) {
+    const btnText = slot.cta_text || design.ctaText;
+    const isGamifiedSubmit = isSpinWheel || isScratchCard || showEmailInput;
+    
+    if (isGamifiedSubmit) {
+      // Form Submit / Spin Trigger Button
+      const actText = isSpinWheel ? 'SPIN WHEEL NOW 🎰' : (isScratchCard ? 'REVEAL MY OFFER ⚡' : btnText);
+      htmlChunks.push('<button class="cta-btn" id="cta-submit-btn">');
+      htmlChunks.push(escapeHtml(actText));
+      htmlChunks.push('</button>');
+    } else {
+      const trackerUrl = slot.click_tracker_url || slot.product_url;
+      // Plain Clickout affiliate button
+      if (design.ctaStyle === 'button') {
+        htmlChunks.push('<a class="cta-btn" href="');
+        htmlChunks.push(escapeHtml(trackerUrl));
+        htmlChunks.push('" target="_blank" rel="noopener" id="cta-link">');
+        htmlChunks.push(escapeHtml(btnText));
+        htmlChunks.push('</a>');
+      } else {
+        htmlChunks.push('<a class="cta-link" href="');
+        htmlChunks.push(escapeHtml(trackerUrl));
+        htmlChunks.push('" target="_blank" rel="noopener" id="cta-link">');
+        htmlChunks.push(escapeHtml(btnText));
+        htmlChunks.push('</a>');
       }
-      .popup-inner { padding: 24px; }
-      .close-btn {
-        position: absolute;
-        ${design.closeButtonPosition === 'top-right' ? 'top: 12px; right: 12px;' : 'top: 12px; left: 12px;'}
-        background: none; border: none; cursor: pointer;
-        font-size: 18px; color: ${design.textColor}; opacity: 0.6;
-        padding: 4px 8px; border-radius: 4px;
-      }
-      .close-btn:hover { opacity: 1; background: rgba(0,0,0,0.1); }
-      .headline { font-size: 20px; font-weight: 700; margin: 0 0 8px; line-height: 1.3; }
-      .subheadline { font-size: 14px; opacity: 0.8; margin: 0 0 16px; }
-      .body-text { font-size: 14px; margin: 0 0 16px; line-height: 1.5; }
-      .product-image { width: 100%; border-radius: 8px; margin-bottom: 16px; display: block; }
-      .cta-btn {
-        display: inline-block; width: 100%; text-align: center;
-        background: ${design.accentColor}; color: #fff;
-        padding: 12px 24px; border-radius: 8px;
-        font-weight: 600; font-size: 15px;
-        text-decoration: none; box-sizing: border-box;
-        transition: opacity 0.15s;
-      }
-      .cta-btn:hover { opacity: 0.9; }
-      .cta-link { color: ${design.accentColor}; text-decoration: underline; font-size: 14px; }
-      .dismiss-text { text-align: center; margin-top: 12px; font-size: 12px; opacity: 0.6; cursor: pointer; }
-      .dismiss-text:hover { opacity: 1; }
-      .powered-by { text-align: center; margin-top: 8px; font-size: 10px; opacity: 0.4; }
-      @keyframes sp-fade-in { from { opacity: 0 } to { opacity: 1 } }
-      @keyframes sp-slide-up { from { opacity: 0; transform: translateY(40px) } to { opacity: 1; transform: translateY(0) } }
-      @keyframes sp-slide-down { from { opacity: 0; transform: translateY(-40px) } to { opacity: 1; transform: translateY(0) } }
-      @keyframes sp-zoom { from { opacity: 0; transform: scale(0.9) } to { opacity: 1; transform: scale(1) } }
-    </style>
+    }
+  }
 
-    ${design.overlayEnabled ? '<div class="overlay" id="overlay"></div>' : ''}
+  if (design.showDismissText && design.dismissText) {
+    htmlChunks.push('<p class="dismiss-text" id="dismiss-text">');
+    htmlChunks.push(escapeHtml(design.dismissText));
+    htmlChunks.push('</p>');
+  }
 
-    <div class="popup" role="dialog">
-      ${design.showCloseButton ? '<button class="close-btn" id="close-btn" aria-label="Close">✕</button>' : ''}
-      <div class="popup-inner">
-        <h2 class="headline">${escapeHtml(design.headline)}</h2>
-        ${design.subheadline ? `<p class="subheadline">${escapeHtml(design.subheadline)}</p>` : ''}
-        ${design.bodyText ? `<p class="body-text">${escapeHtml(design.bodyText)}</p>` : ''}
+  if (design.showPoweredBy) {
+    htmlChunks.push('<p class="powered-by">Powered by ScrollPop</p>');
+  }
 
-        ${slot?.image_url ? `<img class="product-image" src="${escapeHtml(slot.image_url)}" alt="${escapeHtml(slot.product_name ?? '')}" loading="lazy">` : ''}
+  if (isSpinWheel || isScratchCard) {
+    htmlChunks.push('</div>'); // End gamified-left
+    htmlChunks.push('<div class="gamified-right">');
+    
+    if (isSpinWheel) {
+      // Conic SVG Spin Wheel
+      htmlChunks.push('<div class="spin-wrapper">');
+      htmlChunks.push('<div class="spin-peg"></div>');
+      htmlChunks.push('<svg viewBox="0 0 300 300" class="spin-wheel-svg" id="spin-wheel-element">');
+      
+      const slices = [
+        { label: '50% OFF', color: '#ec4899' },
+        { label: 'TRY AGAIN', color: '#1e1b4b' },
+        { label: 'FREE SHIP', color: '#6366f1' },
+        { label: 'NO LUCK', color: '#312e81' },
+        { label: '25% OFF', color: '#f59e0b' },
+        { label: 'TRY AGAIN', color: '#4338ca' },
+      ];
+      
+      slices.forEach((slice, i) => {
+        const sliceAngle = 360 / slices.length;
+        const startAngleRad = (i * sliceAngle - 90) * Math.PI / 180;
+        const endAngleRad = ((i + 1) * sliceAngle - 90) * Math.PI / 180;
 
-        ${slot ? (
-    design.ctaStyle === 'button'
-      ? `<a class="cta-btn" href="${escapeHtml(slot.click_tracker_url || slot.product_url)}" target="_blank" rel="noopener" id="cta-link">${escapeHtml(slot.cta_text || design.ctaText)}</a>`
-      : `<a class="cta-link" href="${escapeHtml(slot.click_tracker_url || slot.product_url)}" target="_blank" rel="noopener" id="cta-link">${escapeHtml(slot.cta_text || design.ctaText)}</a>`
-  ) : ''}
+        const x1 = 150 + 140 * Math.cos(startAngleRad);
+        const y1 = 150 + 140 * Math.sin(startAngleRad);
+        const x2 = 150 + 140 * Math.cos(endAngleRad);
+        const y2 = 150 + 140 * Math.sin(endAngleRad);
 
-        ${design.showDismissText && design.dismissText
-    ? `<p class="dismiss-text" id="dismiss-text">${escapeHtml(design.dismissText)}</p>`
-    : ''}
+        const pathData = `M 150 150 L ${x1} ${y1} A 140 140 0 0 1 ${x2} ${y2} Z`;
 
-        ${design.showPoweredBy ? '<p class="powered-by">Powered by ScrollPop</p>' : ''}
-      </div>
-    </div>
-  `;
+        const textAngleRad = (i * sliceAngle + sliceAngle / 2 - 90) * Math.PI / 180;
+        const textX = 150 + 80 * Math.cos(textAngleRad);
+        const textY = 150 + 80 * Math.sin(textAngleRad);
+
+        htmlChunks.push('<g>');
+        htmlChunks.push(`<path d="${pathData}" fill="${slice.color}" stroke="#ffffff" stroke-width="2"/>`);
+        htmlChunks.push(`<text x="${textX}" y="${textY}" fill="#ffffff" font-family="sans-serif" font-size="11" font-weight="900" text-anchor="middle" dominant-baseline="middle" transform="rotate(${(i * sliceAngle + sliceAngle / 2)}, ${textX}, ${textY})">${slice.label}</text>`);
+        htmlChunks.push('</g>');
+      });
+      
+      htmlChunks.push('</svg>');
+      htmlChunks.push('<div class="spin-center-btn" id="spin-center-btn">SPIN</div>');
+      htmlChunks.push('</div>'); // End spin-wrapper
+    } else {
+      // HTML5 Canvas Scratcher
+      htmlChunks.push('<div class="scratch-container" id="scratch-container">');
+      htmlChunks.push('<div class="scratch-prize">');
+      htmlChunks.push('🏆 MYSTERY VOUCHER 🏆');
+      htmlChunks.push(`<h4 style="margin: 4px 0; color: #fbbf24; font-size: 16px;">${escapeHtml(slot?.product_name || 'SECRET SPECIALS 30% OFF')}</h4>`);
+      htmlChunks.push(`<span style="font-size: 14px; font-weight: bold; background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 6px; border: 1px dashed #fbbf24;">${escapeHtml(slot?.coupon || 'SCRATCH30')}</span>`);
+      htmlChunks.push('</div>');
+      htmlChunks.push('<canvas class="scratch-canvas" id="scratch-canvas"></canvas>');
+      htmlChunks.push('</div>'); // End scratch-container
+    }
+    
+    htmlChunks.push('</div>'); // End gamified-right
+    htmlChunks.push('</div>'); // End gamified-container
+  }
+
+  htmlChunks.push('</div>'); // End popup-view-main
+  htmlChunks.push('</div>'); // End popup
+
+  // Minimizable Teaser Badge
+  htmlChunks.push('<div class="teaser-badge" id="teaser-badge">');
+  htmlChunks.push('⚡ ');
+  htmlChunks.push(escapeHtml(design.subheadline || 'Special Offer'));
+  htmlChunks.push('</div>');
+
+  shadow.innerHTML = htmlChunks.join('');
+
+  // Grab compiled Elements references inside closed Shadow DOM
+  const popupCard = shadow.getElementById('popup-card');
+  const overlay = shadow.getElementById('overlay');
+  const teaser = shadow.getElementById('teaser-badge');
+  const popupViewMain = shadow.getElementById('popup-view-main');
 
   let hasRedirected = false;
   const dismiss = () => {
@@ -484,25 +758,235 @@ function renderPopup(campaign: CampaignConfig): void {
       }
       // Track as 'dismiss' event in analytics
       beaconEvent(campaign, 'dismiss', slot?.id);
-    } else {
-      // Actually close the popup on second click!
-      host.remove();
-      // Clear frequency cap on close so refreshing the page starts the flow again!
-      localStorage.removeItem(`_sp_${campaignId}`);
-      sessionStorage.removeItem(`_sp_session_${campaignId}`);
+      return;
     }
+
+    // Smoothly minimize to teaser state instead of fully removing
+    if (popupCard) popupCard.style.display = 'none';
+    if (overlay) overlay.style.display = 'none';
+    if (teaser) teaser.style.display = 'flex';
   };
 
-  // Wire up close button
+  const reopen = () => {
+    if (popupCard) popupCard.style.display = 'block';
+    if (overlay) overlay.style.display = 'block';
+    if (teaser) teaser.style.display = 'none';
+  };
+
+  // Switch to success congratulations screen state
+  const transitionToSuccess = (email: string) => {
+    // Record conversion event with email input!
+    beaconEvent(campaign, 'conversion', slot?.id, { email });
+
+    const couponTxt = slot?.coupon || 'WELCOME50';
+    const trackerUrl = slot?.click_tracker_url || slot?.product_url || '#';
+
+    // Construct beautiful success HTML
+    popupViewMain!.innerHTML = `
+      <div class="success-icon">✓</div>
+      <h2 class="headline" style="text-align: center;">Congratulations! Voucher active!</h2>
+      <p class="subheadline" style="text-align: center; margin-bottom: 12px;">Your custom campaign promocode was copied safely.</p>
+      <div class="success-coupon-box" id="success-coupon-box" title="Click to copy voucher code">
+        <span>${escapeHtml(couponTxt)}</span>
+      </div>
+      <a class="cta-btn" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top: 10px;">
+        SHOP WITH VOUCHER CODE
+      </a>
+      <p class="powered-by" style="margin-top: 6px;">Powered by ScrollPop</p>
+    `;
+
+    // Wire up clipboard copy trigger
+    shadow.getElementById('success-coupon-box')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(couponTxt);
+      const span = shadow.querySelector('.success-coupon-box span');
+      if (span) span.textContent = 'COPIED! ✓';
+      setTimeout(() => {
+        if (span) span.textContent = couponTxt;
+      }, 1500);
+    });
+
+    // Wire up CTA redirect click tracking
+    shadow.getElementById('success-cta-btn')?.addEventListener('click', () => {
+      beaconEvent(campaign, 'click', slot?.id);
+    });
+  };
+
+  // Wire up close button & teaser reopening
   shadow.getElementById('close-btn')?.addEventListener('click', dismiss);
   shadow.getElementById('dismiss-text')?.addEventListener('click', dismiss);
   shadow.getElementById('overlay')?.addEventListener('click', dismiss);
+  shadow.getElementById('teaser-badge')?.addEventListener('click', reopen);
 
   // Wire up CTA click → beacon then navigate
   shadow.getElementById('cta-link')?.addEventListener('click', () => {
     beaconEvent(campaign, 'click', slot?.id);
-    // Navigation handled by the <a> href naturally — no JS redirect, no history manipulation
   });
+
+  // Handle standard lead capture submission
+  const emailInput = shadow.getElementById('email-input') as HTMLInputElement | null;
+  const submitBtn = shadow.getElementById('cta-submit-btn');
+
+  const executeLeadSubmit = () => {
+    const emailVal = emailInput ? emailInput.value.trim() : '';
+    if (showEmailInput && (!emailVal || !emailVal.includes('@'))) {
+      if (emailInput) {
+        emailInput.style.borderColor = '#ef4444';
+        emailInput.focus();
+      }
+      return;
+    }
+    transitionToSuccess(emailVal || 'anonymous@scrollpop.io');
+  };
+
+  if (submitBtn) {
+    submitBtn.addEventListener('click', () => {
+      if (isSpinWheel) {
+        // Spin Wheel Trigger
+        const spinWheelEl = shadow.getElementById('spin-wheel-element') as SVGElement | null;
+        const emailVal = emailInput ? emailInput.value.trim() : '';
+        if (!emailVal || !emailVal.includes('@')) {
+          if (emailInput) {
+            emailInput.style.borderColor = '#ef4444';
+            emailInput.focus();
+          }
+          return;
+        }
+
+        submitBtn.setAttribute('disabled', 'true');
+        submitBtn.textContent = '🎰 SPINNING...';
+
+        // Select a winning segment and spin
+        const targetDegrees = 360 * 5 + (Math.random() * 360);
+        if (spinWheelEl) {
+          spinWheelEl.style.transform = `rotate(${targetDegrees}deg)`;
+        }
+
+        setTimeout(() => {
+          transitionToSuccess(emailVal);
+        }, 3000);
+      } else if (isScratchCard) {
+        // Scratch card fallback submit
+        executeLeadSubmit();
+      } else {
+        // Standard email capture submit
+        executeLeadSubmit();
+      }
+    });
+  }
+
+  // Real-time Spin Wheel center button click
+  shadow.getElementById('spin-center-btn')?.addEventListener('click', () => {
+    submitBtn?.dispatchEvent(new Event('click'));
+  });
+
+  // Real physics Scratch Card logic inside shadow DOM
+  if (isScratchCard) {
+    const canvas = shadow.getElementById('scratch-canvas') as HTMLCanvasElement | null;
+    const container = shadow.getElementById('scratch-container');
+    
+    if (canvas && container) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Sizing
+        canvas.width = 260;
+        canvas.height = 150;
+
+        // Draw luxury silver coating
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        grad.addColorStop(0, '#d1d5db');
+        grad.addColorStop(0.3, '#f3f4f6');
+        grad.addColorStop(0.5, '#e5e7eb');
+        grad.addColorStop(0.8, '#9ca3af');
+        grad.addColorStop(1, '#6b7280');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Text Overlay
+        ctx.fillStyle = '#374151';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Scratch to Reveal ⚡', canvas.width / 2, canvas.height / 2);
+
+        // Scratching state
+        let isScratching = false;
+        let scratchCount = 0;
+
+        const scratch = (clientX: number, clientY: number) => {
+          const rect = canvas.getBoundingClientRect();
+          const x = clientX - rect.left;
+          const y = clientY - rect.top;
+
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.beginPath();
+          ctx.arc(x, y, 16, 0, Math.PI * 2);
+          ctx.fill();
+
+          scratchCount++;
+          // Auto reveal once they scratch enough
+          if (scratchCount > 40) {
+            canvas.style.display = 'none';
+          }
+        };
+
+        canvas.addEventListener('mousedown', (e) => {
+          isScratching = true;
+          scratch(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+          if (isScratching) scratch(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('mouseup', () => {
+          isScratching = false;
+        });
+
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+          if (e.touches[0]) {
+            isScratching = true;
+            scratch(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+          if (isScratching && e.touches[0]) {
+            scratch(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        });
+
+        canvas.addEventListener('touchend', () => {
+          isScratching = false;
+        });
+      }
+    }
+  }
+
+  // Attach auto email correction logic inside shadow DOM / document form elements
+  try {
+    if (emailInput) {
+      const suggestDiv = document.createElement('div');
+      suggestDiv.className = 'email-suggest';
+      emailInput.parentNode?.insertBefore(suggestDiv, emailInput.nextSibling);
+
+      emailInput.addEventListener('input', (e) => {
+        const val = (e.target as HTMLInputElement).value;
+        const correction = suggestCorrectEmail(val);
+        if (correction) {
+          suggestDiv.innerHTML = `Did you mean <strong style="text-decoration: underline;">${escapeHtml(correction)}</strong>?`;
+          suggestDiv.style.display = 'flex';
+          suggestDiv.onclick = () => {
+            emailInput.value = correction;
+            suggestDiv.style.display = 'none';
+            emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+          };
+        } else {
+          suggestDiv.style.display = 'none';
+        }
+      });
+    }
+  } catch (err) { /* ignore safety bounds */ }
 
   // Beacon view after 1s (user actually saw it)
   setTimeout(() => beaconEvent(campaign, 'view'), 1000);
@@ -521,11 +1005,14 @@ function getPositionStyles(design: DesignConfig): string {
 
 function getAnimation(animation: string): string {
   switch (animation) {
-    case 'fade': return 'sp-fade-in 0.3s ease';
-    case 'slide_up': return 'sp-slide-up 0.3s ease';
+    case 'fade':       return 'sp-fade-in 0.3s ease';
+    case 'slide_up':   return 'sp-slide-up 0.3s ease';
     case 'slide_down': return 'sp-slide-down 0.3s ease';
-    case 'zoom': return 'sp-zoom 0.25s ease';
-    default: return 'none';
+    case 'zoom':       return 'sp-zoom 0.25s ease';
+    case 'bounce':     return 'sp-bounce 0.55s cubic-bezier(0.34,1.56,0.64,1) both';
+    case 'elastic':    return 'sp-elastic 0.5s cubic-bezier(0.34,1.56,0.64,1) both';
+    case 'flip_in':    return 'sp-flip-in 0.45s cubic-bezier(0.16,1,0.3,1) both';
+    default:           return 'none';
   }
 }
 
@@ -542,7 +1029,7 @@ function pickWeightedSlot(slots: AffiliateSlot[]): AffiliateSlot | null {
     rand -= slot.weight ?? 1;
     if (rand <= 0) return slot;
   }
-  return slots[slots.length - 1] ?? null;
+  return slots.slice(-1)[0] ?? null;
 }
 
 // ─── Event Beaconing ──────────────────────────────────────────────────────────
@@ -550,11 +1037,13 @@ function pickWeightedSlot(slots: AffiliateSlot[]): AffiliateSlot | null {
 function beaconEvent(
   campaign: CampaignConfig,
   eventType: 'impression' | 'view' | 'click' | 'dismiss' | 'conversion',
-  affiliateSlotId?: string
+  affiliateSlotId?: string,
+  extraMeta?: Record<string, unknown>
 ): void {
   const payload = {
     events: [{
       campaignId: campaign.id,
+      siteId: activeSiteId,
       eventType,
       affiliateSlotId: affiliateSlotId ?? null,
       visitorId: getVisitorId(),
@@ -562,6 +1051,7 @@ function beaconEvent(
       device: getDevice(),
       pageUrl: window.location.href,
       referrer: document.referrer,
+      meta: extraMeta ?? null,
     }],
   };
 
@@ -619,6 +1109,42 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+function suggestCorrectEmail(email: string): string | null {
+  if (!email || !email.includes('@')) return null;
+  const parts = email.split('@');
+  if (parts.length !== 2) return null;
+  const local = parts[0];
+  const domain = parts[1]?.toLowerCase().trim();
+  if (!local || !domain) return null;
+
+  let correctedDomain = '';
+  switch (domain) {
+    case 'gamil.com':
+    case 'gmial.com':
+    case 'gmal.com':
+    case 'gamil.co':
+      correctedDomain = 'gmail.com';
+      break;
+    case 'yaho.com':
+      correctedDomain = 'yahoo.com';
+      break;
+    case 'hotmial.com':
+      correctedDomain = 'hotmail.com';
+      break;
+    case 'msn.con':
+      correctedDomain = 'msn.com';
+      break;
+    case 'outlook.con':
+      correctedDomain = 'outlook.com';
+      break;
+  }
+
+  if (correctedDomain) {
+    return `${local}@${correctedDomain}`;
+  }
+  return null;
+}
+
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 function extractPublicKey(): string | null {
@@ -642,7 +1168,8 @@ function extractPublicKey(): string | null {
 
   const scripts = document.getElementsByTagName('script');
   for (let i = 0; i < scripts.length; i++) {
-    const src = scripts[i]?.src;
+    const script = scripts.item(i);
+    const src = script?.src;
     if (src) {
       const match = src.match(/\/v1\/([^\/]+)\/p\.js/);
       if (match && match[1]) {

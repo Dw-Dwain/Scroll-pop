@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const electronUpdater = require("electron-updater");
 let mainWindow = null;
+const DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 function getDashboardPath() {
   const packedPath = path.join(process.resourcesPath, "dashboard", "index.html");
   if (fs.existsSync(packedPath)) return packedPath;
@@ -17,14 +18,18 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: "#020308",
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    backgroundColor: "#09090b",
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#09090b",
+      symbolColor: "#a1a1aa"
+    },
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: false
-      // needed to load file:// assets from extraResources
     },
     show: false
   });
@@ -33,7 +38,12 @@ function createWindow() {
     electron.shell.openExternal(url);
     return { action: "deny" };
   });
-  mainWindow.loadFile(getDashboardPath());
+  if (DEV_SERVER_URL) {
+    mainWindow.loadURL(DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  } else {
+    mainWindow.loadFile(getDashboardPath());
+  }
 }
 async function bootstrap() {
   await electron.app.whenReady();

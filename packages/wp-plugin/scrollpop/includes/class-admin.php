@@ -96,18 +96,80 @@ class ScrollPop_Admin {
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
+        $public_key  = ScrollPop::get_public_key();
+        $enabled     = ScrollPop::is_enabled();
+        $status_url  = get_rest_url( null, 'scrollpop/v1/status' );
+        $dashboard   = 'https://app.scrollpop.io';
         ?>
-        <div class="wrap">
-            <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
-            <p><?php esc_html_e( 'Deliver Google-compliant popup campaigns to monetize your traffic with affiliate slots, lead gen, and donation cards.', 'scrollpop' ); ?></p>
-            
+        <div class="wrap" style="max-width:760px;">
+            <h1 style="display:flex;align-items:center;gap:10px;">
+                <?php echo esc_html( get_admin_page_title() ); ?>
+                <?php if ( $enabled && ! empty( $public_key ) ) : ?>
+                    <span style="font-size:12px;background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:20px;font-weight:500;">● Active</span>
+                <?php elseif ( empty( $public_key ) ) : ?>
+                    <span style="font-size:12px;background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:20px;font-weight:500;">⚠ Setup Required</span>
+                <?php endif; ?>
+            </h1>
+
+            <p style="color:#555;font-size:14px;max-width:560px;">
+                <?php esc_html_e( 'Connect this WordPress site to your ScrollPop account to deliver Google-compliant scroll-triggered popup campaigns.', 'scrollpop' ); ?>
+            </p>
+
+            <?php if ( empty( $public_key ) ) : ?>
+            <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#78350f;">
+                <strong>📋 Setup Steps:</strong>
+                <ol style="margin:8px 0 0 18px;line-height:1.8;">
+                    <li>Log in to your <a href="<?php echo esc_url( $dashboard ); ?>" target="_blank">ScrollPop Dashboard</a></li>
+                    <li>Go to <strong>Sites → + New Site</strong> and add this WordPress domain</li>
+                    <li>Copy your <strong>Site Public Key</strong> from the site card</li>
+                    <li>Paste it in the field below and click <strong>Save Changes</strong></li>
+                    <li>Return to your dashboard and click <strong>Verify Connection</strong></li>
+                </ol>
+            </div>
+            <?php endif; ?>
+
             <form action="options.php" method="post">
                 <?php
                 settings_fields( 'scrollpop_settings' );
                 do_settings_sections( 'scrollpop' );
-                submit_button();
+                submit_button( __( 'Save Changes', 'scrollpop' ) );
                 ?>
             </form>
+
+            <?php if ( ! empty( $public_key ) ) : ?>
+            <hr style="margin:24px 0;" />
+            <h2 style="font-size:15px;"><?php esc_html_e( 'Connection Status', 'scrollpop' ); ?></h2>
+            <table class="widefat" style="max-width:480px;">
+                <tbody>
+                    <tr>
+                        <th style="width:180px;"><?php esc_html_e( 'Public Key', 'scrollpop' ); ?></th>
+                        <td><code><?php echo esc_html( $public_key ); ?></code></td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e( 'Site URL', 'scrollpop' ); ?></th>
+                        <td><?php echo esc_html( get_site_url() ); ?></td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e( 'Plugin Version', 'scrollpop' ); ?></th>
+                        <td><?php echo esc_html( SCROLLPOP_VERSION ); ?></td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e( 'Status Endpoint', 'scrollpop' ); ?></th>
+                        <td><a href="<?php echo esc_url( $status_url ); ?>" target="_blank"><?php echo esc_html( $status_url ); ?></a></td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e( 'Snippet Active', 'scrollpop' ); ?></th>
+                        <td><?php echo $enabled ? '<span style="color:#16a34a;">✓ Yes</span>' : '<span style="color:#dc2626;">✗ Disabled</span>'; ?></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p style="margin-top:16px;">
+                <a href="<?php echo esc_url( $dashboard . '/sites' ); ?>" class="button button-secondary" target="_blank">
+                    <?php esc_html_e( 'Open ScrollPop Dashboard →', 'scrollpop' ); ?>
+                </a>
+            </p>
+            <?php endif; ?>
         </div>
         <?php
     }

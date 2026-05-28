@@ -5,27 +5,27 @@
 
 @layer base {
   :root {
-    --bg-root:    #09090b;
-    --bg-base:    #111113;
-    --bg-surface: #18181b;
-    --bg-raised:  #27272a;
-    --bg-overlay: #3f3f46;
+    --bg-root:    #fafafa;
+    --bg-base:    #ffffff;
+    --bg-surface: #ffffff;
+    --bg-raised:  #f4f4f5;
+    --bg-overlay: #e4e4e7;
 
-    --border-subtle:  #27272a;
-    --border-default: #3f3f46;
-    --border-strong:  #71717a;
+    --border-subtle:  #e4e4e7;
+    --border-default: #d4d4d8;
+    --border-strong:  #a1a1aa;
 
-    --text-primary:   #fafafa;
-    --text-secondary: #a1a1aa;
+    --text-primary:   #18181b;
+    --text-secondary: #3f3f46;
     --text-muted:     #71717a;
-    --text-disabled:  #52525b;
+    --text-disabled:  #a1a1aa;
 
-    --accent-100: #e0e7ff;
-    --accent-300: #a5b4fc;
+    --accent-100: #ede9fe;
+    --accent-300: #4f46e5;
     --accent-500: #6366f1;
     --accent-600: #4f46e5;
     --accent-700: #4338ca;
-    --accent-glow: rgba(99, 102, 241, 0.2);
+    --accent-glow: rgba(99, 102, 241, 0.15);
 
     --status-success: #22c55e;
     --status-warning: #f59e0b;
@@ -43,10 +43,15 @@
     --ease-both:   cubic-bezier(0.65, 0, 0.35, 1);
     --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-    --font-mono: 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    --font-sans:    'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
+    --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-mono:    'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+
+    --topnav-bg: #0a0a0a;
 
     --sidebar-width: 220px;
+    --topnav-height: 48px;
+    --footer-height: 48px;
   }
 
   html {
@@ -62,7 +67,7 @@
     color: var(--text-primary);
     background-image: radial-gradient(
       ellipse 80% 50% at 50% -20%,
-      rgba(99, 102, 241, 0.08) 0%,
+      rgba(99, 102, 241, 0.04) 0%,
       transparent 60%
     );
     min-height: 100vh;
@@ -84,9 +89,9 @@
 .skeleton {
   background: linear-gradient(
     90deg,
-    var(--bg-raised)  25%,
-    var(--bg-overlay) 50%,
-    var(--bg-raised)  75%
+    #f4f4f5 25%,
+    #e4e4e7 50%,
+    #f4f4f5 75%
   );
   background-size: 800px 100%;
   animation: shimmer 1.5s ease-in-out infinite;
@@ -101,6 +106,13 @@
 
 .page-enter {
   animation: page-enter 300ms var(--ease-out) 80ms both;
+}
+
+.page-enter > div {
+  max-width: 1500px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  margin-top: 20px !important;
 }
 
 /* ── Top progress bar ─────────────────────────────────────── */
@@ -275,7 +287,7 @@ select.input {
   width: 100%;
   max-width: 480px;
   padding: 24px;
-  box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.04);
 }
 
 /* ── Table ────────────────────────────────────────────────── */
@@ -355,6 +367,34 @@ select.input {
   transition: width 300ms ease;
 }
 
+/* ── Popup entry animations (used by LivePreview) ────────── */
+@keyframes sp-bounce {
+  0%   { opacity: 0; transform: translateY(-60px) scale(0.95); }
+  55%  { opacity: 1; transform: translateY(12px)  scale(1.02); }
+  75%  { transform: translateY(-6px) scale(0.99); }
+  90%  { transform: translateY(3px)  scale(1.005); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes sp-elastic {
+  0%   { opacity: 0; transform: scale(0.4); }
+  55%  { opacity: 1; transform: scale(1.08); }
+  75%  { transform: scale(0.96); }
+  90%  { transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sp-flip-in {
+  0%   { opacity: 0; transform: perspective(600px) rotateX(-90deg) translateY(-40px); }
+  60%  { opacity: 1; transform: perspective(600px) rotateX(8deg); }
+  80%  { transform: perspective(600px) rotateX(-4deg); }
+  100% { opacity: 1; transform: perspective(600px) rotateX(0deg) translateY(0); }
+}
+
+.sp-anim-bounce   { animation: sp-bounce  0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.sp-anim-elastic  { animation: sp-elastic 0.5s  cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.sp-anim-flip-in  { animation: sp-flip-in 0.45s cubic-bezier(0.16, 1, 0.3, 1)     both; }
+
 /* ── Reduce motion ────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
@@ -363,3 +403,134 @@ select.input {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Force dark text on inputs in light mode ── */
+html:not([data-theme="dark"]) input:not([type="checkbox"]):not([type="radio"]),
+html:not([data-theme="dark"]) select,
+html:not([data-theme="dark"]) select option,
+html:not([data-theme="dark"]) textarea {
+  color: #18181b !important;
+}
+
+/* ── Exception: dark-bg sidebar selects and inputs need white text ── */
+.dark-select, .dark-select option {
+  color: #f4f4f5 !important;
+}
+
+/* ── Ticker Marquee Animation ── */
+@keyframes marquee {
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+@layer utilities {
+  .animate-marquee {
+    animation: marquee 14s linear infinite;
+  }
+}
+
+/* ── Global Dark Theme ─────────────────────────────────────────── */
+html[data-theme="dark"] {
+  --bg-root:    #09090b;
+  --bg-base:    #18181b;
+  --bg-surface: #1c1c1f;
+  --bg-raised:  #27272a;
+  --bg-overlay: #3f3f46;
+
+  --border-subtle:  #27272a;
+  --border-default: #3f3f46;
+  --border-strong:  #52525b;
+
+  --text-primary:   #fafafa;
+  --text-secondary: #e4e4e7;
+  --text-muted:     #a1a1aa;
+  --text-disabled:  #71717a;
+
+  --accent-glow: rgba(99, 102, 241, 0.25);
+}
+
+html[data-theme="dark"] body {
+  background-image: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    rgba(99, 102, 241, 0.08) 0%,
+    transparent 60%
+  );
+}
+
+html[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, #27272a 25%, #3f3f46 50%, #27272a 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── Designer panel: hide number input spinners ───────────────────── */
+.designer-panel input[type="number"]::-webkit-outer-spin-button,
+.designer-panel input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.designer-panel input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ── Campaign Designer Panel Theme ────────────────────────────────
+   .designer-panel marks both SidebarLeft and SidebarRight roots.
+   Light mode (default): white panels with dark text.
+   Dark  mode (html[data-theme="dark"]): zinc-950/900 palette.
+   ────────────────────────────────────────────────────────────── */
+
+/* ── Light mode: override SidebarLeft's hardcoded dark zinc classes ── */
+html:not([data-theme="dark"]) .designer-panel {
+  --ds-bg:      #ffffff;
+  --ds-rail-bg: #f9f9fb;
+  --ds-border:  #e4e4e7;
+  --ds-text:    #18181b;
+  --ds-muted:   #71717a;
+  --ds-label:   #52525b;
+  --ds-card-bg: #f4f4f5;
+  --ds-input-bg:#ffffff;
+}
+html:not([data-theme="dark"]) .designer-panel.bg-zinc-950,
+html:not([data-theme="dark"]) .designer-panel .bg-zinc-950 { background-color: var(--ds-bg) !important; }
+html:not([data-theme="dark"]) .designer-panel.bg-zinc-900,
+html:not([data-theme="dark"]) .designer-panel .bg-zinc-900 { background-color: var(--ds-rail-bg) !important; }
+html:not([data-theme="dark"]) .designer-panel .bg-zinc-800 { background-color: var(--ds-card-bg) !important; }
+html:not([data-theme="dark"]) .designer-panel .bg-zinc-700 { background-color: var(--ds-card-bg) !important; }
+html:not([data-theme="dark"]) .designer-panel.border-zinc-800,
+html:not([data-theme="dark"]) .designer-panel .border-zinc-800 { border-color: var(--ds-border) !important; }
+html:not([data-theme="dark"]) .designer-panel .border-zinc-700 { border-color: var(--ds-border) !important; }
+html:not([data-theme="dark"]) .designer-panel .text-zinc-100,
+html:not([data-theme="dark"]) .designer-panel .text-zinc-200 { color: var(--ds-text) !important; }
+html:not([data-theme="dark"]) .designer-panel .text-zinc-400 { color: var(--ds-label) !important; }
+html:not([data-theme="dark"]) .designer-panel .text-zinc-500 { color: var(--ds-muted) !important; }
+html:not([data-theme="dark"]) .designer-panel .text-zinc-600 { color: var(--ds-muted) !important; }
+html:not([data-theme="dark"]) .designer-panel input,
+html:not([data-theme="dark"]) .designer-panel select,
+html:not([data-theme="dark"]) .designer-panel textarea {
+  background-color: var(--ds-input-bg) !important;
+  border-color: var(--ds-border) !important;
+  color: var(--ds-text) !important;
+}
+
+/* ── Dark mode: override SidebarRight's light classes → zinc dark ── */
+html[data-theme="dark"] .designer-panel.bg-white     { background-color: #18181b !important; }
+html[data-theme="dark"] .designer-panel .bg-white    { background-color: #18181b !important; }
+html[data-theme="dark"] .designer-panel .bg-zinc-50  { background-color: #09090b !important; }
+html[data-theme="dark"] .designer-panel .bg-zinc-100 { background-color: #27272a !important; }
+html[data-theme="dark"] .designer-panel.border-zinc-200,
+html[data-theme="dark"] .designer-panel .border-zinc-200 { border-color: #27272a !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-950 { color: #fafafa !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-900 { color: #f4f4f5 !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-800 { color: #e4e4e7 !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-700 { color: #d4d4d8 !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-600 { color: #a1a1aa !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-500 { color: #71717a !important; }
+html[data-theme="dark"] .designer-panel input,
+html[data-theme="dark"] .designer-panel select,
+html[data-theme="dark"] .designer-panel textarea {
+  background-color: #27272a !important;
+  border-color: #3f3f46 !important;
+  color: #fafafa !important;
+}
+
