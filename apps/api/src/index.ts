@@ -54,9 +54,14 @@ export const redis = process.env['REDIS_URL']?.startsWith('redis://')
 
 async function bootstrap() {
   // CORS
+  const productionOrigins = [
+    process.env['DASHBOARD_URL'],
+    'https://app.scrollpop.io',
+    'https://scrollpop.io',
+  ].filter((o): o is string => Boolean(o));
   await app.register(cors, {
     origin: process.env['NODE_ENV'] === 'production'
-      ? ['https://app.scrollpop.io', 'https://scrollpop.io']
+      ? productionOrigins
       : true,
     credentials: true,
   });
@@ -84,19 +89,21 @@ async function bootstrap() {
   // Shopify OAuth callback (public — HMAC verified inside route)
   await app.register(shopifyRoutes, { prefix: '/api/v1' });
 
-  // Dev auth login bypass (for local/desktop client compatibility)
-  app.post('/api/v1/auth/login', async (request, reply) => {
-    const internalSecret = process.env['INTERNAL_SECRET'] || 'change_me_in_production_32_chars_min';
-    return reply.send({
-      token: internalSecret,
-      user: {
-        id: 'admin_desktop_client',
-        email: 'admin@scrollpop.local',
-        name: 'Local Admin',
-        role: 'admin',
-      }
+  // Dev-only auth login bypass (local/desktop client convenience — never runs in production)
+  if (isDev) {
+    app.post('/api/v1/auth/login', async (_request, reply) => {
+      const internalSecret = process.env['INTERNAL_SECRET'] || 'change_me_in_production_32_chars_min';
+      return reply.send({
+        token: internalSecret,
+        user: {
+          id: 'admin_desktop_client',
+          email: 'admin@scrollpop.local',
+          name: 'Local Admin',
+          role: 'admin',
+        }
+      });
     });
-  });
+  }
 
   // Internal (called by Cloudflare Worker, auth via API_SECRET header)
   await app.register(internalRoutes, { prefix: '/api/v1/internal' });

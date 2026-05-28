@@ -1,6 +1,7 @@
 import React from 'react';
 import { Activity, AlertTriangle, Gauge, Radio, TrendingUp, Users, Pause, Play } from 'lucide-react';
 import { useApiUrl, useCustom, useList } from '@refinedev/core';
+import { getApiBase } from '../providers/dataProvider';
 
 interface OpsCenterProps {
   onNavigate: (path: string) => void;
@@ -68,8 +69,8 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
     if (paused) return;
     let es: EventSource | null = null;
     try {
-      const origin = window.location.origin.includes('localhost') ? window.location.origin : '';
-      es = new EventSource(`${origin}/api/v1/ops/stream`);
+      const apiBase = getApiBase().replace(/\/api\/v1$/, '');
+      es = new EventSource(`${apiBase}/api/v1/ops/stream`);
       es.addEventListener('ops_kpi_update', (evt: MessageEvent) => {
         try { setStreamOverview((p: any) => ({ ...(p ?? {}), ...JSON.parse(evt.data) })); } catch {}
       });

@@ -18,7 +18,9 @@ export function getApiBase(): string {
   if (typeof window !== 'undefined' && window.electronAPI?.isDesktop) {
     return `${window.electronAPI.getLocalApiUrl()}/api/v1`;
   }
-  return '/api/v1';
+  // VITE_API_URL is set at build time for the web dashboard (e.g. https://api.scrollpop.io)
+  const configured = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
+  return configured ? `${configured}/api/v1` : '/api/v1';
 }
 
 function resolveUrl(apiBase: string, relativePath: string): string {

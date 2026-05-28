@@ -4,7 +4,8 @@ import {
   ShoppingBag, Globe, ArrowRight, AlertCircle, CheckCircle2,
   Download, RefreshCw, ExternalLink, Wifi, WifiOff,
 } from 'lucide-react';
-import { useList, useCreate, useDelete, useUpdate } from '@refinedev/core';
+import { useList, useCreate, useDelete, useUpdate, useCustomMutation } from '@refinedev/core';
+import { getApiBase } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
 import { LimitBanner } from '../components/PlanGate';
 
@@ -33,6 +34,7 @@ const ShopifyConnectPanel: React.FC<{
   const [shopInput, setShopInput] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const { mutateAsync: customMutate } = useCustomMutation<{ oauthUrl: string; shop: string }>();
 
   const isConnected = !!site.shopifyShop;
 
@@ -47,24 +49,15 @@ const ShopifyConnectPanel: React.FC<{
     if (!shop.endsWith('.myshopify.com')) shop = `${shop}.myshopify.com`;
 
     try {
-      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
-      const token = localStorage.getItem('desktop_token') ??
-        document.cookie.match(/clerk-db-jwt=([^;]+)/)?.[1] ?? '';
-
-      const res = await fetch(`${apiBase}/api/v1/shopify/install`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ shop }),
+      const result = await customMutate({
+        url: `${getApiBase()}/shopify/install`,
+        method: 'post',
+        values: { shop },
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error?.message ?? 'Failed to initiate Shopify OAuth');
-        return;
-      }
       // Redirect user to Shopify permission screen
-      window.location.href = data.data.oauthUrl;
+      window.location.href = result.data.oauthUrl;
     } catch (err: any) {
-      setError(err?.message ?? 'Network error');
+      setError(err?.message ?? 'Failed to initiate Shopify OAuth');
     } finally {
       setLoading(false);
     }
@@ -159,6 +152,7 @@ const WordPressConnectPanel: React.FC<{
   const [wpUrl, setWpUrl] = React.useState(site.wpSiteUrl ?? `https://${site.domain}`);
   const [savingUrl, setSavingUrl] = React.useState(false);
   const [copiedKey, setCopiedKey] = React.useState(false);
+  const { mutateAsync: customMutate } = useCustomMutation<{ verified: boolean; message?: string }>();
 
   const handleCopyKey = () => {
     navigator.clipboard.writeText(site.publicKey ?? '');
@@ -169,12 +163,10 @@ const WordPressConnectPanel: React.FC<{
   const handleSaveUrl = async () => {
     setSavingUrl(true);
     try {
-      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
-      const token = localStorage.getItem('desktop_token') ?? '';
-      await fetch(`${apiBase}/api/v1/sites/${site.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ wpSiteUrl: wpUrl }),
+      await customMutate({
+        url: `${getApiBase()}/sites/${site.id}/wordpress-url`,
+        method: 'patch',
+        values: { wpSiteUrl: wpUrl },
       });
     } finally {
       setSavingUrl(false);
@@ -186,21 +178,15 @@ const WordPressConnectPanel: React.FC<{
     setVerifyError('');
     setVerifySuccess(false);
     try {
-      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
-      const token = localStorage.getItem('desktop_token') ?? '';
-      const res = await fetch(`${apiBase}/api/v1/sites/${site.id}/verify-wordpress`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+      await customMutate({
+        url: `${getApiBase()}/sites/${site.id}/verify-wordpress`,
+        method: 'post',
+        values: {},
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setVerifyError(data?.error?.message ?? 'Verification failed');
-      } else {
-        setVerifySuccess(true);
-        onVerified();
-      }
+      setVerifySuccess(true);
+      onVerified();
     } catch (err: any) {
-      setVerifyError(err?.message ?? 'Network error');
+      setVerifyError(err?.message ?? 'Verification failed');
     } finally {
       setVerifying(false);
     }
@@ -335,6 +321,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const { mutate: createSite } = useCreate();
   const { mutate: deleteSite } = useDelete();
   const { mutate: updateSite } = useUpdate();
+  const { mutateAsync: customMutate } = useCustomMutation<{ disconnected: boolean }>();
   const { withinLimit, limits, isAdmin } = usePlan();
 
   const siteCount = sitesData?.data?.length ?? 0;
@@ -453,12 +440,10 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const handleShopifyDisconnect = async (site: any) => {
     if (!confirm(`Disconnect ${site.shopifyShop} from ScrollPop? The script tag will be removed.`)) return;
     try {
-      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? '';
-      const token = localStorage.getItem('desktop_token') ?? '';
-      await fetch(`${apiBase}/api/v1/shopify/disconnect`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ shop: site.shopifyShop }),
+      await customMutate({
+        url: `${getApiBase()}/shopify/disconnect`,
+        method: 'delete',
+        values: { shop: site.shopifyShop },
       });
       refetch();
     } catch {

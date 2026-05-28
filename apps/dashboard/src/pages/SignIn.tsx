@@ -10,43 +10,14 @@ interface SignInProps {
 export const SignIn: React.FC<SignInProps> = ({ isDemo = false, isDesktop = false, onLogin }) => {
   const [email, setEmail] = React.useState(isDesktop ? 'admin@scrollpop.local' : isDemo ? 'admin@scrollpop.dev' : '');
   const [password, setPassword] = React.useState(isDesktop ? '' : isDemo ? 'devpass123' : '');
-  const [error, setError] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
+  const [error] = React.useState('');
+  const [loading] = React.useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDesktop) {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await fetch(`${(window as any).electronAPI?.getLocalApiUrl() ?? 'http://localhost:3001'}/api/v1/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-        if (res.ok) {
-          const body = await res.json();
-          const token = body?.data?.token || body?.token;
-          if (token) {
-            localStorage.setItem('desktop_token', token);
-            const user = body?.data?.user || body?.user;
-            if (user) localStorage.setItem('desktop_user', JSON.stringify(user));
-            onLogin?.();
-          } else {
-            setError('No token returned. Check server logs.');
-          }
-        } else {
-          const body = await res.json().catch(() => ({}));
-          setError(body?.error?.message || 'Invalid credentials.');
-        }
-      } catch {
-        setError('Could not reach local server. Make sure the API is running.');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      onLogin?.();
-    }
+    // Desktop mode: the parent's onLogin handler reads VITE_INTERNAL_SECRET from env
+    // and stores it as the auth token — no API round-trip needed.
+    onLogin?.();
   };
 
   const STATS = [

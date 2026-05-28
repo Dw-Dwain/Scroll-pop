@@ -23,6 +23,7 @@ interface AffiliateSlot {
   click_tracker_url: string;
   cta_text: string;
   weight: number;
+  coupon?: string;
 }
 
 interface TriggerConfig {

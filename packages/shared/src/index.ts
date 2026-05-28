@@ -46,6 +46,7 @@ export const AffiliateSlotSchema = z.object({
   click_tracker_url: z.string().url(),
   cta_text: z.string().min(1).max(100),
   weight: z.number().int().min(1).max(100).default(1),
+  coupon: z.string().max(50).optional(),
 });
 
 export const DesignConfigSchema = z.object({
