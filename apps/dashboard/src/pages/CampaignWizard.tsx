@@ -1,10 +1,8 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Sparkles, Zap, Laptop, Tablet, Smartphone, Undo2, Redo2, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Sparkles, Laptop, Tablet, Smartphone, Undo2, Redo2, Play } from 'lucide-react';
 import { useCreate, useList } from '@refinedev/core';
 import { TemplateSelector } from '../components/campaign-wizard/TemplateSelector';
 import { DesignControls } from '../components/campaign-wizard/DesignControls';
-import { LivePreview } from '../components/campaign-wizard/LivePreview';
-import { ActionsBuilder } from '../components/campaign-wizard/ActionsBuilder';
 import { TemplatePreset, FormDataShape } from '../types/campaign';
 import { MASSIVE_TEMPLATES, OSS_TEMPLATES } from '../lib/templates';
 
@@ -27,8 +25,7 @@ interface CampaignWizardProps {
 const STEPS = [
   { id: 1, label: 'Details',   icon: Megaphone },
   { id: 2, label: 'Design',    icon: Wand2 },
-  { id: 3, label: 'Actions',   icon: Zap },
-  { id: 4, label: 'Launch',    icon: Sparkles },
+  { id: 3, label: 'Launch',    icon: Sparkles },
 ] as const;
 
 // Helper to bootstrap Campaign object from legacy flat fields or new steps config
@@ -742,8 +739,8 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     }
   };
 
-  // Live-preview side-panel shows on the Actions step (3)
-  const isTwoCol = step === 3;
+  // Single-column wizard (Details / Design / Launch) — no side preview panel
+  const isTwoCol = false;
 
   // Launch-summary helpers derived from step 2's Triggers tab
   const primaryTriggerLabel = (() => {
@@ -1076,13 +1073,8 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
               </div>
             )}
 
-            {/* Step 3: Actions */}
+            {/* Step 3: Launch */}
             {step === 3 && (
-              <ActionsBuilder formData={formData} setFormData={setFormData} />
-            )}
-
-            {/* Step 4: Launch */}
-            {step === 4 && (
               <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 32, textAlign: 'center' }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: '50%', margin: '0 auto 16px',
@@ -1094,7 +1086,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                 </div>
                 <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 8 }}>Ready to Launch</h2>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 400, margin: '0 auto 24px' }}>
-                  Your campaign is fully configured. Review the live preview to confirm everything looks right before going live.
+                  Your campaign is configured. Review the summary below before going live.
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
@@ -1125,7 +1117,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
             )}
 
             {/* Wizard Navigation Footer */}
-            {step < 4 && (
+            {step < 3 && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1150,7 +1142,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                       alert('Please enter a campaign name and select a target site.');
                       return;
                     }
-                    setStep((s) => Math.min(4, s + 1));
+                    setStep((s) => Math.min(3, s + 1));
                   }}
                 >
                   Next Step
@@ -1159,13 +1151,6 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
             )}
 
           </div>
-
-          {/* Right column: live preview (steps 3+) */}
-          {isTwoCol && (
-            <div style={{ position: 'sticky', top: 20, height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
-              <LivePreview formData={formData} />
-            </div>
-          )}
         </div>
       )}
     </div>
