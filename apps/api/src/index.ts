@@ -54,15 +54,18 @@ export const redis = process.env['REDIS_URL']?.startsWith('redis://')
 
 async function bootstrap() {
   // CORS
-  const productionOrigins = [
+  const allowedOrigins = [
     process.env['DASHBOARD_URL'],
     'https://dashboard.scrollpop.online',
     'https://scrollpop-dashboard.pages.dev',
   ].filter((o): o is string => Boolean(o));
   await app.register(cors, {
-    origin: process.env['NODE_ENV'] === 'production'
-      ? productionOrigins
-      : true,
+    origin: (origin, cb) => {
+      // Allow requests with no origin (curl, Postman, server-to-server)
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      cb(new Error(`Origin ${origin} not allowed by CORS`), false);
+    },
     credentials: true,
   });
 
