@@ -152,6 +152,11 @@ jobs:
       - name: Deploy Worker
         working-directory: apps/worker
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "⏭️  CLOUDFLARE_API_TOKEN not set on this repo — skipping Worker deploy."
+            echo "    (The Worker is deployed from the repo that holds the Cloudflare secrets.)"
+            exit 0
+          fi
           node -e "require('fs').copyFileSync('../../packages/snippet/dist/p.js', 'src/p.txt')"
           npx wrangler deploy --env=""
         env:
