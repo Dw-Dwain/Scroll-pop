@@ -59,11 +59,13 @@ async function bootstrap() {
     'https://dashboard.scrollpop.online',
     'https://scrollpop-dashboard.pages.dev',
   ].filter((o): o is string => Boolean(o));
+  // Allows Cloudflare Pages preview deployments: <hash>.scrollpop-dashboard.pages.dev
+  const pagesPreviewPattern = /^https:\/\/[a-z0-9-]+\.scrollpop-dashboard\.pages\.dev$/;
   await app.register(cors, {
     origin: (origin, cb) => {
       // Allow requests with no origin (curl, Postman, server-to-server)
       if (!origin) return cb(null, true);
-      if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (allowedOrigins.includes(origin) || pagesPreviewPattern.test(origin)) return cb(null, true);
       cb(new Error(`Origin ${origin} not allowed by CORS`), false);
     },
     credentials: true,
