@@ -613,8 +613,8 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     if (t) {
       if (t.scrollPercent > 0) triggers.push({ type: 'scroll_pct', params: { pct: t.scrollPercent } });
       if (t.timeDelaySeconds > 0) triggers.push({ type: 'dwell_time', params: { seconds: t.timeDelaySeconds } });
-      if (t.inactivitySeconds > 0) triggers.push({ type: 'inactivity', params: { seconds: t.inactivitySeconds } });
-      if (t.exitIntent) triggers.push({ type: 'exit_intent', params: {} });
+      if (t.inactivitySeconds > 0) triggers.push({ type: 'inactivity', params: { seconds: Math.max(5, t.inactivitySeconds) } });
+      if (t.exitIntent) triggers.push({ type: 'exit_intent_mouse', params: { sensitivity: 20 } });
     }
     if (triggers.length === 0) {
       triggers.push({
