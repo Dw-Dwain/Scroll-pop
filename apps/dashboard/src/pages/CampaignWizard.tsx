@@ -1,13 +1,11 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Shield, Sparkles, Zap, Laptop, Tablet, Smartphone, Undo2, Redo2, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Sparkles, Zap, Laptop, Tablet, Smartphone, Undo2, Redo2, Play } from 'lucide-react';
 import { useCreate, useList } from '@refinedev/core';
 import { TemplateSelector } from '../components/campaign-wizard/TemplateSelector';
 import { DesignControls } from '../components/campaign-wizard/DesignControls';
-import { RulesBuilder } from '../components/campaign-wizard/RulesBuilder';
-import { Scheduler } from '../components/campaign-wizard/Scheduler';
 import { LivePreview } from '../components/campaign-wizard/LivePreview';
 import { ActionsBuilder } from '../components/campaign-wizard/ActionsBuilder';
-import { RuleGroup, RuleCondition, SchedulerWindow, TemplatePreset, FormDataShape } from '../types/campaign';
+import { TemplatePreset, FormDataShape } from '../types/campaign';
 import { MASSIVE_TEMPLATES, OSS_TEMPLATES } from '../lib/templates';
 
 // Advanced Canvas Designer Component Imports
@@ -25,15 +23,12 @@ interface CampaignWizardProps {
   onNavigate: (path: string) => void;
 }
 
-const newGroup = (): RuleGroup => ({ id: crypto.randomUUID(), type: 'group', operator: 'and', children: [] });
-const newWindow = (): SchedulerWindow => ({ id: crypto.randomUUID(), day: 'all', start: '00:00', end: '23:59', tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
 
 const STEPS = [
   { id: 1, label: 'Details',   icon: Megaphone },
   { id: 2, label: 'Design',    icon: Wand2 },
-  { id: 3, label: 'Rules',     icon: Shield },
-  { id: 4, label: 'Actions',   icon: Zap },
-  { id: 5, label: 'Launch',    icon: Sparkles },
+  { id: 3, label: 'Actions',   icon: Zap },
+  { id: 4, label: 'Launch',    icon: Sparkles },
 ] as const;
 
 // Helper to bootstrap Campaign object from legacy flat fields or new steps config
@@ -302,11 +297,11 @@ function bootstrapCampaign(campaignId: string, campaignName: string, designData:
 
 export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) => {
   const { data: sitesData } = useList({ resource: 'sites' });
-  const { mutate: createCampaign } = useCreate();
-  const { mutate: createDesign } = useCreate();
-  const { mutate: createTrigger } = useCreate();
-  const { mutate: createTargeting } = useCreate();
-  const { mutate: createFrequency } = useCreate();
+  const { mutateAsync: createCampaign } = useCreate();
+  const { mutateAsync: createDesign } = useCreate();
+  const { mutateAsync: createTrigger } = useCreate();
+  const { mutateAsync: createTargeting } = useCreate();
+  const { mutateAsync: createFrequency } = useCreate();
 
   const [step, setStep] = React.useState(1);
   const [loading, setLoading] = React.useState(false);
@@ -315,8 +310,6 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
   });
   const [customTemplates, setCustomTemplates] = React.useState<TemplatePreset[]>([]);
   const [activeKind, setActiveKind] = React.useState<TemplatePreset['kind'] | 'all'>('all');
-  const [ruleTree, setRuleTree] = React.useState<RuleGroup>(() => newGroup());
-  const [scheduler, setScheduler] = React.useState<SchedulerWindow[]>([newWindow()]);
 
   // Advanced Visual Designer state variables
   const [campaign, setCampaign] = React.useState<Campaign | null>(null);
@@ -579,7 +572,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     setHistory([JSON.parse(JSON.stringify(camp.steps.main.elements))]);
     setHistoryIndex(0);
     setActiveStep('main');
-    setStep(3);
+    setStep(2);
   };
 
   React.useEffect(() => {
@@ -614,29 +607,44 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
   const cloneTemplate = (template: TemplatePreset) =>
     setCustomTemplates((prev) => [{ ...template, id: `custom-${crypto.randomUUID()}`, name: `${template.name} Copy`, tags: [...template.tags, 'custom'] }, ...prev]);
 
-  const createTargetingRules = (campaignId: string) => {
-    const flat: RuleCondition[] = [];
-    const walk = (group: RuleGroup) => group.children.forEach((c) => c.type === 'condition' ? flat.push(c as RuleCondition) : walk(c as RuleGroup));
-    walk(ruleTree);
-    flat.forEach((rule) => {
-      if (!rule.value && rule.kind !== 'returning_visitor') return;
-      const value = rule.kind === 'device' ? { device: rule.value } : rule.kind === 'returning_visitor' ? { returning: rule.value !== 'false' } : { pattern: rule.value };
-      createTargeting({ resource: `campaigns/${campaignId}/targeting`, values: { kind: rule.kind, operator: rule.operator, value } });
-    });
-    createTargeting({ resource: `campaigns/${campaignId}/targeting`, values: { kind: 'url_contains', operator: 'include', value: { meta: 'rules_builder', combinator: ruleTree.operator, tree: ruleTree, scheduler } } });
+  // Build trigger/frequency/targeting specs from step 2's campaign.triggers,
+  // falling back to formData defaults when there is no campaign object.
+  const buildRuleSpecs = () => {
+    const t = campaign?.triggers;
+    const triggers: Array<{ type: string; params: Record<string, number> }> = [];
+    if (t) {
+      if (t.scrollPercent > 0) triggers.push({ type: 'scroll_pct', params: { pct: t.scrollPercent } });
+      if (t.timeDelaySeconds > 0) triggers.push({ type: 'dwell_time', params: { seconds: t.timeDelaySeconds } });
+      if (t.inactivitySeconds > 0) triggers.push({ type: 'inactivity', params: { seconds: t.inactivitySeconds } });
+      if (t.exitIntent) triggers.push({ type: 'exit_intent', params: {} });
+    }
+    if (triggers.length === 0) {
+      triggers.push({
+        type: formData.triggerType,
+        params: formData.triggerType === 'scroll_pct' ? { pct: formData.triggerParams.pct } : { seconds: formData.triggerParams.seconds },
+      });
+    }
+    const frequency = t?.frequency ?? formData.frequency ?? 'once_per_session';
+    const targeting: Array<{ kind: string; operator: string; value: Record<string, unknown> }> = [];
+    if (t) {
+      if (t.deviceTargeting && t.deviceTargeting !== 'all') targeting.push({ kind: 'device', operator: 'include', value: { device: t.deviceTargeting } });
+      if (t.newVisitorOnly) targeting.push({ kind: 'returning_visitor', operator: 'include', value: { returning: false } });
+      if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') targeting.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
+    }
+    return { triggers, frequency, targeting };
   };
 
   const handleLaunch = async () => {
     if (!formData.siteId || !formData.name) { alert('Campaign name and site are required.'); return; }
     setLoading(true);
-    createCampaign({ resource: 'campaigns', values: { siteId: formData.siteId, name: formData.name } }, {
-      onSuccess: (campaignRes: any) => {
-        const campaignId = campaignRes.data.id;
-        
-        let designConfig: any;
-        let designKind: any = formData.kind;
+    try {
+      const campaignRes: any = await createCampaign({ resource: 'campaigns', values: { siteId: formData.siteId, name: formData.name } });
+      const campaignId = campaignRes.data.id;
 
-        if (campaign) {
+      let designConfig: any;
+      let designKind: any = formData.kind;
+
+      if (campaign) {
           const mainStep = campaign.steps.main;
           const teaserStep = campaign.steps.teaser;
           const successStep = campaign.steps.success;
@@ -713,23 +721,51 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
           cta_text: formData.ctaText || 'Click Here', weight: 100,
         }] : [];
 
-        createDesign({ resource: `campaigns/${campaignId}/design`, values: { kind: designKind, config: designConfig, affiliate_slots: affiliateSlots } }, {
-          onSuccess: () => createTrigger({ resource: `campaigns/${campaignId}/triggers`, values: { type: formData.triggerType, params: formData.triggerType === 'scroll_pct' ? { pct: formData.triggerParams.pct } : { seconds: formData.triggerParams.seconds } } }, {
-            onSuccess: () => createFrequency({ resource: `campaigns/${campaignId}/frequency`, values: { frequency: formData.frequency } }, {
-              onSuccess: () => { createTargetingRules(campaignId); setLoading(false); onNavigate('/campaigns'); },
-              onError: () => setLoading(false),
-            }),
-            onError: () => setLoading(false),
-          }),
-          onError: () => setLoading(false),
-        });
-      },
-      onError: () => setLoading(false),
-    });
+      await createDesign({ resource: `campaigns/${campaignId}/design`, values: { kind: designKind, config: designConfig, affiliate_slots: affiliateSlots } });
+
+      // Triggers, frequency and targeting now come from step 2's Triggers tab.
+      const { triggers, frequency, targeting } = buildRuleSpecs();
+      for (const spec of triggers) {
+        await createTrigger({ resource: `campaigns/${campaignId}/triggers`, values: spec });
+      }
+      await createFrequency({ resource: `campaigns/${campaignId}/frequency`, values: { frequency } });
+      for (const spec of targeting) {
+        await createTargeting({ resource: `campaigns/${campaignId}/targeting`, values: spec });
+      }
+
+      setLoading(false);
+      onNavigate('/campaigns');
+    } catch (err) {
+      console.error('Launch failed', err);
+      setLoading(false);
+      alert('Failed to launch campaign. Please try again.');
+    }
   };
 
-  // Show a live-preview side-panel for steps 3 & 4 (rules + actions)
-  const isTwoCol = step === 3 || step === 4;
+  // Live-preview side-panel shows on the Actions step (3)
+  const isTwoCol = step === 3;
+
+  // Launch-summary helpers derived from step 2's Triggers tab
+  const primaryTriggerLabel = (() => {
+    const t = campaign?.triggers;
+    if (t) {
+      if (t.scrollPercent > 0) return `scroll ${t.scrollPercent}%`;
+      if (t.timeDelaySeconds > 0) return `${t.timeDelaySeconds}s delay`;
+      if (t.inactivitySeconds > 0) return `${t.inactivitySeconds}s idle`;
+      if (t.exitIntent) return 'exit intent';
+    }
+    return formData.triggerType.replace(/_/g, ' ');
+  })();
+  const targetingSummary = (() => {
+    const t = campaign?.triggers;
+    let n = 0;
+    if (t) {
+      if (t.deviceTargeting && t.deviceTargeting !== 'all') n++;
+      if (t.newVisitorOnly) n++;
+      if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') n++;
+    }
+    return n === 0 ? 'All visitors' : `${n} rule${n === 1 ? '' : 's'}`;
+  })();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -1040,108 +1076,13 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
               </div>
             )}
 
-            {/* Step 3: Rules & Triggering */}
+            {/* Step 3: Actions */}
             {step === 3 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>Targeting & Triggers</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Define exactly when and to whom this popup should be displayed.</p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {/* Triggers */}
-                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
-                    <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 12px' }}>Display Triggers</h3>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Trigger Type</label>
-                        <select
-                          className="input"
-                          value={formData.triggerType}
-                          onChange={(e) => setFormData({ ...formData, triggerType: e.target.value as any })}
-                          style={{ width: '100%' }}
-                        >
-                          <option value="scroll_pct">Scroll Depth</option>
-                          <option value="dwell_time">Time Delay</option>
-                          <option value="exit_intent">Exit Intent</option>
-                          <option value="inactivity">Inactivity</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                          {formData.triggerType === 'scroll_pct' ? 'Scroll Percentage' : 'Delay Seconds'}
-                        </label>
-                        {formData.triggerType === 'scroll_pct' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
-                            <input
-                              type="range" min={1} max={100}
-                              value={formData.triggerParams.pct}
-                              onChange={(e) => setFormData({ ...formData, triggerParams: { ...formData.triggerParams, pct: Number(e.target.value) || 45 } })}
-                              style={{ flex: 1, accentColor: 'var(--accent-500)' }}
-                            />
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', minWidth: 32 }}>
-                              {formData.triggerParams.pct}%
-                            </span>
-                          </div>
-                        ) : (
-                          <input
-                            type="number" min={1}
-                            className="input"
-                            value={formData.triggerParams.seconds}
-                            onChange={(e) => setFormData({ ...formData, triggerParams: { ...formData.triggerParams, seconds: Number(e.target.value) || 20 } })}
-                            style={{ width: '100%' }}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Frequency */}
-                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
-                    <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 12px' }}>Display Frequency</h3>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Show Campaign</label>
-                        <select
-                          className="input"
-                          value={formData.frequency}
-                          onChange={(e) => setFormData({ ...formData, frequency: e.target.value as any })}
-                          style={{ width: '100%' }}
-                        >
-                          <option value="always">Every page view</option>
-                          <option value="once_per_session">Once per session</option>
-                          <option value="once_per_day">Once per day</option>
-                          <option value="once_per_visitor">Once per visitor</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Rules Builder */}
-                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
-                    <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 12px' }}>Targeting Rules</h3>
-                    <RulesBuilder ruleTree={ruleTree} setRuleTree={setRuleTree} />
-                  </div>
-
-                  {/* Scheduling */}
-                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
-                    <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 12px' }}>Campaign Schedule</h3>
-                    <Scheduler scheduler={scheduler} setScheduler={setScheduler} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Actions */}
-            {step === 4 && (
               <ActionsBuilder formData={formData} setFormData={setFormData} />
             )}
 
-            {/* Step 5: Launch */}
-            {step === 5 && (
+            {/* Step 4: Launch */}
+            {step === 4 && (
               <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 32, textAlign: 'center' }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: '50%', margin: '0 auto 16px',
@@ -1159,9 +1100,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
                   {[
                     { label: 'Format', value: formData.kind.replace(/_/g, ' ') },
-                    { label: 'Trigger', value: formData.triggerType.replace(/_/g, ' ') },
-                    { label: 'Rules', value: `${ruleTree.children.length} groups` },
-                    { label: 'Schedule', value: `${scheduler.length} windows` },
+                    { label: 'Trigger', value: primaryTriggerLabel },
+                    { label: 'Frequency', value: (campaign?.triggers?.frequency ?? formData.frequency ?? 'once_per_session').replace(/_/g, ' ') },
+                    { label: 'Targeting', value: targetingSummary },
                   ].map(({ label, value }) => (
                     <div key={label} style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
@@ -1184,7 +1125,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
             )}
 
             {/* Wizard Navigation Footer */}
-            {step < 5 && (
+            {step < 4 && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1209,7 +1150,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                       alert('Please enter a campaign name and select a target site.');
                       return;
                     }
-                    setStep((s) => Math.min(5, s + 1));
+                    setStep((s) => Math.min(4, s + 1));
                   }}
                 >
                   Next Step

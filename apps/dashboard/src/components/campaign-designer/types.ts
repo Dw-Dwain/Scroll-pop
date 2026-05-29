@@ -103,6 +103,8 @@ export interface CampaignTriggers {
   sessionPageCount: number; // fire after visiting N pages (0 = disabled)
   utmSource: string; // show only when utm_source matches (empty = all)
   abTestPercent: number; // 0-100, percentage of visitors to show to
+  // How often the popup may show to the same visitor (persisted as the campaign frequency rule)
+  frequency?: 'always' | 'once_per_session' | 'once_per_day' | 'once_per_visitor';
 }
 
 export interface Campaign {

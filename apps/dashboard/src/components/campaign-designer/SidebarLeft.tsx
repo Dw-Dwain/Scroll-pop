@@ -1449,6 +1449,27 @@ export default function SidebarLeft({
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-4 pr-1 pb-4 scrollbar-thin">
+              {/* 0. Display Frequency */}
+              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-zinc-300" />
+                  <span className="text-xs font-semibold text-zinc-100">Display Frequency</span>
+                </div>
+                <select
+                  value={campaign.triggers.frequency ?? 'once_per_session'}
+                  onChange={(e) => onUpdateTriggers('frequency', e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1.5 focus:outline-hidden focus:border-indigo-500"
+                >
+                  <option value="always">Every page view</option>
+                  <option value="once_per_session">Once per session</option>
+                  <option value="once_per_day">Once per day</option>
+                  <option value="once_per_visitor">Once per visitor</option>
+                </select>
+                <p className="text-[10.5px] text-zinc-600 leading-normal">
+                  How often a single visitor may see this popup.
+                </p>
+              </div>
+
               {/* 1. Exit intent */}
               <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
                 <div className="flex items-center justify-between">
