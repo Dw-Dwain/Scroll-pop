@@ -7,8 +7,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 API_ORIGIN = "https://scroll-pop.onrender.com"
 # INTERNAL_SECRET is set via: wrangler secret put INTERNAL_SECRET
-# NOTE: INTERNAL_SECRET (here) MUST equal API_SECRET on the Render API, or the
-# Worker's config origin calls are rejected with 401.
+# NOTE: INTERNAL_SECRET (here) MUST equal INTERNAL_SECRET on the Render API, or
+# the Worker's config origin calls are rejected with 401.
 
 # ── Custom domains (auto-provisions DNS + TLS on deploy) ──────────────────────
 # Both hostnames route to this same Worker:

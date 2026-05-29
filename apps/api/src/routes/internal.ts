@@ -7,11 +7,13 @@ import crypto from 'node:crypto';
 
 /**
  * Internal routes — called by the Cloudflare Worker, NOT authenticated via Clerk.
- * Auth: X-Internal-Secret header must match API_SECRET env var.
+ * Auth: the X-Internal-Secret header must match the INTERNAL_SECRET env var
+ * (API_SECRET kept as a legacy fallback). This is the SAME value the Worker
+ * sends as its INTERNAL_SECRET secret.
  */
 
 function assertInternalSecret(request: FastifyRequest, reply: FastifyReply): boolean {
-  const secret = process.env['API_SECRET'] || 'change_me_in_production_32_chars_min';
+  const secret = process.env['INTERNAL_SECRET'] || process.env['API_SECRET'] || 'change_me_in_production_32_chars_min';
   const provided = request.headers['x-internal-secret'] as string | undefined;
 
   if (!secret || provided !== secret) {
