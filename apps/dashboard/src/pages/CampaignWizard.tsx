@@ -299,6 +299,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
   const { mutateAsync: createTrigger } = useCreate();
   const { mutateAsync: createTargeting } = useCreate();
   const { mutateAsync: createFrequency } = useCreate();
+  const { mutateAsync: activateCampaign } = useCreate();
 
   const [step, setStep] = React.useState(1);
   const [loading, setLoading] = React.useState(false);
@@ -729,6 +730,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
       for (const spec of targeting) {
         await createTargeting({ resource: `campaigns/${campaignId}/targeting`, values: spec });
       }
+
+      // Launch = go live. Activate so the campaign is served by the edge (was left as draft).
+      await activateCampaign({ resource: `campaigns/${campaignId}/activate`, values: {} });
 
       setLoading(false);
       onNavigate('/campaigns');
