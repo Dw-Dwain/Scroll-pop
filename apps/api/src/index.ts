@@ -69,6 +69,10 @@ async function bootstrap() {
       cb(new Error(`Origin ${origin} not allowed by CORS`), false);
     },
     credentials: true,
+    // Explicitly allow the methods/headers the dashboard uses — the design editor
+    // saves via PUT, which was missing from the default preflight allow-list.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id', 'X-Tenant-Override'],
   });
 
   // Rate limiting
