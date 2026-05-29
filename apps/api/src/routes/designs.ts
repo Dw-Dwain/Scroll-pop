@@ -1,15 +1,31 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { DesignConfigSchema, AffiliateSlotSchema } from '@scrollpop/shared';
+import { AffiliateSlotSchema } from '@scrollpop/shared';
 import { z } from 'zod';
 import { db } from '../db/client.js';
 import { designs, campaigns } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
+const DESIGN_KINDS = ['modal', 'slide_in', 'banner', 'bar', 'fullscreen'] as const;
+type DesignKindValue = (typeof DESIGN_KINDS)[number];
+
+// `config` is a jsonb column and the visual builder emits a rich, evolving shape
+// (steps, elements, freeform colors, etc.). We accept any object here rather than
+// forcing it through the narrow legacy DesignConfigSchema, which rejected valid
+// builder output. The snippet reads config fields defensively with fallbacks.
 const UpsertDesignBody = z.object({
-  kind: z.enum(['modal', 'slide_in', 'banner', 'bar', 'fullscreen']).optional(),
-  config: DesignConfigSchema.partial().optional(),
+  kind: z.string().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
   affiliateSlots: z.array(AffiliateSlotSchema).max(3).optional(),
 });
+
+// Map any incoming popup type to a valid DB enum value (defaults to modal).
+function coerceKind(kind: string | undefined): DesignKindValue | undefined {
+  if (kind === undefined) return undefined;
+  if ((DESIGN_KINDS as readonly string[]).includes(kind)) return kind as DesignKindValue;
+  if (kind === 'slide-in' || kind === 'drawer' || kind === 'corner' || kind === 'toast') return 'slide_in';
+  if (kind === 'sticky_bar' || kind === 'sticky-bar' || kind === 'floating_bar') return 'bar';
+  return 'modal';
+}
 
 export const designRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/v1/campaigns/:id/design
@@ -48,6 +64,7 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
       rawBody.affiliateSlots = rawBody.affiliate_slots;
     }
     const body = UpsertDesignBody.parse(rawBody);
+    const coercedKind = coerceKind(body.kind);
 
     // Verify campaign belongs to tenant
     const campaign = await db.query.campaigns.findFirst({
@@ -74,7 +91,7 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
       const [updated] = await db
         .update(designs)
         .set({
-          kind: body.kind ?? existing.kind,
+          kind: coercedKind ?? existing.kind,
           config: body.config ? { ...(existing.config as object), ...body.config } : existing.config,
           affiliateSlots: body.affiliateSlots ?? existing.affiliateSlots,
           updatedAt: new Date(),
@@ -90,7 +107,7 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
         .values({
           campaignId: request.params.id,
           tenantId: request.tenantId,
-          kind: body.kind ?? 'modal',
+          kind: coercedKind ?? 'modal',
           config: body.config ?? {},
           affiliateSlots: body.affiliateSlots ?? [],
         })
