@@ -12,7 +12,8 @@
 import snippetCode from './p.txt';
 
 export interface Env {
-  SCROLLPOP_CONFIG: KVNamespace;
+  // Optional: when no KV namespace is bound, config is served uncached from origin.
+  SCROLLPOP_CONFIG?: KVNamespace;
   API_ORIGIN: string;
   REDIS_URL: string;
   REDIS_TOKEN: string;
@@ -78,17 +79,19 @@ async function handleConfig(
 
   const kvKey = `config:${publicKey}`;
 
-  // Try KV cache first
-  const cached = await env.SCROLLPOP_CONFIG.get(kvKey, 'text');
-  if (cached) {
-    return new Response(cached, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=60',
-        'X-Cache': 'HIT',
-        ...CORS_HEADERS,
-      },
-    });
+  // Try KV cache first (only when a KV namespace is bound)
+  if (env.SCROLLPOP_CONFIG) {
+    const cached = await env.SCROLLPOP_CONFIG.get(kvKey, 'text');
+    if (cached) {
+      return new Response(cached, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=60',
+          'X-Cache': 'HIT',
+          ...CORS_HEADERS,
+        },
+      });
+    }
   }
 
   // Cache miss — fetch from origin API
@@ -121,10 +124,12 @@ async function handleConfig(
 
   const configJson = await originResponse.text();
 
-  // Store in KV with 60s TTL (async — don't block response)
-  ctx.waitUntil(
-    env.SCROLLPOP_CONFIG.put(kvKey, configJson, { expirationTtl: 60 })
-  );
+  // Store in KV with 60s TTL (async — don't block response), if KV is bound
+  if (env.SCROLLPOP_CONFIG) {
+    ctx.waitUntil(
+      env.SCROLLPOP_CONFIG.put(kvKey, configJson, { expirationTtl: 60 })
+    );
+  }
 
   return new Response(configJson, {
     headers: {

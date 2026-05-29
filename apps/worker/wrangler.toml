@@ -7,6 +7,23 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 API_ORIGIN = "https://scroll-pop.onrender.com"
 # INTERNAL_SECRET is set via: wrangler secret put INTERNAL_SECRET
+# NOTE: INTERNAL_SECRET (here) MUST equal API_SECRET on the Render API, or the
+# Worker's config origin calls are rejected with 401.
+
+# ── Custom domains (auto-provisions DNS + TLS on deploy) ──────────────────────
+# Both hostnames route to this same Worker:
+#   cdn.scrollpop.online/v1/:publicKey/p.js   → snippet bundle
+#   edge.scrollpop.online/c/:publicKey        → site config
+#   edge.scrollpop.online/e                   → event ingest
+# Requires the scrollpop.online zone in this Cloudflare account and a deploy
+# token with Zone:DNS:Edit + Workers Scripts:Edit.
+[[routes]]
+pattern = "cdn.scrollpop.online"
+custom_domain = true
+
+[[routes]]
+pattern = "edge.scrollpop.online"
+custom_domain = true
 
 # ── KV Namespace: campaign config cache ───────────────────────────────────────
 # TODO: Create KV namespace in Cloudflare dashboard and add IDs here
