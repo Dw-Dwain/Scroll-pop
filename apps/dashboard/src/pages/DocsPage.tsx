@@ -546,7 +546,7 @@ function SectionAnalytics() {
         <><strong>CTR (Click-Through Rate)</strong> — clicks ÷ views × 100. Industry benchmark for affiliate popups: 3–8 %.</>,
         <><strong>View Rate</strong> — views ÷ impressions × 100. Low view rate usually means your trigger fires too late or targeting is too narrow.</>,
         <><strong>Conversion Rate</strong> — conversions ÷ clicks × 100. Tracks coupon copies and defined conversion events.</>,
-        <><strong>Dismiss Rate</strong> — dismisses ÷ views × 100. High dismiss rate (>80 %) suggests mismatch between offer and audience.</>,
+        <><strong>Dismiss Rate</strong> — dismisses ÷ views × 100. High dismiss rate ({'>'}80 %) suggests mismatch between offer and audience.</>,
       ]} />
 
       <H2>Analytics Dashboard</H2>
@@ -563,7 +563,7 @@ function SectionAnalytics() {
       <Note type="info">The OpsCenter page (enabled on Growth+ plans) shows a live SSE stream of events as they arrive — useful for monitoring a campaign launch in real time.</Note>
 
       <H2>Data Retention</H2>
-      <P>Analytics events are stored indefinitely in the TimescaleDB hypertable. There is no automatic purge. At >50M events/month, the platform migrates to ClickHouse for analytical queries (this is a v3 feature).</P>
+      <P>Analytics events are stored indefinitely in the TimescaleDB hypertable. There is no automatic purge. At {'>'}50M events/month, the platform migrates to ClickHouse for analytical queries (this is a v3 feature).</P>
     </div>
   );
 }
