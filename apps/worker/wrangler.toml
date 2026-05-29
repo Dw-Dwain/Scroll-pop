@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 # ── Non-secret vars (safe to commit) ──────────────────────────────────────────
 [vars]
 API_ORIGIN = "https://scroll-pop.onrender.com"
-INTERNAL_SECRET = "change_me_in_production_32_chars_min"
+INTERNAL_SECRET = "set-via-wrangler-secret-put"
 
 # ── KV Namespace: campaign config cache ───────────────────────────────────────
 [[kv_namespaces]]
@@ -26,7 +26,7 @@ preview_id = "7562d61304e8425b9dcab1260b94e560"
 #   pnpm wrangler secret put SENTRY_DSN --env production
 
 [env.production]
-vars = { ENVIRONMENT = "production", API_ORIGIN = "https://api.scrollpop.io" }
+vars = { ENVIRONMENT = "production", API_ORIGIN = "https://scroll-pop.onrender.com" }
 
 [env.staging]
 vars = { ENVIRONMENT = "staging", API_ORIGIN = "https://api-staging.scrollpop.io" }
