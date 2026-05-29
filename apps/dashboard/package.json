@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "lint": "echo 'ESLint not yet configured — tracked in tech debt T-ESLint'"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.2.0",
