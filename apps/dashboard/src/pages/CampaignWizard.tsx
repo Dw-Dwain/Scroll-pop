@@ -955,21 +955,13 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
               onUpdateStepConfig={handleUpdateStepConfig}
               onUpdateTriggers={handleUpdateTriggers}
               onSelectTemplate={(tpl) => {
-                const targetConfig = tpl.steps[activeStep];
-                handleUpdateStepConfig({
-                  elements: JSON.parse(JSON.stringify(targetConfig.elements)),
-                  backgroundColor: targetConfig.backgroundColor,
-                  borderColor: targetConfig.borderColor,
-                  borderWidth: targetConfig.borderWidth,
-                  borderRadius: targetConfig.borderRadius,
-                  popupType: targetConfig.popupType,
-                  width: targetConfig.width,
-                  height: targetConfig.height,
-                  overlayColor: targetConfig.overlayColor,
-                  animationEntrance: targetConfig.animationEntrance,
-                });
+                // Load the FULL template design (all steps: teaser/main/success), not just the active step.
+                setCampaign((prev) => (prev ? { ...prev, steps: JSON.parse(JSON.stringify(tpl.steps)) } : prev));
                 setSelectedElementId(null);
-                toastMessage(`🔀 Preset template style loaded`);
+                const mainEls = JSON.parse(JSON.stringify(tpl.steps.main?.elements ?? []));
+                setHistory([mainEls]);
+                setHistoryIndex(0);
+                toastMessage(`🎨 Template design loaded`);
               }}
               onAddElement={handleAddElement}
               onRemoveElement={handleRemoveElement}
