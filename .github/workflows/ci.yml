@@ -142,17 +142,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter snippet build
       - name: Deploy Worker
-        run: pnpm --filter worker run deploy
+        working-directory: apps/worker
+        run: |
+          node -e "require('fs').copyFileSync('../../packages/snippet/dist/p.js', 'src/p.txt')"
+          npx wrangler deploy --env=""
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Verify token was set
-        if: failure()
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "❌ CLOUDFLARE_API_TOKEN is empty — check GitHub secret"
-          else
-            echo "✅ CLOUDFLARE_API_TOKEN is set (length: ${#CLOUDFLARE_API_TOKEN})"
-          fi
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
