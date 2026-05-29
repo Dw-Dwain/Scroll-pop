@@ -97,7 +97,7 @@ function getEdgeUrl(): string {
     if (currentScript?.src) {
       try {
         const urlObj = new URL(currentScript.src);
-        if (!urlObj.hostname.includes('cdn.scrollpop.io')) {
+        if (!urlObj.hostname.includes('cdn.scrollpop.online')) {
           return urlObj.origin;
         }
       } catch {}
@@ -111,7 +111,7 @@ function getEdgeUrl(): string {
       if (src && src.includes('/p.js')) {
         try {
           const urlObj = new URL(src);
-          if (!urlObj.hostname.includes('cdn.scrollpop.io')) {
+          if (!urlObj.hostname.includes('cdn.scrollpop.online')) {
             return urlObj.origin;
           }
         } catch {}
@@ -119,7 +119,7 @@ function getEdgeUrl(): string {
     }
   }
 
-  return 'https://edge.scrollpop.io';
+  return 'https://edge.scrollpop.online';
 }
 
 const EDGE_URL = getEdgeUrl();
@@ -836,7 +836,7 @@ function renderPopup(campaign: CampaignConfig): void {
       }
       return;
     }
-    transitionToSuccess(emailVal || 'anonymous@scrollpop.io');
+    transitionToSuccess(emailVal || 'anonymous@scrollpop.online');
   };
 
   if (submitBtn) {

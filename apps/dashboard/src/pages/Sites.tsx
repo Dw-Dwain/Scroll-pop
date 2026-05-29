@@ -464,7 +464,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   var p=w.__sp=w.__sp||{q:[],identify:function(v){p.q.push(['identify',v])},loaded:false};
   if(p.loaded)return; p.loaded=true;
   var el=d.createElement(s); el.async=true; el.defer=true;
-  el.src='https://cdn.scrollpop.io/v1/${publicKey}/p.js';
+  el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';
   d.head.appendChild(el);
 })(window,document,'script');
 </\script>`;

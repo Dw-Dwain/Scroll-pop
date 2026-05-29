@@ -947,10 +947,15 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 ## 22. What's Built vs Not Built
 
 ### ✅ Built & Working
-- Multi-tenant auth (Clerk orgs)
+- Auth via Clerk — **personal-account model**: each signed-in user gets an auto-provisioned
+  tenant (`personal_<clerkUserId>`) on first request; the org-based multi-tenant path is
+  preserved in `tenant-context.ts` for later but no org-creation UI exists yet
+- Email/password sign-up (real Clerk flow: create → email verification code → active session)
+  plus Google/GitHub OAuth, in both SignIn and SignUp pages
 - Sites CRUD with platform picker
 - Shopify OAuth 2.0 + Script Tag injection + GDPR webhooks
-- WordPress plugin + dashboard verification
+- WordPress plugin + dashboard verification (plugin `.zip` served from GitHub release asset:
+  `github.com/dwain-coder/Scroll-pop/releases/latest/download/scrollpop-wp.zip`)
 - Campaign wizard (3-step: basics, triggers, targeting)
 - Full trigger types: scroll %, dwell time, inactivity, exit-intent mouse, click
 - Full targeting types: URL exact/contains/regex, device, returning visitor
@@ -968,18 +973,27 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - OpsCenter live SSE stream (beta)
 - Experiments UI (beta placeholder)
 - Journeys UI (beta placeholder)
-- CI/CD pipeline (GitHub Actions) — needs `workflow` scope PAT
+- CI/CD pipeline (GitHub Actions) — deploys API → Render from `dwain-coder/Scroll-pop`;
+  pushing CI/workflow changes needs a `workflow`-scope PAT
 - Multi-page docs with sidebar nav
 - License page (verbatim OSS licenses)
 - Terms, Privacy, Status pages
 - VITE_API_URL routing fix (production-ready)
-- CORS env-var based (DASHBOARD_URL)
+- CORS: allowlist (`DASHBOARD_URL`, `dashboard.scrollpop.online`, `scrollpop-dashboard.pages.dev`)
+  plus a regex allowing Cloudflare Pages preview origins (`<hash>.scrollpop-dashboard.pages.dev`)
+- All in-code infra references repointed from the placeholder `scrollpop.io` to the owned
+  `scrollpop.online` domain (snippet embed, edge/cdn URLs, Shopify/WP/docs)
 
 ### ❌ Not Built Yet (v2 targets)
 - Real-time view limit enforcement in Worker (currently uncapped)
 - Stripe Usage Records metering (views are not actually reported to Stripe)
-- `api.scrollpop.io` custom domain (API still at render subdomain)
-- scrollpop.io marketing site
+- `api.scrollpop.online` custom domain (API still at `scroll-pop.onrender.com` render subdomain)
+- `cdn.scrollpop.online` / `edge.scrollpop.online` DNS + Cloudflare custom-domain routing —
+  code now references these, but the snippet/config endpoints won't serve until the R2 bucket
+  and Worker custom domains are wired up
+- Clerk Organizations / team UI — personal accounts only for now (no org switcher/create,
+  so the org-based tenant path is dormant)
+- `scrollpop.online` marketing site
 - Email notifications (view limit warnings, campaign status changes)
 - Campaign scheduling (start/end dates)
 - Geo targeting (country/region)

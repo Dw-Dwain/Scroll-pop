@@ -32,4 +32,4 @@ API_ORIGIN = "https://scroll-pop.onrender.com"
 vars = { ENVIRONMENT = "production", API_ORIGIN = "https://scroll-pop.onrender.com" }
 
 [env.staging]
-vars = { ENVIRONMENT = "staging", API_ORIGIN = "https://api-staging.scrollpop.io" }
+vars = { ENVIRONMENT = "staging", API_ORIGIN = "https://api-staging.scrollpop.online" }

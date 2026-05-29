@@ -135,7 +135,7 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!site) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Site not found' } });
 
-    const cdnUrl = process.env['SNIPPET_CDN_URL'] ?? 'https://cdn.scrollpop.io';
+    const cdnUrl = process.env['SNIPPET_CDN_URL'] ?? 'https://cdn.scrollpop.online';
 
     const snippetHtml = `<!-- ScrollPop -->
 <script>

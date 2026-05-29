@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: ScrollPop
- * Plugin URI:  https://scrollpop.io
+ * Plugin URI:  https://scrollpop.online
  * Description: Google-compliant scroll-triggered popup campaigns for affiliate marketing, lead generation, and donations.
  * Version:     1.0.0
  * Author:      ScrollPop
- * Author URI:  https://scrollpop.io
+ * Author URI:  https://scrollpop.online
  * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: scrollpop
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'SCROLLPOP_VERSION', '1.0.0' );
 define( 'SCROLLPOP_PLUGIN_FILE', __FILE__ );
 define( 'SCROLLPOP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCROLLPOP_CDN_URL', 'https://cdn.scrollpop.io' );
+define( 'SCROLLPOP_CDN_URL', 'https://cdn.scrollpop.online' );
 
 require_once SCROLLPOP_PLUGIN_DIR . 'includes/class-scrollpop.php';
 require_once SCROLLPOP_PLUGIN_DIR . 'includes/class-admin.php';

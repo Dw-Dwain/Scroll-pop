@@ -170,7 +170,7 @@ function SectionQuickStart() {
   w.__sp.key=k;
   var t=d.createElement(s);
   t.async=1;
-  t.src='https://cdn.scrollpop.io/v1/'+k+'/p.js';
+  t.src='https://cdn.scrollpop.online/v1/'+k+'/p.js';
   d.head.appendChild(t);
 })(window,document,'script','YOUR_PUBLIC_KEY');
 </script>`;
@@ -182,7 +182,7 @@ function SectionQuickStart() {
       <Divider />
 
       <StepCard number={1} title="Create your account & organisation">
-        <P>Sign up at <strong>app.scrollpop.io</strong>. During onboarding, create an Organisation — this is your tenant that holds all your sites and campaigns. Plans start free.</P>
+        <P>Sign up at <strong>dashboard.scrollpop.online</strong>. During onboarding, create an Organisation — this is your tenant that holds all your sites and campaigns. Plans start free.</P>
       </StepCard>
 
       <StepCard number={2} title="Register a Site">
@@ -220,7 +220,7 @@ function SectionSites() {
 add_action('wp_footer', function() {
   $key = get_option('scrollpop_public_key');
   if ($key) {
-    echo '<script>(function(w,d,s,k){w.__sp=w.__sp||{q:[]};w.__sp.key=k;var t=d.createElement(s);t.async=1;t.src="https://cdn.scrollpop.io/v1/"+k+"/p.js";d.head.appendChild(t);})(window,document,"script","'.$key.'");</script>';
+    echo '<script>(function(w,d,s,k){w.__sp=w.__sp||{q:[]};w.__sp.key=k;var t=d.createElement(s);t.async=1;t.src="https://cdn.scrollpop.online/v1/"+k+"/p.js";d.head.appendChild(t);})(window,document,"script","'.$key.'");</script>';
   }
 });`;
 
@@ -688,7 +688,7 @@ Content-Type: application/json
   "status": "draft"
 }`;
 
-  const beaconEvent = `POST https://edge.scrollpop.io/e
+  const beaconEvent = `POST https://edge.scrollpop.online/e
 Content-Type: application/json
 
 {

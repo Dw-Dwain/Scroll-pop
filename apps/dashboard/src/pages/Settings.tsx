@@ -57,16 +57,16 @@ const TABS: { id: Tab; label: string; icon: React.FC<any>; danger?: boolean }[] 
 ];
 
 function getSnippetJS(publicKey: string) {
-  return `<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.io/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
+  return `<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
 }
 function getWpFunctionsPhp(publicKey: string) {
-  return `<?php\nfunction scrollpop_embed_script() {\n    $public_key = '${publicKey}';\n    ?>\n    <script>\n    (function(w,d,s,p){\n      p=w.__sp=w.__sp||{};\n      if(p.loaded)return; p.loaded=true;\n      var el=d.createElement(s); el.async=true; el.defer=true;\n      el.src='https://cdn.scrollpop.io/v1/<?php echo esc_js( $public_key ); ?>/p.js';\n      d.head.appendChild(el);\n    })(window,document,'script');\n    <\/script>\n    <?php\n}\nadd_action( 'wp_head', 'scrollpop_embed_script' );`;
+  return `<?php\nfunction scrollpop_embed_script() {\n    $public_key = '${publicKey}';\n    ?>\n    <script>\n    (function(w,d,s,p){\n      p=w.__sp=w.__sp||{};\n      if(p.loaded)return; p.loaded=true;\n      var el=d.createElement(s); el.async=true; el.defer=true;\n      el.src='https://cdn.scrollpop.online/v1/<?php echo esc_js( $public_key ); ?>/p.js';\n      d.head.appendChild(el);\n    })(window,document,'script');\n    <\/script>\n    <?php\n}\nadd_action( 'wp_head', 'scrollpop_embed_script' );`;
 }
 function getShopifyThemeLiquid(publicKey: string) {
-  return `{%- comment -%} ScrollPop — place just before </head> {%- endcomment -%}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.io/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
+  return `{%- comment -%} ScrollPop — place just before </head> {%- endcomment -%}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
 }
 function getShopifyAppEmbedBlock(publicKey: string) {
-  return `{% comment %} sections/scrollpop-embed.liquid {% endcomment %}\n{% if section.settings.public_key != blank %}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.io/v1/{{ section.settings.public_key }}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>\n{% endif %}\n\n{% schema %}\n{\n  "name": "ScrollPop",\n  "target": "head",\n  "settings": [\n    {\n      "type": "text",\n      "id": "public_key",\n      "label": "ScrollPop Public Key",\n      "default": "${publicKey}"\n    }\n  ]\n}\n{% endschema %}`;
+  return `{% comment %} sections/scrollpop-embed.liquid {% endcomment %}\n{% if section.settings.public_key != blank %}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/{{ section.settings.public_key }}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>\n{% endif %}\n\n{% schema %}\n{\n  "name": "ScrollPop",\n  "target": "head",\n  "settings": [\n    {\n      "type": "text",\n      "id": "public_key",\n      "label": "ScrollPop Public Key",\n      "default": "${publicKey}"\n    }\n  ]\n}\n{% endschema %}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
@@ -356,7 +356,7 @@ export const Settings: React.FC = () => {
                         fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
                         pointerEvents: 'none',
                       }}>
-                        scrollpop.io/
+                        scrollpop.online/
                       </span>
                     </div>
                   </FieldRow>

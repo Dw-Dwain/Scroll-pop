@@ -1051,7 +1051,7 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
                           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Quick Start</div>
                         </div>
                         <div style={{ padding: '12px 16px', background: 'var(--bg-raised)' }}>
-                          <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '19px', color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre-wrap' }}>{`curl https://api.scrollpop.io/v1/campaigns \\
+                          <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '19px', color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre-wrap' }}>{`curl https://api.scrollpop.online/v1/campaigns \\
   -H "Authorization: Bearer ${showKey ? profile.apiKey : 'sp_pk_live_...'}" \\
   -H "Content-Type: application/json"`}</pre>
                         </div>

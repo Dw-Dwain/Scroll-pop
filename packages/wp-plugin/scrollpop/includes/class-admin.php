@@ -99,7 +99,7 @@ class ScrollPop_Admin {
         $public_key  = ScrollPop::get_public_key();
         $enabled     = ScrollPop::is_enabled();
         $status_url  = get_rest_url( null, 'scrollpop/v1/status' );
-        $dashboard   = 'https://app.scrollpop.io';
+        $dashboard   = 'https://dashboard.scrollpop.online';
         ?>
         <div class="wrap" style="max-width:760px;">
             <h1 style="display:flex;align-items:center;gap:10px;">

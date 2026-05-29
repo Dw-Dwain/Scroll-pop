@@ -33,8 +33,8 @@ function getConfig() {
   const apiKey = process.env['SHOPIFY_API_KEY'];
   const apiSecret = process.env['SHOPIFY_API_SECRET'];
   const scopes = process.env['SHOPIFY_SCOPES'] ?? 'read_products,write_script_tags';
-  const dashboardUrl = process.env['DASHBOARD_URL'] ?? 'https://app.scrollpop.io';
-  const apiBaseUrl = process.env['API_BASE_URL'] ?? 'https://api.scrollpop.io';
+  const dashboardUrl = process.env['DASHBOARD_URL'] ?? 'https://dashboard.scrollpop.online';
+  const apiBaseUrl = process.env['API_BASE_URL'] ?? 'https://api.scrollpop.online';
 
   if (!apiKey || !apiSecret) {
     throw new Error('SHOPIFY_API_KEY and SHOPIFY_API_SECRET must be set');
@@ -327,7 +327,7 @@ export const shopifyRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // 10. Inject Script Tag (async — non-blocking for the OAuth redirect)
-    const cdnUrl = process.env['SNIPPET_CDN_URL'] ?? 'https://cdn.scrollpop.io';
+    const cdnUrl = process.env['SNIPPET_CDN_URL'] ?? 'https://cdn.scrollpop.online';
     const scriptTagSrc = `${cdnUrl}/v1/${site.publicKey}/p.js`;
 
     try {
