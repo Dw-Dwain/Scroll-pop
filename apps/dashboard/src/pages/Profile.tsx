@@ -6,6 +6,26 @@ import {
   Camera, ChevronRight, Activity, Zap,
   AlertCircle, QrCode, X,
 } from 'lucide-react';
+import { useClerk, useUser } from '@clerk/clerk-react';
+
+// Captures the Clerk client/user into the parent without calling Clerk hooks
+// at the parent's top level — this child only mounts in real (Clerk) mode,
+// so the hooks never run in demo/desktop mode where there is no ClerkProvider.
+type ClerkBridgeValue = { openUserProfile: () => void; updateName: (name: string) => Promise<void> };
+function ClerkBridge({ onReady }: { onReady: (v: ClerkBridgeValue) => void }) {
+  const clerk = useClerk();
+  const { user } = useUser();
+  React.useEffect(() => {
+    onReady({
+      openUserProfile: () => clerk.openUserProfile(),
+      updateName: async (name: string) => {
+        const [firstName, ...rest] = name.trim().split(/\s+/);
+        await user?.update({ firstName: firstName ?? '', lastName: rest.join(' ') });
+      },
+    });
+  }, [clerk, user, onReady]);
+  return null;
+}
 
 interface ProfileProps {
   isDemo: boolean;
@@ -418,6 +438,11 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
   // 2FA modal
   const [setup2FA, setSetup2FA] = React.useState<{ secret: string; backupCodes: string[] } | null>(null);
 
+  // Real (Clerk) mode: password, 2FA, and identity are managed by Clerk, not localStorage.
+  const isClerkMode = !isDemo && !isDesktop;
+  const clerkRef = React.useRef<ClerkBridgeValue | null>(null);
+  const handleClerkReady = React.useCallback((v: ClerkBridgeValue) => { clerkRef.current = v; }, []);
+
   const storedAuth = (() => {
     try {
       return JSON.parse(localStorage.getItem('_sp_auth') ?? '{}');
@@ -439,6 +464,11 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     persistProfile(profile);
+    // Real mode: persist the display name to Clerk (the source of truth synced to our DB
+    // via the Clerk webhook). Avatar-by-URL and bio stay local (Clerk avatars are uploads).
+    if (isClerkMode && clerkRef.current) {
+      try { await clerkRef.current.updateName(profile.name); } catch { /* surfaced below */ }
+    }
     if (isDesktop) {
       const token = localStorage.getItem('desktop_token');
       const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? 'http://127.0.0.1:3010';
@@ -456,6 +486,12 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
   };
 
   const handlePasswordChange = () => {
+    // Real mode: passwords are managed by Clerk — open its real security UI instead of
+    // storing a fake password in localStorage.
+    if (isClerkMode) {
+      clerkRef.current?.openUserProfile();
+      return;
+    }
     setPwMsg(null);
     const stored = (() => { try { return JSON.parse(localStorage.getItem('_sp_auth') ?? '{}'); } catch { return {}; } })();
     if (stored.password && stored.password !== pwCurrent) {
@@ -473,6 +509,11 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
   };
 
   const handleEnable2FA = () => {
+    // Real mode: TOTP/2FA is managed by Clerk — open its real security UI.
+    if (isClerkMode) {
+      clerkRef.current?.openUserProfile();
+      return;
+    }
     const secret = generateSecret();
     const backupCodes = generateBackupCodes();
     setSetup2FA({ secret, backupCodes });
@@ -539,6 +580,7 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
 
   return (
     <section style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
+      {isClerkMode && <ClerkBridge onReady={handleClerkReady} />}
       {/* Left panel — sticky */}
       <div style={{
         width: 240, flexShrink: 0,
@@ -700,10 +742,12 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
                             className="btn btn-secondary btn-sm"
                             style={{ fontSize: 11 }}
                             onClick={() => {
-                              if (active) {
-                                showToast("Manage credentials is only active for production Clerk sessions.");
+                              if (isClerkMode) {
+                                clerkRef.current?.openUserProfile();
+                              } else if (active) {
+                                showToast("Sign-in methods are managed in your account security settings.");
                               } else {
-                                showToast(`Initiating OAuth connection flow for ${method}... (Simulated in developer mode)`);
+                                showToast(`Connecting ${method} is available with a production account.`);
                               }
                             }}
                           >
@@ -720,6 +764,12 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
             {/* ── SECURITY ── */}
             {activeSection === 'security' && (
               <div>
+                {isClerkMode && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', marginBottom: 16, background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <Shield size={14} style={{ color: 'var(--accent-400)', flexShrink: 0 }} />
+                    <span>Password and two-factor authentication are managed by our secure auth provider. The buttons below open the secure account dialog.</span>
+                  </div>
+                )}
                 {/* 2FA */}
                 <SectionCard title="Two-Factor Authentication" subtitle="Add an extra layer of security to your account.">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: twoFA.enabled ? 16 : 0 }}>

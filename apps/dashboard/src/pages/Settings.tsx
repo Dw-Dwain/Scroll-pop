@@ -5,7 +5,8 @@ import {
   Webhook, Download, Pause, Trash2, Info, Clock, Mail, Smartphone,
   Building2, Link2, Languages, CreditCard, Activity,
 } from 'lucide-react';
-import { useList } from '@refinedev/core';
+import { useList, useUpdate, useCustomMutation } from '@refinedev/core';
+import { getApiBase } from '../providers/dataProvider';
 
 const STORAGE_KEY = '_sp_settings';
 
@@ -188,10 +189,8 @@ export const Settings: React.FC = () => {
   });
 
   const handleRotateSecretKey = () => {
-    const newKey = `sk_live_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-    setSecretKey(newKey);
-    localStorage.setItem('_sp_secret_key', newKey);
-    showToast("Secret API key successfully rotated!");
+    // No API-key system exists in the backend yet — don't fabricate a key that won't work.
+    showToast("API key management isn't available yet — coming in a future release.");
   };
 
   const handleTestWebhook = async () => {
@@ -227,41 +226,43 @@ export const Settings: React.FC = () => {
   };
 
   const handleRequestExport = () => {
-    showToast("📤 Export archive requested. We will email you within 24 hours.");
+    // No export backend yet. Point users at the working per-campaign CSV export on Analytics.
+    showToast("Account-wide export isn't available yet — use the CSV export on the Analytics page.");
   };
 
-  const handlePauseAll = () => {
-    if (window.confirm("Are you sure you want to pause all active campaigns immediately? This will disable popups across all live sites.")) {
-      try {
-        const raw = localStorage.getItem('campaigns') ?? '[]';
-        const list = JSON.parse(raw);
-        const updated = list.map((c: any) => ({ ...c, isActive: false }));
-        localStorage.setItem('campaigns', JSON.stringify(updated));
-      } catch {}
-      showToast("⏸ All live campaigns have been successfully paused.");
+  const [pausing, setPausing] = React.useState(false);
+  const handlePauseAll = async () => {
+    if (!window.confirm("Pause all active campaigns immediately? This disables popups across all live sites.")) return;
+    const active = campaigns.filter((c) => c.status === 'active');
+    if (active.length === 0) { showToast("No active campaigns to pause."); return; }
+    setPausing(true);
+    let paused = 0;
+    try {
+      for (const c of active) {
+        try {
+          await customMutate({ url: `${getApiBase()}/campaigns/${c.id}/pause`, method: 'post', values: {} });
+          paused++;
+        } catch { /* keep going; report the count actually paused */ }
+      }
+      await refetchCampaigns();
+      showToast(paused === active.length
+        ? `Paused ${paused} campaign${paused === 1 ? '' : 's'}.`
+        : `Paused ${paused} of ${active.length}; ${active.length - paused} failed.`);
+    } finally {
+      setPausing(false);
     }
   };
 
   const handleResetAnalytics = () => {
-    if (window.confirm("WARNING: This will permanently delete all campaign view, click, and conversion data. Campaign designs are preserved. This action CANNOT be undone. Proceed?")) {
-      localStorage.setItem('_sp_views_used', '0');
-      showToast("📊 Analytics and view metrics reset successfully.");
-    }
+    // Events are an immutable append-only log; there is no reset endpoint. Don't fake it.
+    showToast("Resetting analytics isn't available — event history is immutable in this beta.");
   };
 
   const handleDeleteOrg = () => {
     if (deleteConfirm !== 'DELETE') return;
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem('_sp_profile_v2');
-    localStorage.removeItem('_sp_sessions');
-    localStorage.removeItem('_sp_auth');
-    localStorage.removeItem('_sp_2fa');
-    localStorage.removeItem('desktop_user');
-    localStorage.removeItem('desktop_token');
-    showToast("🗑 Organization and all workspace data permanently deleted.");
-    setTimeout(() => {
-      window.location.reload();
-    }, 1500);
+    // No account-deletion backend yet; clearing localStorage would NOT delete server data,
+    // so we don't pretend it did. Surface an honest message instead.
+    showToast("Account deletion isn't available yet — contact support to close your account.");
   };
 
   const { data: sitesData } = useList({ resource: 'sites' });
@@ -269,17 +270,44 @@ export const Settings: React.FC = () => {
   const selectedSite = sites.find((s) => s.id === selectedSiteId) ?? sites[0] ?? null;
   const publicKey = selectedSite?.publicKey ?? 'YOUR_PUBLIC_KEY';
 
+  // Tenant (org) — name is real server data persisted via PATCH /tenants/:id
+  const { data: tenantData } = useList({ resource: 'tenants' });
+  const tenant = (tenantData?.data?.[0] ?? null) as any;
+  const { mutateAsync: updateTenant } = useUpdate();
+
+  // Campaigns — used by Pause-all
+  const { data: campaignsData, refetch: refetchCampaigns } = useList({ resource: 'campaigns', pagination: { mode: 'off' } });
+  const campaigns = (campaignsData?.data ?? []) as any[];
+  const { mutateAsync: customMutate } = useCustomMutation();
+
+  // Seed org fields from the server tenant once it loads.
+  React.useEffect(() => {
+    if (tenant?.name && tenant.name !== settings.orgName) {
+      setSettings((s: Record<string, any>) => ({ ...s, orgName: tenant.name, orgSlug: slugify(tenant.name) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant?.name]);
+
   const persistSettings = (updated: Record<string, any>) => {
     setSettings(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Client-side preferences (timezone, notifications, default triggers) persist locally;
+    // the organization name is real server data and goes to the API.
     persistSettings(settings);
-    setIsSaved(true);
-    showToast("Settings successfully saved.");
-    setTimeout(() => setIsSaved(false), 2500);
+    try {
+      if (tenant?.id && settings.orgName && settings.orgName !== tenant.name) {
+        await updateTenant({ resource: 'tenants', id: tenant.id, values: { name: settings.orgName } });
+      }
+      setIsSaved(true);
+      showToast("Settings saved.");
+      setTimeout(() => setIsSaved(false), 2500);
+    } catch (err: any) {
+      showToast(err?.message ?? "Couldn't save organization name to the server.");
+    }
   };
 
   const handleCopy = (text: string, key: string) => {
@@ -802,7 +830,7 @@ export const Settings: React.FC = () => {
               <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Export Your Data</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Download a full archive of your campaigns, sites, analytics, and settings as a ZIP file. Available within 24 hours.</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Account-wide export isn't available yet. For now, export per-campaign analytics as CSV from the Analytics page.</div>
                 </div>
                 <button type="button" onClick={handleRequestExport} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0 }}>
                   <Download size={13} /> Request Export
@@ -815,8 +843,8 @@ export const Settings: React.FC = () => {
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Pause All Campaigns</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Immediately pause every active campaign across all your sites. Campaigns can be individually reactivated afterward.</div>
                 </div>
-                <button type="button" onClick={handlePauseAll} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0, color: 'var(--status-warning)', borderColor: 'rgba(245,158,11,0.3)' }}>
-                  <Pause size={13} /> Pause All
+                <button type="button" onClick={handlePauseAll} disabled={pausing} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0, color: 'var(--status-warning)', borderColor: 'rgba(245,158,11,0.3)' }}>
+                  {pausing ? <RefreshCw size={13} className="spin" /> : <Pause size={13} />} {pausing ? 'Pausing…' : 'Pause All'}
                 </button>
               </div>
 
