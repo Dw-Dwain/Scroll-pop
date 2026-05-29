@@ -141,6 +141,14 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter snippet build
+      - name: Debug CF token
+        run: |
+          echo "Token length: ${#CLOUDFLARE_API_TOKEN}"
+          echo "Account ID length: ${#CLOUDFLARE_ACCOUNT_ID}"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "❌ TOKEN IS EMPTY"; else echo "✅ TOKEN IS SET"; fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Deploy Worker
         working-directory: apps/worker
         run: |
