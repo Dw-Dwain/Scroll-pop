@@ -11,8 +11,8 @@ API_ORIGIN = "https://scroll-pop.onrender.com"
 # ── KV Namespace: campaign config cache ───────────────────────────────────────
 [[kv_namespaces]]
 binding = "SCROLLPOP_CONFIG"
-id = "7562d61304e8425b9dcab1260b94e560"
-preview_id = "7562d61304e8425b9dcab1260b94e560"
+id = "fae43476cd5945319b43fa71200fd479"
+preview_id = "fae43476cd5945319b43fa71200fd479"
 
 # ── Secrets (set via `wrangler secret put <NAME>` — never commit values) ──────
 # Required secrets:
