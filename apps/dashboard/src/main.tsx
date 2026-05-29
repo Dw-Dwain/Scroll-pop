@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import { Refine } from '@refinedev/core';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -90,6 +90,9 @@ const ClerkAppContent: React.FC = () => {
   
   // Render routing mapper
   const renderRoute = () => {
+    // Clerk SSO callback — must be handled before anything else
+    if (currentPath.startsWith('/sso-callback')) return <AuthenticateWithRedirectCallback />;
+
     // Auth routes
     if (currentPath === '/sign-in') return <SignIn isDemo={false} />;
     if (currentPath === '/sign-up') return <SignUp isDemo={false} />;
