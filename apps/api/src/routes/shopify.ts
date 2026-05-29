@@ -34,7 +34,9 @@ function getConfig() {
   const apiSecret = process.env['SHOPIFY_API_SECRET'];
   const scopes = process.env['SHOPIFY_SCOPES'] ?? 'read_products,write_script_tags';
   const dashboardUrl = process.env['DASHBOARD_URL'] ?? 'https://dashboard.scrollpop.online';
-  const apiBaseUrl = process.env['API_BASE_URL'] ?? 'https://api.scrollpop.online';
+  // Must match the redirect URL registered in the Shopify app. Defaults to the
+  // live Render origin since api.scrollpop.online is not yet provisioned.
+  const apiBaseUrl = process.env['API_BASE_URL'] ?? 'https://scroll-pop.onrender.com';
 
   if (!apiKey || !apiSecret) {
     throw new Error('SHOPIFY_API_KEY and SHOPIFY_API_SECRET must be set');
@@ -57,7 +59,11 @@ function validateOAuthHmac(query: Record<string, string>, secret: string): boole
     .update(message)
     .digest('hex');
 
-  return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmac));
+  const a = Buffer.from(digest);
+  const b = Buffer.from(hmac);
+  // timingSafeEqual throws on length mismatch — guard so a bad hmac is rejected, not a 500.
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 /** Validate HMAC from Shopify webhook header */
