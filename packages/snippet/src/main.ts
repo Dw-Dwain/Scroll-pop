@@ -891,8 +891,30 @@ function renderPopup(campaign: CampaignConfig): void {
     });
   };
 
-  // Wire up close button & teaser reopening
-  shadow.getElementById('close-btn')?.addEventListener('click', dismiss);
+  // Close button: open affiliate/product URL in new tab, then auto-dismiss + reset
+  // frequency cap when the user returns from that tab (visibilitychange).
+  const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
+  const closeUrl = closeEl?.href || (elementMode ? null : slot?.click_tracker_url || slot?.product_url || null);
+  shadow.getElementById('close-btn')?.addEventListener('click', () => {
+    if (closeUrl) {
+      window.open(closeUrl, '_blank', 'noopener');
+      beaconEvent(campaign, 'click', slot?.id);
+      // When user comes back from the new tab, remove the popup and reset triggers.
+      const onReturn = () => {
+        if (!document.hidden) {
+          host.remove();
+          // Reset both session and persistent frequency caps so triggers can fire again.
+          sessionStorage.removeItem(`_sp_session_${campaign.id}`);
+          try { localStorage.removeItem(`_sp_fr_${campaign.id}`); } catch {}
+          beaconEvent(campaign, 'dismiss', slot?.id);
+          document.removeEventListener('visibilitychange', onReturn);
+        }
+      };
+      document.addEventListener('visibilitychange', onReturn);
+    } else {
+      dismiss();
+    }
+  });
   shadow.getElementById('dismiss-text')?.addEventListener('click', dismiss);
   shadow.getElementById('overlay')?.addEventListener('click', dismiss);
   shadow.getElementById('teaser-badge')?.addEventListener('click', reopen);

@@ -212,19 +212,31 @@ async function forwardEventsToApi(env: Env, events: unknown[]): Promise<void> {
     return;
   }
 
+  // 10s timeout prevents silent hangs when the API origin is cold-starting (Render free tier
+  // can take 10-30s on first request — without a timeout the Worker execution context hangs,
+  // events are dropped, and analytics never populate).
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
   try {
     const url = `${env.API_ORIGIN}/e`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ events }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     if (!response.ok) {
       console.error('API event forwarding returned non-ok status:', response.status);
     }
-  } catch (err) {
-    console.error('Error forwarding events to API:', err);
+  } catch (err: unknown) {
+    clearTimeout(timeout);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('aborted')) {
+      console.warn('Event forwarding timed out — API cold start? Events lost for this batch.');
+    } else {
+      console.error('Error forwarding events to API:', err);
+    }
   }
 }

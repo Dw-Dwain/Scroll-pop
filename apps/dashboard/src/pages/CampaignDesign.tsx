@@ -332,12 +332,21 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
   const [isSaving, setIsSaving] = React.useState(false);
   const [toast, setToast] = React.useState<string | null>(null);
 
-  // Bootstrap campaign when API data arrives
+  // Track whether the API data has been loaded yet. A ref (not state) so changes to it
+  // don't trigger re-renders and don't interfere with user edits once loaded.
+  const apiLoadedRef = React.useRef(false);
+
+  // Primary load: bootstrap campaign when BOTH API responses settle.
+  // We intentionally do NOT guard on `campaign` here — the 1500ms fallback below can fire
+  // first (Render cold-start takes 3-10s), set `campaign` with defaults, and then the
+  // `if (campaign) return` guard would block the real API data from ever loading.
+  // The apiLoadedRef ensures we only load once (so in-progress user edits are never reset).
   React.useEffect(() => {
-    if (campaign) return;
+    if (apiLoadedRef.current) return;
     const bothSettled = !isCampaignLoading && !isDesignLoading;
     if (!bothSettled) return;
 
+    apiLoadedRef.current = true;
     const camp = bootstrapCampaign(
       campaignId,
       campaignData?.data?.name || 'New Campaign',
@@ -346,29 +355,30 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     setCampaign(camp);
     setHistory([JSON.parse(JSON.stringify(camp.steps.main.elements))]);
     setHistoryIndex(0);
-  }, [campaignData, designData, isCampaignLoading, isDesignLoading, campaignId, campaign]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignData, designData, isCampaignLoading, isDesignLoading, campaignId]);
 
-  // Fallback: if API is unreachable, restore from sessionStorage cache written by Campaigns page
+  // Fallback: if API hasn't responded within 8s, load from sessionStorage cache so the
+  // canvas isn't stuck on a blank spinner. The primary effect above will override this
+  // with real data when the API finally responds (apiLoadedRef is still false at that point).
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      if (!campaign) {
-        // Try to restore name + design from the cache written when "Edit Design" was clicked
-        let cachedName = 'New Campaign';
-        let cachedDesign: any = {};
-        try {
-          const raw = sessionStorage.getItem(`sp_campaign_${campaignId}`);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.name) cachedName = parsed.name;
-            if (parsed.config) cachedDesign = { kind: parsed.kind, config: parsed.config };
-          }
-        } catch {}
-        const camp = bootstrapCampaign(campaignId, cachedName, cachedDesign);
-        setCampaign(camp);
-        setHistory([JSON.parse(JSON.stringify(camp.steps.main.elements))]);
-        setHistoryIndex(0);
-      }
-    }, 1500);
+      if (apiLoadedRef.current) return; // real data already arrived
+      let cachedName = 'New Campaign';
+      let cachedDesign: any = {};
+      try {
+        const raw = sessionStorage.getItem(`sp_campaign_${campaignId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.name) cachedName = parsed.name;
+          if (parsed.config) cachedDesign = { kind: parsed.kind, config: parsed.config };
+        }
+      } catch {}
+      const camp = bootstrapCampaign(campaignId, cachedName, cachedDesign);
+      setCampaign(camp);
+      setHistory([JSON.parse(JSON.stringify(camp.steps.main.elements))]);
+      setHistoryIndex(0);
+    }, 8000);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
@@ -568,6 +578,9 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     if (!campaign) return;
     setIsSaving(true);
     const designPayload = mapCampaignToDesign(campaign);
+    // Preserve existing affiliate slots — mapCampaignToDesign always returns [] because
+    // affiliate slots live on the design record, not on the Campaign canvas object.
+    designPayload.affiliateSlots = (designData?.data as any)?.affiliateSlots ?? [];
     mutate(
       { url: `${apiUrl}/campaigns/${campaignId}/design`, method: 'put', values: designPayload },
       {
