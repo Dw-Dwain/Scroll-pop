@@ -139,13 +139,17 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   const [sortCol, setSortCol] = React.useState<SortCol>('impressions');
   const [sortAsc, setSortAsc] = React.useState(false);
 
+  const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
+
   const { data: overviewResult, isLoading: overviewLoading } = useCustom({
-    url: `${apiUrl}/analytics/overview`,
+    url: `${apiUrl}/analytics/overview?days=${days}`,
     method: 'get',
+    queryOptions: { queryKey: ['analytics/overview', days] },
   });
   const { data: statsResult, isLoading: statsLoading } = useCustom({
-    url: `${apiUrl}/analytics/campaigns`,
+    url: `${apiUrl}/analytics/campaigns?days=${days}`,
     method: 'get',
+    queryOptions: { queryKey: ['analytics/campaigns', days] },
   });
   const { data: dailyResult, isLoading: dailyLoading } = useCustom({
     url: `${apiUrl}/analytics/daily`,
@@ -160,7 +164,25 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
 
   const dailyAll: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }> =
     (dailyResult as any)?.data?.daily ?? [];
+  // curr period = last N days; prev period = N days before that (for delta calculation)
   const curr30 = dailyAll.slice(30);
+  const prev30 = dailyAll.slice(0, 30);
+
+  const sum = (arr: typeof curr30, key: 'impressions' | 'views' | 'clicks' | 'conversions') =>
+    arr.reduce((s, d) => s + (d[key] ?? 0), 0);
+
+  const pct = (curr: number, prev: number) => {
+    if (prev === 0) return curr > 0 ? '+100%' : '—';
+    const d = ((curr - prev) / prev) * 100;
+    return (d >= 0 ? '+' : '') + d.toFixed(1) + '%';
+  };
+
+  const currImpr = sum(curr30, 'impressions');
+  const currClks = sum(curr30, 'clicks');
+  const prevImpr = sum(prev30, 'impressions');
+  const prevClks = sum(prev30, 'clicks');
+  const currCtr  = currImpr > 0 ? (currClks / currImpr) * 100 : 0;
+  const prevCtr  = prevImpr > 0 ? (prevClks / prevImpr) * 100 : 0;
 
   const campaignStats = React.useMemo(() => {
     const arr = [...rawStats];
@@ -176,10 +198,15 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   };
 
   const kpis = [
-    { label: 'Total Impressions', value: overview?.impressions ?? 0, delta: '+12.4%', mono: true },
-    { label: 'Total Views',       value: overview?.views ?? 0,       delta: '+8.1%',  mono: true },
-    { label: 'Click-Through Rate',value: overview ? parseFloat(((overview.ctr ?? 0) * 100).toFixed(2)) : 0, delta: '+2.1%', suffix: '%', mono: true },
-    { label: 'Total Conversions', value: overview?.conversions ?? 0, delta: '+22.1%', mono: true },
+    { label: 'Total Impressions', value: overview?.impressions ?? 0,
+      delta: pct(sum(curr30,'impressions'), sum(prev30,'impressions')), mono: true },
+    { label: 'Total Views',       value: overview?.views ?? 0,
+      delta: pct(sum(curr30,'views'), sum(prev30,'views')), mono: true },
+    { label: 'Click-Through Rate',
+      value: overview ? parseFloat(((overview.ctr ?? 0) * 100).toFixed(2)) : 0,
+      delta: pct(currCtr, prevCtr), suffix: '%', mono: true },
+    { label: 'Total Conversions', value: overview?.conversions ?? 0,
+      delta: pct(sum(curr30,'conversions'), sum(prev30,'conversions')), mono: true },
   ];
 
   const totalImpr = overview?.impressions ?? 1;

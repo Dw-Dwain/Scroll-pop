@@ -3,16 +3,14 @@ import { db } from '../db/client.js';
 import { events } from '../db/schema.js';
 import { eq, and, gte, sql } from 'drizzle-orm';
 
-const THIRTY_DAYS_AGO = () => {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return d;
-};
+const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d; };
 
 export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/v1/analytics/overview — tenant-level: total impressions, clicks, CTR (30d)
-  fastify.get('/analytics/overview', async (request, reply) => {
-    const since = THIRTY_DAYS_AGO();
+  // GET /api/v1/analytics/overview — tenant-level stats
+  // Query param: ?days=7|30|90 (default 30)
+  fastify.get<{ Querystring: { days?: string } }>('/analytics/overview', async (request, reply) => {
+    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
+    const since = daysAgo(days);
 
     const rows = await db
       .select({
@@ -46,7 +44,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({
       data: {
-        period: '30d',
+        period: `${days}d`,
         impressions,
         views: counts['view'] ?? 0,
         clicks,
@@ -67,7 +65,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: string } }>(
     '/analytics/campaigns/:id',
     async (request, reply) => {
-      const since = THIRTY_DAYS_AGO();
+      const since = daysAgo(30);
 
       const rows = await db
         .select({
@@ -90,9 +88,11 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GET /api/v1/analytics/campaigns — all tenant campaigns, aggregated stats (30d batch)
-  fastify.get('/analytics/campaigns', async (request, reply) => {
-    const since = THIRTY_DAYS_AGO();
+  // GET /api/v1/analytics/campaigns — all tenant campaigns, aggregated stats
+  // Query param: ?days=7|30|90 (default 30)
+  fastify.get<{ Querystring: { days?: string } }>('/analytics/campaigns', async (request, reply) => {
+    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
+    const since = daysAgo(days);
 
     const rows = await db
       .select({
@@ -122,7 +122,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: string } }>(
     '/analytics/sites/:id',
     async (request, reply) => {
-      const since = THIRTY_DAYS_AGO();
+      const since = daysAgo(30);
 
       const rows = await db
         .select({
