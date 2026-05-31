@@ -28,6 +28,12 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const clicks = counts['click'] ?? 0;
     const ctr = impressions > 0 ? (clicks / impressions) : 0;
 
+    // Also count ALL events for this tenant regardless of date (debug)
+    const [totalRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(events)
+      .where(eq(events.tenantId, request.tenantId));
+
     return reply.send({
       data: {
         period: '30d',
@@ -37,6 +43,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         dismissals: counts['dismiss'] ?? 0,
         conversions: counts['conversion'] ?? 0,
         ctr: parseFloat(ctr.toFixed(4)),
+        _debug: {
+          tenantId: request.tenantId,
+          totalEventsAllTime: totalRow?.count ?? 0,
+        },
       },
     });
   });

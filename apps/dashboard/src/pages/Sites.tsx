@@ -599,7 +599,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                 <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '10px 12px' }}>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Campaigns</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>
-                    {String(site.campaignCount ?? '0').padStart(2, '0')}
+                    {site.campaignCount ?? 0}
                   </div>
                 </div>
                 <div style={{ background: 'var(--bg-raised)', borderRadius: 6, padding: '10px 12px' }}>

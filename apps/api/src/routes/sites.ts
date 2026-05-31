@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { sites } from '../db/schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { sites, campaigns, events } from '../db/schema.js';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 
 const CreateSiteBody = z.object({
   name: z.string().min(1).max(100),
@@ -23,7 +23,32 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
       where: and(eq(sites.tenantId, request.tenantId), isNull(sites.deletedAt)),
       orderBy: (s, { desc }) => [desc(s.createdAt)],
     });
-    return reply.send({ data: tenantSites });
+
+    // Enrich each site with real campaign count and monthly impression count.
+    const enriched = await Promise.all(tenantSites.map(async (site) => {
+      const [campaignRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(campaigns)
+        .where(and(eq(campaigns.siteId, site.id), isNull(campaigns.deletedAt)));
+
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const [viewRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(events)
+        .where(and(
+          eq(events.siteId, site.id),
+          eq(events.eventType, 'impression'),
+          sql`${events.ts} >= ${monthStart}`
+        ));
+
+      return {
+        ...site,
+        campaignCount: campaignRow?.count ?? 0,
+        totalViews:    viewRow?.count    ?? 0,
+      };
+    }));
+
+    return reply.send({ data: enriched });
   });
 
   // POST /api/v1/sites
