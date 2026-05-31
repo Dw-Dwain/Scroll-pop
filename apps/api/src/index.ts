@@ -58,6 +58,7 @@ async function bootstrap() {
   const allowedOrigins = [
     process.env['DASHBOARD_URL'],
     'https://dashboard.scrollpop.online',
+    'https://staging.scrollpop.online',
     'https://scrollpop-dashboard.pages.dev',
   ].filter((o): o is string => Boolean(o));
   // Allows Cloudflare Pages preview deployments: <hash>.scrollpop-dashboard.pages.dev
