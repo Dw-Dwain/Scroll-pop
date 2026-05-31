@@ -883,28 +883,27 @@ function renderPopup(campaign: CampaignConfig): void {
     });
   };
 
-  // Close (X) button behaviour:
-  // 1. Always closes the popup immediately (dismiss + beacon).
-  // 2. If the close element has an href OR there's an affiliate slot URL, also
-  //    opens that URL in a new tab as a bonus action (user already saw the popup).
-  //    A visibilitychange listener then resets the frequency cap so triggers
-  //    can re-fire when the user comes back, giving them a second chance.
+  // Close (X) button — two-step flow when an affiliate/ad URL is configured:
+  //   1st click → open the ad in a new tab, popup stays visible.
+  //   User closes the new tab and returns to the page — popup is still there.
+  //   2nd click → popup dismisses and frequency cap resets (triggers can re-fire).
+  //
+  // When no URL is configured, the first click dismisses immediately (simple mode).
   const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
   const closeUrl = closeEl?.href || slot?.click_tracker_url || slot?.product_url || null;
+  let adOpened = false;
   shadow.getElementById('close-btn')?.addEventListener('click', () => {
-    dismiss(); // always close immediately + beacon dismiss
-    if (closeUrl) {
-      beaconEvent(campaign, 'click', slot?.id); // also count as a click
+    if (closeUrl && !adOpened) {
+      // First click: open ad, keep popup alive, beacon click
+      adOpened = true;
       window.open(closeUrl, '_blank', 'noopener');
-      // Reset frequency caps on return so the popup can fire again
-      const onReturn = () => {
-        if (!document.hidden) {
-          sessionStorage.removeItem(`_sp_session_${campaign.id}`);
-          try { localStorage.removeItem(`_sp_fr_${campaign.id}`); } catch {}
-          document.removeEventListener('visibilitychange', onReturn);
-        }
-      };
-      document.addEventListener('visibilitychange', onReturn);
+      beaconEvent(campaign, 'click', slot?.id);
+      // No dismiss yet — user sees popup again when they return
+    } else {
+      // Second click (or first click with no URL): dismiss + reset frequency cap
+      dismiss();
+      sessionStorage.removeItem(`_sp_session_${campaign.id}`);
+      try { localStorage.removeItem(`_sp_fr_${campaign.id}`); } catch {}
     }
   });
   shadow.getElementById('dismiss-text')?.addEventListener('click', dismiss);
