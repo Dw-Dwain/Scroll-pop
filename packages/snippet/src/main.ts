@@ -827,24 +827,16 @@ function renderPopup(campaign: CampaignConfig): void {
   const teaser = shadow.getElementById('teaser-badge');
   const popupViewMain = shadow.getElementById('popup-view-main');
 
-  let hasRedirected = false;
+  // dismiss() — close the popup and minimise to the teaser badge.
+  // Beacons the 'dismiss' event exactly once.
+  let dismissed = false;
   const dismiss = () => {
-    if (!hasRedirected) {
-      hasRedirected = true;
-      // Open affiliate link in a new tab (as explicitly requested)
-      const url = slot?.click_tracker_url || slot?.product_url;
-      if (url) {
-        window.open(url, '_blank');
-      }
-      // Track as 'dismiss' event in analytics
-      beaconEvent(campaign, 'dismiss', slot?.id);
-      return;
-    }
-
-    // Smoothly minimize to teaser state instead of fully removing
+    if (dismissed) return;
+    dismissed = true;
+    beaconEvent(campaign, 'dismiss', slot?.id);
     if (popupCard) popupCard.style.display = 'none';
-    if (overlay) overlay.style.display = 'none';
-    if (teaser) teaser.style.display = 'flex';
+    if (overlay)   overlay.style.display = 'none';
+    if (teaser)    teaser.style.display = 'flex';
   };
 
   const reopen = () => {
@@ -891,28 +883,28 @@ function renderPopup(campaign: CampaignConfig): void {
     });
   };
 
-  // Close button: open affiliate/product URL in new tab, then auto-dismiss + reset
-  // frequency cap when the user returns from that tab (visibilitychange).
+  // Close (X) button behaviour:
+  // 1. Always closes the popup immediately (dismiss + beacon).
+  // 2. If the close element has an href OR there's an affiliate slot URL, also
+  //    opens that URL in a new tab as a bonus action (user already saw the popup).
+  //    A visibilitychange listener then resets the frequency cap so triggers
+  //    can re-fire when the user comes back, giving them a second chance.
   const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
-  const closeUrl = closeEl?.href || (elementMode ? null : slot?.click_tracker_url || slot?.product_url || null);
+  const closeUrl = closeEl?.href || slot?.click_tracker_url || slot?.product_url || null;
   shadow.getElementById('close-btn')?.addEventListener('click', () => {
+    dismiss(); // always close immediately + beacon dismiss
     if (closeUrl) {
+      beaconEvent(campaign, 'click', slot?.id); // also count as a click
       window.open(closeUrl, '_blank', 'noopener');
-      beaconEvent(campaign, 'click', slot?.id);
-      // When user comes back from the new tab, remove the popup and reset triggers.
+      // Reset frequency caps on return so the popup can fire again
       const onReturn = () => {
         if (!document.hidden) {
-          host.remove();
-          // Reset both session and persistent frequency caps so triggers can fire again.
           sessionStorage.removeItem(`_sp_session_${campaign.id}`);
           try { localStorage.removeItem(`_sp_fr_${campaign.id}`); } catch {}
-          beaconEvent(campaign, 'dismiss', slot?.id);
           document.removeEventListener('visibilitychange', onReturn);
         }
       };
       document.addEventListener('visibilitychange', onReturn);
-    } else {
-      dismiss();
     }
   });
   shadow.getElementById('dismiss-text')?.addEventListener('click', dismiss);
