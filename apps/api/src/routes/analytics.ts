@@ -192,6 +192,60 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: { daily } });
   });
 
+  // GET /api/v1/analytics/breakdown — device/country/referrer/trigger/unique breakdown
+  // Query param: ?days=7|30|90 (default 30)
+  fastify.get<{ Querystring: { days?: string } }>('/analytics/breakdown', async (request, reply) => {
+    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
+    const since = daysAgo(days);
+
+    const [deviceRows, countryRows, triggerRows, uniqueRow] = await Promise.all([
+      // Device breakdown
+      db.select({
+        device: events.device,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(events)
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression')))
+        .groupBy(events.device)
+        .orderBy(sql`count(*) desc`),
+
+      // Country breakdown (top 10)
+      db.select({
+        country: events.country,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(events)
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression')))
+        .groupBy(events.country)
+        .orderBy(sql`count(*) desc`)
+        .limit(10),
+
+      // Trigger type breakdown (from metadata)
+      db.select({
+        triggerType: sql<string>`metadata->>'triggerType'`,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(events)
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression')))
+        .groupBy(sql`metadata->>'triggerType'`)
+        .orderBy(sql`count(*) desc`),
+
+      // Unique visitors
+      db.select({ count: sql<number>`count(distinct visitor_id)::int` })
+        .from(events)
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since))),
+    ]);
+
+    return reply.send({
+      data: {
+        devices:        deviceRows.map(r => ({ device: r.device ?? 'unknown', count: r.count })),
+        countries:      countryRows.map(r => ({ country: r.country ?? 'unknown', count: r.count })),
+        triggerTypes:   triggerRows.filter(r => r.triggerType).map(r => ({ triggerType: r.triggerType!, count: r.count })),
+        uniqueVisitors: uniqueRow[0]?.count ?? 0,
+      },
+    });
+  });
+
   // GET /api/v1/analytics/recent — tenant-level recent events log
   fastify.get('/analytics/recent', async (request, reply) => {
     const recentEvents = await db

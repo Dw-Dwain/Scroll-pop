@@ -126,6 +126,55 @@ const EDGE_URL = getEdgeUrl();
 
 let activeSiteId = '';
 
+// Track when the snippet loaded so we can report time-on-page at trigger
+const _pageLoadTime = Date.now();
+
+// ─── Exclusion Guards ─────────────────────────────────────────────────────────
+// Called once before any trigger is registered. Returns true if tracking should
+// be SKIPPED entirely for this page load.
+
+function shouldSkipTracking(): boolean {
+  // 1. Do Not Track header — respect browser/OS preference
+  if (navigator.doNotTrack === '1' || (window as any).doNotTrack === '1') {
+    console.log('[ScrollPop] DNT header set — skipping tracking.');
+    return true;
+  }
+
+  // 2. Localhost / dev / staging domains — never pollute production analytics
+  const host = window.location.hostname;
+  if (
+    host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
+    host.endsWith('.local') || host.endsWith('.test') ||
+    host.includes('staging.scrollpop.online') ||
+    host.includes('scrollpop-dashboard.pages.dev') ||
+    host.includes('scroll-pop.pages.dev')
+  ) {
+    console.log('[ScrollPop] Dev/staging host — skipping tracking:', host);
+    return true;
+  }
+
+  // 3. Bot / crawler detection
+  const ua = navigator.userAgent;
+  const botPattern = /bot|crawler|spider|crawling|Googlebot|Bingbot|Slurp|DuckDuck|Baidu|YandexBot|Sogou|facebookexternalhit|Twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|developers\.google|headlesschrome/i;
+  if (botPattern.test(ua) || navigator.webdriver) {
+    console.log('[ScrollPop] Bot/crawler detected — skipping tracking.');
+    return true;
+  }
+
+  // 4. Admin / site-owner exclusion — dashboard sets __sp_admin in localStorage
+  //    when the owner is logged in to their ScrollPop account
+  if (localStorage.getItem('__sp_admin') === '1') {
+    console.log('[ScrollPop] Admin visit — skipping tracking.');
+    return true;
+  }
+
+  // 5. Minimum time on page — skip tracking until visitor has been here ≥ 2s
+  //    (filters out instant bounces that never see the popup)
+  //    We don't skip trigger registration, but we gate the fire() call below.
+
+  return false;
+}
+
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
 function init(publicKey: string): void {
@@ -155,6 +204,9 @@ function init(publicKey: string): void {
 }
 
 async function fetchConfigAndBoot(publicKey: string): Promise<void> {
+  // Run exclusion checks before doing anything else
+  if (shouldSkipTracking()) return;
+
   try {
     const url = `${EDGE_URL}/c/${publicKey}`;
     console.log('[ScrollPop] Fetching configuration from:', url);
@@ -252,16 +304,32 @@ function evaluateRule(rule: TargetingRule): boolean {
 function registerCampaignTriggers(campaign: CampaignConfig): void {
   let fired = false;
 
-  const fire = () => {
+  // fire() is called by a trigger with its metadata so we can beacon it
+  const fire = (triggerMeta?: { triggerType: string; scrollPct?: number }) => {
     if (fired) return;
+
+    // Minimum time-on-page gate: visitor must have been here ≥ 2s
+    const timeOnPage = Date.now() - _pageLoadTime;
+    if (timeOnPage < 2000) {
+      console.log('[ScrollPop] Page load <2s — skipping trigger.');
+      return;
+    }
+
     if (!checkFrequencyCap(campaign.id, campaign.frequency.frequency)) {
       console.warn('[ScrollPop] Frequency cap met, skipping display for campaign:', campaign.id);
       return;
     }
     fired = true;
     console.log('[ScrollPop] Trigger fired! Displaying campaign popup:', campaign.id);
-    beaconEvent(campaign, 'impression');
-    renderPopup(campaign);
+
+    // Beacon impression with trigger metadata
+    beaconEvent(campaign, 'impression', undefined, {
+      triggerType: triggerMeta?.triggerType ?? 'unknown',
+      scrollPct:   triggerMeta?.scrollPct  ?? Math.round((window.scrollY / Math.max(document.body.scrollHeight - window.innerHeight, 1)) * 100),
+      timeOnPage,
+    });
+
+    renderPopup(campaign, timeOnPage);
     setFrequencyCap(campaign.id, campaign.frequency.frequency);
   };
 
@@ -271,7 +339,7 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
   }
 }
 
-function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
+function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: string; scrollPct?: number }) => void): void {
   switch (trigger.type) {
     // ✅ SAFE: scroll position — direction-aware (only fires on downward scroll)
     case 'scroll_pct': {
@@ -281,14 +349,13 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
         const scrolled = window.scrollY;
         const total = document.body.scrollHeight - window.innerHeight;
         if (total <= 0) return;
-        // Only fire when user is scrolling DOWN (not when scrolling back up past threshold)
         const scrollingDown = scrolled > lastScrollY;
         lastScrollY = scrolled;
         if (!scrollingDown) return;
         const pct = (scrolled / total) * 100;
         if (pct >= targetPct) {
           window.removeEventListener('scroll', onScroll);
-          fire();
+          fire({ triggerType: 'scroll_pct', scrollPct: Math.round(pct) });
         }
       };
       window.addEventListener('scroll', onScroll, { passive: true });
@@ -298,17 +365,17 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
     // ✅ SAFE: time on page
     case 'dwell_time': {
       const seconds = (trigger.params['seconds'] as number) ?? 30;
-      setTimeout(fire, seconds * 1000);
+      setTimeout(() => fire({ triggerType: 'dwell_time' }), seconds * 1000);
       break;
     }
 
     // ✅ SAFE: inactivity detection
     case 'inactivity': {
       const seconds = (trigger.params['seconds'] as number) ?? 60;
-      let timer = setTimeout(fire, seconds * 1000);
+      let timer = setTimeout(() => fire({ triggerType: 'inactivity' }), seconds * 1000);
       const resetTimer = () => {
         clearTimeout(timer);
-        timer = setTimeout(fire, seconds * 1000);
+        timer = setTimeout(() => fire({ triggerType: 'inactivity' }), seconds * 1000);
       };
       ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'].forEach((evt) =>
         document.addEventListener(evt, resetTimer, { passive: true })
@@ -317,21 +384,16 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
     }
 
     // ✅ SAFE: cursor leaving viewport toward top (NOT popstate/history)
-    // Also handles mobile exit intent via fast upward scroll velocity detection
     case 'exit_intent_mouse': {
       const sensitivity = (trigger.params['sensitivity'] as number) ?? 20;
-
-      // Desktop: cursor near top of viewport
       const onMouseMove = (e: MouseEvent) => {
         if (e.clientY <= sensitivity) {
           document.removeEventListener('mousemove', onMouseMove);
-          fire();
+          fire({ triggerType: 'exit_intent_mouse' });
         }
       };
       document.addEventListener('mousemove', onMouseMove);
 
-      // Mobile fallback: rapid upward scroll = user is about to leave
-      // Track scroll velocity; if user scrolls up fast (>120px in 150ms) → exit intent
       const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       if (isTouchDevice) {
         let lastY = window.scrollY;
@@ -341,15 +403,14 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
           if (mobileFired) return;
           const nowY = window.scrollY;
           const nowT = Date.now();
-          const dy = lastY - nowY;       // positive = scrolling UP
-          const dt = nowT - lastT;       // ms elapsed
+          const dy = lastY - nowY;
+          const dt = nowT - lastT;
           lastY = nowY;
           lastT = nowT;
-          // Velocity threshold: upward movement >120px in <150ms
           if (dy > 120 && dt < 150) {
             mobileFired = true;
             window.removeEventListener('scroll', onMobileScroll);
-            fire();
+            fire({ triggerType: 'exit_intent_mouse' });
           }
         };
         window.addEventListener('scroll', onMobileScroll, { passive: true });
@@ -365,7 +426,7 @@ function registerTrigger(trigger: TriggerConfig, fire: () => void): void {
         const target = e.target as Element;
         if (target.closest(selector)) {
           document.removeEventListener('click', onDocClick);
-          fire();
+          fire({ triggerType: 'click' });
         }
       };
       document.addEventListener('click', onDocClick);
@@ -491,8 +552,10 @@ function buildElementsHTML(step: any, design: any, slot: any): string {
 
 // ─── Popup Rendering (Shadow DOM) ─────────────────────────────────────────────
 
-function renderPopup(campaign: CampaignConfig): void {
+function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   const { design, affiliateSlots, id: campaignId } = campaign;
+  const _impressionTs = Date.now();
+  const getDisplayDuration = () => Math.round(Date.now() - _impressionTs);
 
   // Pick weighted affiliate slot
   const slot = pickWeightedSlot(affiliateSlots);
@@ -833,7 +896,7 @@ function renderPopup(campaign: CampaignConfig): void {
   const dismiss = () => {
     if (dismissed) return;
     dismissed = true;
-    beaconEvent(campaign, 'dismiss', slot?.id);
+    beaconEvent(campaign, 'dismiss', slot?.id, { displayDuration: getDisplayDuration() });
     if (popupCard) popupCard.style.display = 'none';
     if (overlay)   overlay.style.display = 'none';
     if (teaser)    teaser.style.display = 'flex';
@@ -897,7 +960,7 @@ function renderPopup(campaign: CampaignConfig): void {
       // First click: open ad, keep popup alive, beacon click
       adOpened = true;
       window.open(closeUrl, '_blank', 'noopener');
-      beaconEvent(campaign, 'click', slot?.id);
+      beaconEvent(campaign, 'click', slot?.id, { destinationUrl: closeUrl, displayDuration: getDisplayDuration() });
       // No dismiss yet — user sees popup again when they return
     } else {
       // Second click (or first click with no URL): dismiss + reset frequency cap
@@ -911,8 +974,9 @@ function renderPopup(campaign: CampaignConfig): void {
   shadow.getElementById('teaser-badge')?.addEventListener('click', reopen);
 
   // Wire up CTA click → beacon then navigate
-  shadow.getElementById('cta-link')?.addEventListener('click', () => {
-    beaconEvent(campaign, 'click', slot?.id);
+  shadow.getElementById('cta-link')?.addEventListener('click', (e) => {
+    const href = (e.currentTarget as HTMLAnchorElement)?.href || slot?.click_tracker_url || '';
+    beaconEvent(campaign, 'click', slot?.id, { destinationUrl: href, displayDuration: getDisplayDuration() });
   });
 
   // Handle standard lead capture submission

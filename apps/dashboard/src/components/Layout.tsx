@@ -76,6 +76,13 @@ export const Layout: React.FC<LayoutProps> = ({
     try { localStorage.setItem('sp_theme', isDarkTheme ? 'dark' : 'light'); } catch {}
   }, [isDarkTheme]);
 
+  // Set __sp_admin flag so the snippet skips tracking when the site owner is
+  // browsing their own site while logged into the dashboard.
+  React.useEffect(() => {
+    try { localStorage.setItem('__sp_admin', '1'); } catch {}
+    return () => { try { localStorage.removeItem('__sp_admin'); } catch {} };
+  }, []);
+
   const journeysEnabled = isFeatureEnabled('ff_journeys_ui');
   const opsEnabled = isFeatureEnabled('ff_realtime_ops_dashboard');
   const experimentsEnabled = isFeatureEnabled('ff_experiments_v1');

@@ -155,8 +155,14 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
     url: `${apiUrl}/analytics/daily`,
     method: 'get',
   });
+  const { data: breakdownResult } = useCustom({
+    url: `${apiUrl}/analytics/breakdown?days=${days}`,
+    method: 'get',
+    queryOptions: { queryKey: ['analytics/breakdown', days] },
+  });
 
   const overview = (overviewResult as any)?.data ?? null;
+  const breakdown = (breakdownResult as any)?.data ?? null;
   const rawStats: CampaignStat[] = Array.isArray((statsResult as any)?.data)
     ? (statsResult as any).data
     : [];
@@ -449,6 +455,75 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
             </table>
           </div>
         )}
+      </div>
+
+      {/* ── Breakdown row: Device · Country · Trigger Type ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 16 }}>
+
+        {/* Device split */}
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
+            Device Split
+          </div>
+          {breakdown?.devices?.length > 0 ? breakdown.devices.map((d: any) => {
+            const total = breakdown.devices.reduce((s: number, x: any) => s + x.count, 0);
+            const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
+            return (
+              <div key={d.device} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{d.device}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{pct}% · {d.count.toLocaleString()}</span>
+                </div>
+                <div className="usage-bar-track"><div className="usage-bar-fill" style={{ width: `${pct}%`, background: 'var(--accent-500)' }} /></div>
+              </div>
+            );
+          }) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>}
+          {breakdown && (
+            <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
+              Unique visitors: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{(breakdown.uniqueVisitors ?? 0).toLocaleString()}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Top countries */}
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
+            Top Countries
+          </div>
+          {breakdown?.countries?.length > 0 ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
+                {breakdown.countries.slice(0, 6).map((c: any, i: number) => (
+                  <tr key={i}>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '4px 0' }}>{c.country === 'unknown' || !c.country ? '—' : c.country}</td>
+                    <td style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textAlign: 'right' }}>{c.count.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>}
+        </div>
+
+        {/* Trigger type breakdown */}
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
+            Trigger Breakdown
+          </div>
+          {breakdown?.triggerTypes?.length > 0 ? breakdown.triggerTypes.map((t: any) => {
+            const total = breakdown.triggerTypes.reduce((s: number, x: any) => s + x.count, 0);
+            const pct = total > 0 ? Math.round((t.count / total) * 100) : 0;
+            const label = (t.triggerType as string).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+            return (
+              <div key={t.triggerType} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{pct}% · {t.count.toLocaleString()}</span>
+                </div>
+                <div className="usage-bar-track"><div className="usage-bar-fill" style={{ width: `${pct}%`, background: 'var(--data-3)' }} /></div>
+              </div>
+            );
+          }) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>}
+        </div>
       </div>
     </div>
   );
