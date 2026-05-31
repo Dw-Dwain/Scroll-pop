@@ -112,18 +112,33 @@ jobs:
           echo "✅ PASS: No banned APIs found in snippet source"
 
   deploy-api:
-    name: Deploy API → Render
+    name: Deploy API → Render (production)
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Trigger Render deploy hook
+      - name: Trigger Render production deploy hook
         run: |
           if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
             curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-            echo "✅ Render deploy triggered"
+            echo "✅ Render production deploy triggered"
           else
             echo "⚠️ RENDER_DEPLOY_HOOK_URL not set — Render auto-deploys on push"
+          fi
+
+  deploy-staging:
+    name: Deploy API → Render (staging)
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
+    if: github.ref == 'refs/heads/dev'
+    steps:
+      - name: Trigger Render staging deploy hook
+        run: |
+          if [ -n "${{ secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}" ]; then
+            curl -s -X POST "${{ secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}"
+            echo "✅ Render staging deploy triggered (scroll-pop-staging)"
+          else
+            echo "⚠️ RENDER_STAGING_DEPLOY_HOOK_URL not set — Render auto-deploys on push to dev branch"
           fi
 
   deploy-worker:

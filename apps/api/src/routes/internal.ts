@@ -1,9 +1,10 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
-import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events } from '../db/schema.js';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from '../db/schema.js';
+import { eq, and, isNull, sql, gte } from 'drizzle-orm';
 import type { SiteConfigPayload } from '@scrollpop/shared';
 import crypto from 'node:crypto';
+import { redis } from '../index.js';
 
 /**
  * Internal routes — called by the Cloudflare Worker, NOT authenticated via Clerk.
@@ -44,6 +45,58 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
       if (!site) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Site not found' } });
       }
+
+      // ── Monthly view-limit enforcement ────────────────────────────────────────
+      // Check how many impressions this tenant has had this calendar month.
+      // Redis counter is the fast path; DB query is the fallback.
+      // Fail OPEN: if both checks fail, serve the config rather than block users.
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, site.tenantId),
+        columns: { monthlyViewLimit: true, plan: true },
+      });
+
+      if (tenant && tenant.monthlyViewLimit > 0) {
+        let monthlyViews = 0;
+        const month = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+        const redisKey = `sp_views:${site.tenantId}:${month}`;
+
+        if (redis) {
+          try {
+            const cached = await redis.get<number>(redisKey);
+            monthlyViews = cached ?? 0;
+          } catch { /* fall through to DB */ }
+        }
+
+        // DB fallback: count impressions this calendar month
+        if (monthlyViews === 0) {
+          try {
+            const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+            const [row] = await db
+              .select({ count: sql<number>`count(*)::int` })
+              .from(events)
+              .where(
+                and(
+                  eq(events.tenantId, site.tenantId),
+                  eq(events.eventType, 'impression'),
+                  gte(events.ts, monthStart)
+                )
+              );
+            monthlyViews = row?.count ?? 0;
+          } catch { /* fail open */ }
+        }
+
+        if (monthlyViews >= tenant.monthlyViewLimit) {
+          // Over limit — return empty campaigns so no popup renders.
+          // Short TTL so upgrades take effect quickly.
+          return reply.send({
+            siteId: site.id,
+            campaigns: [],
+            version: 'limited',
+            limitExceeded: true,
+          });
+        }
+      }
+      // ── End view-limit enforcement ────────────────────────────────────────────
 
       // Get all active campaigns for this site
       const activeCampaigns = await db.query.campaigns.findMany({

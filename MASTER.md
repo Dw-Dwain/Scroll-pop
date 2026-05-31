@@ -248,6 +248,18 @@ scrollpop/
 | Clerk Auth | https://clerk.scrollpop.online | Clerk (production instance) |
 | Clerk Accounts Portal | https://accounts.scrollpop.online | Clerk |
 
+### Staging URLs (dev branch — isolated from production)
+| Service | URL | Host |
+|---|---|---|
+| Staging API | https://scroll-pop-staging.onrender.com | Render.com Free (cold starts OK for staging) |
+| Staging Dashboard | https://dev.scrollpop-dashboard.pages.dev | Cloudflare Pages (Preview environment) |
+| Staging DB | Neon `dev` branch (`br-flat-leaf-ao5st8va`) | Neon — schema-only fork of production |
+
+**Staging deploy flow:** push to `dev` → CI checks pass → `deploy-staging` job triggers
+`RENDER_STAGING_DEPLOY_HOOK_URL` secret → staging API rebuilds from `dev` branch.
+CF Pages auto-rebuilds `dev.scrollpop-dashboard.pages.dev` on every `dev` push.
+Both point at the Neon dev branch — **zero risk to production data**.
+
 ### Domain
 | Domain | Registrar | DNS | Purpose |
 |---|---|---|---|

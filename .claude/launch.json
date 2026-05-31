@@ -24,6 +24,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@scrollpop/snippet", "dev"],
       "port": null
+    },
+    {
+      "name": "CONTRIBUTING preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".preview/server.mjs"],
+      "port": 4444
     }
   ]
 }

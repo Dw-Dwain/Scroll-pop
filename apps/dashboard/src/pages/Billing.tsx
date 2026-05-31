@@ -1,6 +1,8 @@
 import React from 'react';
-import { Check, Crown, CreditCard, X, TrendingUp, Zap, Building2 } from 'lucide-react';
+import { Check, Crown, CreditCard, X, TrendingUp, Zap, Building2, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePlan, PLAN_LIMITS, PLAN_PRICES, PLAN_ORDER } from '../hooks/usePlan';
+import { useCustomMutation, useCustom } from '@refinedev/core';
+import { getApiBase } from '../providers/dataProvider';
 import type { PlanId } from '../hooks/usePlan';
 
 interface BillingProps {
@@ -24,44 +26,112 @@ function formatLimit(val: number) {
 
 export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
   const { plan: currentPlan, isAdmin, limits } = usePlan();
-  const [views, setViews]             = React.useState(0);
   const [confirmPlan, setConfirmPlan] = React.useState<PlanId | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = React.useState(false);
+  const [portalLoading, setPortalLoading] = React.useState(false);
+  const [toast, setToast] = React.useState<string | null>(null);
+  const { mutateAsync: customMutate } = useCustomMutation();
 
+  // Fetch real usage from the API
+  const { data: usageData, isLoading: usageLoading } = useCustom({
+    url: `${getApiBase()}/billing/usage`,
+    method: 'get',
+    queryOptions: { staleTime: 30_000 },
+  });
+  const usage = (usageData?.data as any) ?? null;
+  const currentMonthViews: number = usage?.currentMonthViews ?? 0;
+  const monthlyViewLimit: number  = usage?.monthlyViewLimit  ?? limits.maxViews;
+
+  // Detect success return from Stripe Checkout
   React.useEffect(() => {
-    const isDesktop = !!(window as any).electronAPI?.isDesktop;
-    const apiBase   = isDesktop ? `${(window as any).electronAPI?.getLocalApiUrl()}/api/v1` : '/api/v1';
-    const token     = isDesktop ? localStorage.getItem('desktop_token') : null;
-    fetch(`${apiBase}/analytics/overview`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then((r) => r.ok ? r.json() : null)
-      .then((b) => b?.data?.views && setViews(b.data.views))
-      .catch(() => {});
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('billing_success') === '1') {
+      setToast('🎉 Subscription activated! Your new plan is now live.');
+      // Clean the URL without a page reload
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
-  const viewLimit   = isAdmin ? Infinity : limits.maxViews;
-  const usagePct    = viewLimit === Infinity ? 0 : Math.min((views / viewLimit) * 100, 100);
-  const usageColor  = usagePct >= 95 ? 'var(--status-error)' : usagePct >= 80 ? 'var(--status-warning)' : 'var(--accent-500)';
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 5000);
+  };
 
-  const handleConfirmUpgrade = () => {
-    if (!confirmPlan) return;
-    const s = JSON.parse(localStorage.getItem('_sp_settings') || '{}');
-    s.plan = confirmPlan;
-    localStorage.setItem('_sp_settings', JSON.stringify(s));
-    window.dispatchEvent(new Event('storage'));
+  const viewLimit  = isAdmin ? Infinity : monthlyViewLimit;
+  const usagePct   = viewLimit === Infinity ? 0 : Math.min((currentMonthViews / Math.max(viewLimit, 1)) * 100, 100);
+  const usageColor = usagePct >= 95 ? 'var(--status-error)' : usagePct >= 80 ? 'var(--status-warning)' : 'var(--accent-500)';
+
+  // Open Stripe Checkout — redirects the page to Stripe's hosted payment form.
+  const handleUpgrade = async (planId: PlanId) => {
+    if (planId === 'free') return; // downgrade is handled via portal
+    setCheckoutLoading(true);
     setConfirmPlan(null);
+    try {
+      const origin = window.location.origin;
+      const result = await customMutate({
+        url: `${getApiBase()}/billing/checkout`,
+        method: 'post',
+        values: {
+          plan: planId,
+          successUrl: `${origin}/billing?billing_success=1`,
+          cancelUrl:  `${origin}/billing`,
+        },
+      });
+      const url = (result?.data as any)?.url;
+      if (url) {
+        window.location.href = url; // hand off to Stripe
+      } else {
+        throw new Error('No checkout URL returned');
+      }
+    } catch (err: any) {
+      setCheckoutLoading(false);
+      showToast(err?.message ?? 'Failed to start checkout. Check STRIPE_SECRET_KEY is set on the server.');
+    }
+  };
+
+  // Open Stripe Customer Portal — lets user manage/cancel their subscription.
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const result = await customMutate({
+        url: `${getApiBase()}/billing/portal`,
+        method: 'post',
+        values: { returnUrl: `${window.location.origin}/billing` },
+      });
+      const url = (result?.data as any)?.url;
+      if (url) window.location.href = url;
+    } catch (err: any) {
+      setPortalLoading(false);
+      showToast(err?.message ?? 'Could not open subscription portal. Subscribe to a paid plan first.');
+    }
   };
 
   const planRank = (p: PlanId) => PLAN_ORDER.indexOf(p);
+  const hasPaidPlan = currentPlan !== 'free';
 
   const usageRows = [
-    { label: 'Monthly Views', used: views,    max: viewLimit,             color: usageColor },
-    { label: 'Campaigns',      used: 0,        max: limits.maxCampaigns,  color: 'var(--accent-500)' },
-    { label: 'Sites',          used: 0,        max: limits.maxSites,      color: 'var(--accent-500)' },
+    { label: 'Monthly Views', used: currentMonthViews, max: viewLimit,          color: usageColor },
+    { label: 'Campaigns',     used: 0,                 max: limits.maxCampaigns, color: 'var(--accent-500)' },
+    { label: 'Sites',         used: 0,                 max: limits.maxSites,     color: 'var(--accent-500)' },
   ];
 
   return (
     <div style={{ width: '100%' }}>
 
-      {/* ── Page header ── */}
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
+          borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 500,
+          color: 'var(--text-primary)', zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          {toast}
+        </div>
+      )}
+
+      {/* Page header */}
       <div style={{ marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)' }}>
         <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Billing</h1>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
@@ -83,15 +153,15 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* ── Top row: current plan card + usage side by side ── */}
+      {/* Top row: current plan + usage */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, alignItems: 'start' }}>
 
-        {/* Current plan */}
+        {/* Current plan card */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>
             Current Plan
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 600, textTransform: 'capitalize', color: 'var(--text-primary)' }}>
               {currentPlan}
             </span>
@@ -99,21 +169,30 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
               {PLAN_PRICES[currentPlan]}/mo
             </span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>
-            Next billing: <span style={{ color: 'var(--text-secondary)' }}>June 1, 2026</span>
-          </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--bg-base)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-            <CreditCard size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1 }}>Visa •••• 4242 &nbsp;·&nbsp; Exp 12/27</span>
-            <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>Update</button>
-          </div>
+          {hasPaidPlan ? (
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ gap: 6, width: '100%', justifyContent: 'center' }}
+              onClick={handleManageSubscription}
+              disabled={portalLoading}
+            >
+              {portalLoading
+                ? <><RefreshCw size={11} className="spin" /> Opening portal…</>
+                : <><CreditCard size={11} /> Manage Subscription</>}
+            </button>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Zap size={12} /> Free plan — upgrade to unlock more
+            </div>
+          )}
         </div>
 
         {/* Usage meters */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
             Usage This Month
+            {usageLoading && <span style={{ marginLeft: 8, opacity: 0.5, fontWeight: 400 }}>loading…</span>}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {usageRows.map(({ label, used, max, color }) => {
@@ -133,10 +212,21 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
               );
             })}
           </div>
+          {usagePct >= 80 && !isAdmin && (
+            <div style={{ marginTop: 12, padding: '8px 10px', borderRadius: 6, fontSize: 11,
+              background: usagePct >= 95 ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
+              color: usagePct >= 95 ? 'var(--status-error)' : 'var(--status-warning)',
+              border: `1px solid ${usagePct >= 95 ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'}`,
+            }}>
+              {usagePct >= 95
+                ? '🔴 View limit almost reached. Popups will stop showing when the limit is hit.'
+                : '🟡 You\'re at 80%+ of your monthly view limit.'}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── Plans grid — 5 equal columns ── */}
+      {/* Plans grid */}
       <div style={{ marginBottom: 12 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 14px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Plans</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
@@ -147,11 +237,8 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
               <div key={id} style={{
                 background: 'var(--bg-surface)',
                 border: `1px solid ${isCurrent ? 'var(--border-strong)' : popular ? 'var(--accent-500)' : 'var(--border-subtle)'}`,
-                borderRadius: 8,
-                padding: '16px 14px',
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
+                borderRadius: 8, padding: '16px 14px', position: 'relative',
+                display: 'flex', flexDirection: 'column',
               }}>
                 {(popular && !isCurrent) && (
                   <div style={{ position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)' }}>
@@ -174,9 +261,10 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
                 <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent-500)', fontWeight: 600, marginBottom: 14 }}>
                   {formatLimit(PLAN_LIMITS[id].maxViews)} views/mo
                 </div>
-                {!isCurrent && (
+                {!isCurrent && id !== 'free' && (
                   <button
                     onClick={() => setConfirmPlan(id)}
+                    disabled={checkoutLoading}
                     className={`btn btn-sm ${isUpgrade ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ width: '100%', justifyContent: 'center', fontSize: 11, marginTop: 'auto' }}
                   >
@@ -194,22 +282,15 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* ── Feature comparison table ── */}
-      <div style={{
-        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
-        borderRadius: 10, padding: '20px 20px 4px', marginTop: 24,
-      }}>
+      {/* Feature comparison */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '20px 20px 4px', marginTop: 24 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Feature Comparison</h3>
         <table className="data-table" style={{ width: '100%' }}>
           <thead>
             <tr>
               <th style={{ width: '28%' }}>Feature</th>
               {PLAN_DETAILS.map(({ id, name }) => (
-                <th key={id} style={{
-                  textAlign: 'center',
-                  color: id === currentPlan ? 'var(--accent-500)' : 'var(--text-primary)',
-                  fontWeight: id === currentPlan ? 600 : 500,
-                }}>
+                <th key={id} style={{ textAlign: 'center', color: id === currentPlan ? 'var(--accent-500)' : 'var(--text-primary)', fontWeight: id === currentPlan ? 600 : 500 }}>
                   {name}
                   {id === currentPlan && <span style={{ fontSize: 9, display: 'block', color: 'var(--accent-500)', opacity: 0.7 }}>current</span>}
                 </th>
@@ -231,9 +312,8 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
                 {vals.map((val, i) => (
                   <td key={i} style={{ textAlign: 'center' }}>
                     {typeof val === 'boolean' ? (
-                      val
-                        ? <Check size={13} style={{ color: 'var(--status-success)', display: 'inline' }} />
-                        : <span style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1 }}>—</span>
+                      val ? <Check size={13} style={{ color: 'var(--status-success)', display: 'inline' }} />
+                          : <span style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1 }}>—</span>
                     ) : (
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)' }}>{val}</span>
                     )}
@@ -245,26 +325,46 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
         </table>
       </div>
 
-      {/* ── Confirm upgrade/downgrade modal ── */}
+      {/* Stripe note when keys not configured */}
+      <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--bg-raised)', borderRadius: 6, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <ExternalLink size={12} style={{ flexShrink: 0 }} />
+        Paid plans require Stripe to be configured on the server (
+        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>STRIPE_SECRET_KEY</code>,
+        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}> STRIPE_PRICE_STARTER</code>,
+        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}> STRIPE_PRICE_GROWTH</code>, etc.).
+        Until then, everyone stays on Free.
+      </div>
+
+      {/* Confirm modal */}
       {confirmPlan && (
         <div className="modal-backdrop">
-          <div className="modal-content" style={{ maxWidth: 360 }}>
+          <div className="modal-content" style={{ maxWidth: 380 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
                 Switch to {confirmPlan.charAt(0).toUpperCase() + confirmPlan.slice(1)}
               </h3>
               <button className="btn btn-icon" onClick={() => setConfirmPlan(null)}><X size={14} /></button>
             </div>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-              You'll be switched to the{' '}
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+              You'll be taken to Stripe's secure checkout page to set up your{' '}
               <strong style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{confirmPlan}</strong> plan
-              at{' '}
-              <strong style={{ color: 'var(--text-primary)' }}>{PLAN_PRICES[confirmPlan]}/mo</strong>.
-              {' '}Changes take effect immediately.
+              at <strong style={{ color: 'var(--text-primary)' }}>{PLAN_PRICES[confirmPlan]}/mo</strong>.
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20 }}>
+              Your plan upgrades immediately on payment. You can cancel anytime from the billing portal.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setConfirmPlan(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleConfirmUpgrade}>Confirm</button>
+              <button
+                className="btn btn-primary"
+                disabled={checkoutLoading}
+                onClick={() => handleUpgrade(confirmPlan)}
+                style={{ gap: 6 }}
+              >
+                {checkoutLoading
+                  ? <><RefreshCw size={12} className="spin" /> Redirecting…</>
+                  : <><ExternalLink size={12} /> Continue to Stripe</>}
+              </button>
             </div>
           </div>
         </div>

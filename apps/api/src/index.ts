@@ -25,6 +25,7 @@ import { internalRoutes } from './routes/internal.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
+import { adminRoutes } from './routes/admin.js';
 import { journeyRoutes } from './routes/journeys.js';
 import { experimentRoutes } from './routes/experiments.js';
 import { shopifyRoutes, shopifyWebhookRoutes } from './routes/shopify.js';
@@ -127,6 +128,7 @@ async function bootstrap() {
   await app.register(frequencyRoutes, { prefix: '/api/v1' });
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
   await app.register(opsRoutes, { prefix: '/api/v1' });
+  await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });
   await app.register(experimentRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
@@ -314,6 +316,18 @@ async function bootstrap() {
               pageUrl: pageUrl || null,
               referrer: referrer || null,
             });
+
+            // Increment monthly view counter in Redis for edge enforcement.
+            // Only impressions count against the monthly view limit.
+            if (eventType === 'impression' && redis) {
+              const month = new Date().toISOString().slice(0, 7); // e.g. "2026-05"
+              const key = `sp_views:${campaign.tenantId}:${month}`;
+              try {
+                await redis.incr(key);
+                // Keep the key alive through the end of the month + a 7-day buffer.
+                await redis.expire(key, 38 * 24 * 60 * 60); // 38 days
+              } catch { /* non-fatal — enforcement falls back to DB query */ }
+            }
           }
         } catch (err) {
           request.log.error(err, 'Failed to insert analytic event');

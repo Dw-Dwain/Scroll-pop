@@ -6,6 +6,18 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "build/**"]
     },
+    "@scrollpop/worker#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "src/p.txt"]
+    },
+    "@scrollpop/wp-plugin#build": {
+      "dependsOn": [],
+      "outputs": []
+    },
+    "@scrollpop/desktop#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "out/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { tenants } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { tenants, events } from '../db/schema.js';
+import { eq, and, gte, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { PLAN_LIMITS, PLAN_PRICES_USD } from '@scrollpop/shared';
+import { redis } from '../index.js';
 
 function getStripe(): Stripe {
   const key = process.env['STRIPE_SECRET_KEY'];
@@ -13,7 +14,7 @@ function getStripe(): Stripe {
 }
 
 const CheckoutBody = z.object({
-  plan: z.enum(['starter', 'growth']),
+  plan: z.enum(['starter', 'growth', 'scale', 'agency']),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
 });
@@ -104,13 +105,37 @@ export const billingRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Tenant not found' } });
     }
 
-    // TODO (Step 8): Query TimescaleDB for actual view count this month
-    // For now return the limit info so the dashboard can render the usage meter
+    // Real monthly view count — Redis counter is the fast path, DB is fallback.
+    let currentMonthViews = 0;
+    const month = new Date().toISOString().slice(0, 7);
+    const redisKey = `sp_views:${request.tenantId}:${month}`;
+
+    if (redis) {
+      try {
+        currentMonthViews = (await redis.get<number>(redisKey)) ?? 0;
+      } catch { /* fall through to DB */ }
+    }
+
+    if (currentMonthViews === 0) {
+      try {
+        const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const [row] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(events)
+          .where(and(
+            eq(events.tenantId, request.tenantId),
+            eq(events.eventType, 'impression'),
+            gte(events.ts, monthStart)
+          ));
+        currentMonthViews = row?.count ?? 0;
+      } catch { /* return 0 on error */ }
+    }
+
     return reply.send({
       data: {
         plan: tenant.plan,
         monthlyViewLimit: tenant.monthlyViewLimit,
-        currentMonthViews: 0, // populated in Step 8
+        currentMonthViews,
         periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
         periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString(),
       },

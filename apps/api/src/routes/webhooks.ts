@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client.js';
-import { tenants, users, tenantMembers } from '../db/schema.js';
+import { tenants, users, tenantMembers, sites } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { Webhook } from 'svix';
 import Stripe from 'stripe';
 import { PLAN_LIMITS } from '@scrollpop/shared';
+import { redis } from '../index.js';
 
 // ─── Clerk Webhook ────────────────────────────────────────────────────────────
 
@@ -42,6 +43,21 @@ interface ClerkUserEvent {
 }
 
 // ─── Stripe Webhook ───────────────────────────────────────────────────────────
+
+/** Delete the KV edge-cache entries for all sites under a tenant so
+ *  plan/limit changes propagate to the edge within one config TTL. */
+async function bustTenantCache(tenantId: string): Promise<void> {
+  if (!redis) return;
+  try {
+    const tenantSites = await db.query.sites.findMany({
+      where: eq(sites.tenantId, tenantId),
+      columns: { publicKey: true },
+    });
+    await Promise.allSettled(
+      tenantSites.map((s) => redis!.del(`config:${s.publicKey}`))
+    );
+  } catch { /* non-fatal */ }
+}
 
 function getPlanFromStripePrice(priceId: string): 'starter' | 'growth' | 'scale' | 'agency' | null {
   if (priceId === process.env['STRIPE_PRICE_STARTER']) return 'starter';
@@ -217,27 +233,34 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
           const plan = getPlanFromStripePrice(priceId);
           if (!plan) break;
 
-          await db.update(tenants)
+          const [updated] = await db.update(tenants)
             .set({
               plan,
               monthlyViewLimit: PLAN_LIMITS[plan].monthlyViews,
               stripeSubscriptionId: sub.id,
               updatedAt: new Date(),
             })
-            .where(eq(tenants.stripeCustomerId, sub.customer as string));
+            .where(eq(tenants.stripeCustomerId, sub.customer as string))
+            .returning({ id: tenants.id });
+
+          // Bust edge KV cache so new limits take effect immediately.
+          if (updated) await bustTenantCache(updated.id);
           break;
         }
 
         case 'customer.subscription.deleted': {
           const sub = event.data.object as Stripe.Subscription;
-          await db.update(tenants)
+          const [downgraded] = await db.update(tenants)
             .set({
               plan: 'free',
               monthlyViewLimit: PLAN_LIMITS.free.monthlyViews,
               stripeSubscriptionId: null,
               updatedAt: new Date(),
             })
-            .where(eq(tenants.stripeCustomerId, sub.customer as string));
+            .where(eq(tenants.stripeCustomerId, sub.customer as string))
+            .returning({ id: tenants.id });
+
+          if (downgraded) await bustTenantCache(downgraded.id);
           break;
         }
 
