@@ -25,6 +25,7 @@ import { internalRoutes } from './routes/internal.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
+import { adminRoutes } from './routes/admin.js';
 import { journeyRoutes } from './routes/journeys.js';
 import { experimentRoutes } from './routes/experiments.js';
 import { shopifyRoutes, shopifyWebhookRoutes } from './routes/shopify.js';
@@ -127,6 +128,7 @@ async function bootstrap() {
   await app.register(frequencyRoutes, { prefix: '/api/v1' });
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
   await app.register(opsRoutes, { prefix: '/api/v1' });
+  await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });
   await app.register(experimentRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });

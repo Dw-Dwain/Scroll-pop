@@ -31,6 +31,41 @@ const PLAN_COLORS: Record<string, { bg: string; color: string }> = {
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const { isAdmin } = usePlan();
+
+  // Hard gate — render nothing useful until the API confirms admin status.
+  // isAdmin is only true when the verified API email === ADMIN_EMAIL.
+  // This prevents any logged-in user from seeing the admin UI.
+  if (!isAdmin) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', height: '100%', gap: 16, padding: 40,
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Lock size={24} style={{ color: 'var(--status-error)' }} />
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+            Access Restricted
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 320 }}>
+            This area is only accessible to the ScrollPop system administrator.
+          </div>
+        </div>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => onNavigate('/dashboard')}
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
+
   const [users, setUsers] = React.useState<AdminUser[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');

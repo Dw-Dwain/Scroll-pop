@@ -1,4 +1,6 @@
 import React from 'react';
+import { useCustom } from '@refinedev/core';
+import { getApiBase } from '../providers/dataProvider';
 
 export const ADMIN_EMAIL = 'dwain3991@gmail.com';
 
@@ -109,27 +111,9 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   },
 };
 
-function detectAdmin(): boolean {
-  try {
-    const isDesktop = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
-    if (isDesktop) return true; // Desktop users are always admin locally
+// ─── localStorage fallbacks (desktop mode / pre-load) ─────────────────────────
 
-    const desktopUser = localStorage.getItem('desktop_user');
-    if (desktopUser) {
-      const u = JSON.parse(desktopUser) as { role?: string; email?: string };
-      if (u.role === 'admin') return true;
-      if (u.email === ADMIN_EMAIL) return true;
-    }
-    const profile = localStorage.getItem('_sp_profile');
-    if (profile) {
-      const p = JSON.parse(profile) as { email?: string };
-      if (p.email === ADMIN_EMAIL) return true;
-    }
-  } catch {}
-  return false;
-}
-
-function detectPlan(): PlanId {
+function detectPlanLocal(): PlanId {
   try {
     const settings = localStorage.getItem('_sp_settings');
     if (settings) {
@@ -140,15 +124,46 @@ function detectPlan(): PlanId {
   return 'free';
 }
 
-export function usePlan() {
-  const [plan, setPlan] = React.useState<PlanId>(detectPlan);
-  const [isAdmin, setIsAdmin] = React.useState(detectAdmin);
+function detectAdminLocal(): boolean {
+  try {
+    const isDesktop = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
+    if (isDesktop) return true;
+    const desktopUser = localStorage.getItem('desktop_user');
+    if (desktopUser) {
+      const u = JSON.parse(desktopUser) as { role?: string; email?: string };
+      if (u.role === 'admin' || u.email === ADMIN_EMAIL) return true;
+    }
+  } catch {}
+  return false;
+}
 
+// ─── Main hook ────────────────────────────────────────────────────────────────
+
+export function usePlan() {
+  // Fetch real plan + email from GET /me.
+  // plan  → tenants.plan in DB (updated by Stripe webhook on subscription change).
+  // email → users.email    (synced from Clerk on sign-up).
+  const { data: meData } = useCustom({
+    url: `${getApiBase()}/me`,
+    method: 'get',
+    queryOptions: { staleTime: 60_000, retry: false },
+  });
+
+  const apiPlan  = (meData?.data as any)?.tenant?.plan  as string | undefined;
+  const apiEmail = (meData?.data as any)?.user?.email   as string | undefined;
+
+  // API data wins; fall back to localStorage while loading or in desktop mode.
+  const plan: PlanId = (apiPlan && (PLAN_ORDER as string[]).includes(apiPlan))
+    ? (apiPlan as PlanId)
+    : detectPlanLocal();
+
+  // isAdmin is true ONLY when the verified API email matches ADMIN_EMAIL.
+  // No user can fake this — the email comes from the Clerk JWT → DB lookup.
+  const isAdmin: boolean = apiEmail === ADMIN_EMAIL || detectAdminLocal();
+
+  const [, rerender] = React.useState(0);
   React.useEffect(() => {
-    const onStorage = () => {
-      setPlan(detectPlan());
-      setIsAdmin(detectAdmin());
-    };
+    const onStorage = () => rerender(n => n + 1);
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
