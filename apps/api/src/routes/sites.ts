@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/client.js';
 import { sites, campaigns, events } from '../db/schema.js';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, gte } from 'drizzle-orm';
 
 const CreateSiteBody = z.object({
   name: z.string().min(1).max(100),
@@ -25,27 +25,33 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // Enrich each site with real campaign count and monthly impression count.
+    // Wrapped in try/catch per-site so a query error never kills the whole list.
     const enriched = await Promise.all(tenantSites.map(async (site) => {
-      const [campaignRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(campaigns)
-        .where(and(eq(campaigns.siteId, site.id), isNull(campaigns.deletedAt)));
+      try {
+        const [campaignRow] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(campaigns)
+          .where(and(eq(campaigns.siteId, site.id), isNull(campaigns.deletedAt)));
 
-      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const [viewRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(events)
-        .where(and(
-          eq(events.siteId, site.id),
-          eq(events.eventType, 'impression'),
-          sql`${events.ts} >= ${monthStart}`
-        ));
+        const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const [viewRow] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(events)
+          .where(and(
+            eq(events.siteId, site.id),
+            eq(events.eventType, 'impression'),
+            gte(events.ts, monthStart)
+          ));
 
-      return {
-        ...site,
-        campaignCount: campaignRow?.count ?? 0,
-        totalViews:    viewRow?.count    ?? 0,
-      };
+        return {
+          ...site,
+          campaignCount: campaignRow?.count ?? 0,
+          totalViews:    viewRow?.count    ?? 0,
+        };
+      } catch {
+        // Enrichment failed (e.g. missing partition) — return site with zeroes
+        return { ...site, campaignCount: 0, totalViews: 0 };
+      }
     }));
 
     return reply.send({ data: enriched });
