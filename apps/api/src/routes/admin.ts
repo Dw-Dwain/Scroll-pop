@@ -15,7 +15,13 @@ import { db } from '../db/client.js';
 import { users, tenants, tenantMembers, sites, campaigns } from '../db/schema.js';
 import { eq, sql, isNull } from 'drizzle-orm';
 
-const ADMIN_EMAIL = process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com';
+const ADMIN_EMAIL       = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
+const UNLIMITED_DOMAINS = ['novatise.com'];
+
+function isAdminUser(email: string): boolean {
+  const e = email.toLowerCase();
+  return e === ADMIN_EMAIL || UNLIMITED_DOMAINS.some((d) => e.endsWith(`@${d}`));
+}
 
 /** Rejects the request if the calling user is not the super admin. */
 async function assertSuperAdmin(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
@@ -24,7 +30,7 @@ async function assertSuperAdmin(request: FastifyRequest, reply: FastifyReply): P
     columns: { email: true },
   });
 
-  if (!user || user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+  if (!user || !isAdminUser(user.email)) {
     await reply.code(403).send({
       error: {
         code: 'FORBIDDEN',

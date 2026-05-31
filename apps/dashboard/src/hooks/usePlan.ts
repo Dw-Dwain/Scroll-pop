@@ -2,7 +2,14 @@ import React from 'react';
 import { useCustom } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
 
-export const ADMIN_EMAIL = 'dwain3991@gmail.com';
+export const ADMIN_EMAIL       = 'dwain3991@gmail.com';
+export const UNLIMITED_DOMAINS = ['novatise.com'];
+
+export function isUnlimitedEmail(email: string): boolean {
+  const e = email.toLowerCase();
+  return e === ADMIN_EMAIL.toLowerCase() ||
+    UNLIMITED_DOMAINS.some((d) => e.endsWith(`@${d}`));
+}
 
 export type PlanId = 'free' | 'starter' | 'growth' | 'scale' | 'agency';
 export const PLAN_ORDER: PlanId[] = ['free', 'starter', 'growth', 'scale', 'agency'];
@@ -157,9 +164,9 @@ export function usePlan() {
     ? (apiPlan as PlanId)
     : detectPlanLocal();
 
-  // isAdmin is true ONLY when the verified API email matches ADMIN_EMAIL.
-  // No user can fake this — the email comes from the Clerk JWT → DB lookup.
-  const isAdmin: boolean = apiEmail === ADMIN_EMAIL || detectAdminLocal();
+  // isAdmin (unlimited) is true for ADMIN_EMAIL or any @novatise.com address.
+  // Source of truth is the API email (from Clerk JWT → DB) — cannot be faked.
+  const isAdmin: boolean = (apiEmail ? isUnlimitedEmail(apiEmail) : false) || detectAdminLocal();
 
   const [, rerender] = React.useState(0);
   React.useEffect(() => {
