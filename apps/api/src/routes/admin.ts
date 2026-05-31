@@ -24,11 +24,11 @@ async function assertSuperAdmin(request: FastifyRequest, reply: FastifyReply): P
     columns: { email: true },
   });
 
-  if (!user || user.email !== ADMIN_EMAIL) {
+  if (!user || user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
     await reply.code(403).send({
       error: {
         code: 'FORBIDDEN',
-        message: 'Super-admin access required.',
+        message: `Super-admin access required. Authenticated as: ${user?.email ?? 'unknown'}`,
       },
     });
     return false;
