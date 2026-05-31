@@ -48,6 +48,489 @@ const createSpacer = (height: string) => ({
 });
 
 export const MASSIVE_TEMPLATES: TemplatePreset[] = [
+
+  // ================= WELCOME POPUPS =================
+  {
+    id: 'welcome-round-clean',
+    name: 'Round Welcome — Clean',
+    kind: 'modal',
+    category: 'Welcome',
+    desc: 'Simple welcome popup with a single CTA and highlighted first-order offer. Best triggered after 10–15 seconds.',
+    thumbnail: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=400&q=80',
+    tags: ['Welcome', 'First Visit', 'Coupon', 'New Visitor'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#6366f1' },
+    fields: {
+      position: 'center', size: 'md', animation: 'zoom', borderRadius: 24, layoutMode: 'blocks',
+      elements: [
+        createText('Welcome! 👋', '32px', '800', '#111827'),
+        createSpacer('8px'),
+        createText('Get 10% off your first order', '20px', '600', '#6366f1'),
+        createSpacer('8px'),
+        createText('Sign up and we\'ll send you an exclusive coupon right away.', '14px', '400', '#6b7280'),
+        createSpacer('16px'),
+        createCoupon('WELCOME10'),
+        createSpacer('16px'),
+        createForm('Claim My 10% Off', '#6366f1'),
+      ]
+    }
+  },
+  {
+    id: 'welcome-high-contrast',
+    name: 'High Contrast Welcome',
+    kind: 'modal',
+    category: 'Welcome',
+    desc: 'Two-column high-contrast welcome popup with bold offer messaging and email capture.',
+    thumbnail: 'https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=400&q=80',
+    tags: ['Welcome', 'High Contrast', 'Two Column', 'New Visitor'],
+    colors: { bg: '#0f172a', text: '#ffffff', accent: '#f59e0b' },
+    fields: {
+      position: 'center', size: 'lg', animation: 'slide_up', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createImage('https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=800&q=80', '160px'),
+        createSpacer('20px'),
+        createText('WELCOME OFFER', '12px', '800', '#f59e0b', { letterSpacing: '3px', textTransform: 'uppercase' }),
+        createSpacer('8px'),
+        createText('15% Off Your First Purchase', '30px', '900', '#ffffff', { lineHeight: '1.1' }),
+        createSpacer('8px'),
+        createText('Join thousands of happy customers. Unsubscribe any time.', '13px', '400', '#94a3b8'),
+        createSpacer('20px'),
+        createForm('Get My 15% Discount', '#f59e0b'),
+      ]
+    }
+  },
+  {
+    id: 'welcome-first-order',
+    name: 'First Order Offer',
+    kind: 'modal',
+    category: 'Welcome',
+    desc: 'Email capture with coupon reveal on first visit. Ideal for ecommerce stores.',
+    thumbnail: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=400&q=80',
+    tags: ['Welcome', 'First Order', 'Email Capture', 'Coupon'],
+    colors: { bg: '#fff7ed', text: '#7c2d12', accent: '#ea580c' },
+    fields: {
+      position: 'center', size: 'md', animation: 'fade', borderRadius: 20, layoutMode: 'blocks',
+      elements: [
+        createText('🎁', '48px', '400', '#ea580c'),
+        createSpacer('8px'),
+        createText('A gift for you!', '28px', '800', '#7c2d12'),
+        createText('Sign up and unlock 20% off your first order.', '15px', '400', '#9a3412'),
+        createSpacer('16px'),
+        createForm('Unlock My 20% Off', '#ea580c'),
+        createSpacer('8px'),
+        createText('No spam. Unsubscribe any time.', '11px', '400', '#c2410c'),
+      ]
+    }
+  },
+  {
+    id: 'welcome-free-shipping',
+    name: 'Welcome + Free Shipping',
+    kind: 'modal',
+    category: 'Welcome',
+    desc: 'Welcome new visitors with free shipping on their first order — a proven conversion driver.',
+    thumbnail: 'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=400&q=80',
+    tags: ['Welcome', 'Free Shipping', 'First Visit', 'Ecommerce'],
+    colors: { bg: '#f0fdf4', text: '#14532d', accent: '#16a34a' },
+    fields: {
+      position: 'center', size: 'md', animation: 'slide_up', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('🚚', '44px', '400', '#16a34a'),
+        createSpacer('8px'),
+        createText('Free Shipping On Your First Order', '26px', '800', '#14532d', { lineHeight: '1.2' }),
+        createText('No minimum spend. Sign up and get your free shipping code instantly.', '14px', '400', '#166534'),
+        createSpacer('20px'),
+        createForm('Send Me The Code', '#16a34a'),
+      ]
+    }
+  },
+  {
+    id: 'welcome-minimal-slide',
+    name: 'Minimal Welcome Slide-in',
+    kind: 'slide_in',
+    category: 'Welcome',
+    desc: 'Non-intrusive slide-in welcome offer that doesn\'t block the page. Perfect for subtle first impressions.',
+    thumbnail: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=400&q=80',
+    tags: ['Welcome', 'Minimal', 'Slide-in', 'Non-intrusive'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#8b5cf6' },
+    fields: {
+      position: 'bottom-right', size: 'sm', animation: 'slide_up', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('First time here? 👀', '18px', '700', '#111827', { textAlign: 'left' }),
+        createSpacer('4px'),
+        createText('Use code HELLO10 for 10% off.', '13px', '400', '#6b7280', { textAlign: 'left' }),
+        createSpacer('12px'),
+        createForm('Claim Offer', '#8b5cf6'),
+      ]
+    }
+  },
+
+  // ================= UPSELL & CROSS-SELL =================
+  {
+    id: 'upsell-quantity',
+    name: 'Buy More, Save More',
+    kind: 'modal',
+    category: 'Upsell',
+    desc: 'Upsell popup triggered after a product is added to cart — buy more of the same product at a discount.',
+    thumbnail: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=400&q=80',
+    tags: ['Upsell', 'AOV', 'Quantity', 'Cart'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#2563eb' },
+    fields: {
+      position: 'center', size: 'md', animation: 'zoom', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('💡 Quick Tip', '13px', '700', '#2563eb', { textTransform: 'uppercase', letterSpacing: '1px' }),
+        createSpacer('8px'),
+        createText('Buy 2 and save an extra 20%', '26px', '800', '#111827'),
+        createText('Customers who buy 2+ save an average of $14. Add one more to unlock the deal.', '14px', '400', '#6b7280'),
+        createSpacer('16px'),
+        createButton('Add Another & Save 20%', '#2563eb', '#ffffff'),
+        createSpacer('8px'),
+        createText('No thanks, I\'ll pay full price', '12px', '400', '#9ca3af'),
+      ]
+    }
+  },
+  {
+    id: 'upsell-upgrade',
+    name: 'Upgrade Upsell',
+    kind: 'slide_in',
+    category: 'Upsell',
+    desc: 'Suggest a premium version of the item already in the cart for a small price bump.',
+    thumbnail: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80',
+    tags: ['Upsell', 'Premium', 'Upgrade', 'Cart'],
+    colors: { bg: '#1e1b4b', text: '#ffffff', accent: '#a855f7' },
+    fields: {
+      position: 'bottom-right', size: 'md', animation: 'slide_up', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('✨ Upgrade Available', '13px', '700', '#a855f7', { textTransform: 'uppercase' }),
+        createSpacer('8px'),
+        createText('Switch to Pro for just $10 more', '20px', '700', '#ffffff'),
+        createImage('https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=400&q=80', '100px', { borderRadius: '8px' }),
+        createText('⭐⭐⭐⭐⭐  4.9 rating — our most popular option.', '12px', '400', '#c4b5fd'),
+        createSpacer('12px'),
+        createButton('Upgrade For $10 More', '#a855f7', '#ffffff'),
+      ]
+    }
+  },
+  {
+    id: 'crosssell-bundle',
+    name: 'Bundle & Complete the Look',
+    kind: 'modal',
+    category: 'Cross-Sell',
+    desc: 'Complete-the-look cross-sell popup triggered after add-to-cart.',
+    thumbnail: 'https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&w=400&q=80',
+    tags: ['Cross-Sell', 'Bundle', 'Complete the Look', 'AOV'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#111827' },
+    fields: {
+      position: 'center', size: 'md', animation: 'slide_up', borderRadius: 12, layoutMode: 'blocks',
+      elements: [
+        createText('Customers also bought', '14px', '600', '#6b7280', { textTransform: 'uppercase', letterSpacing: '1px' }),
+        createSpacer('12px'),
+        createImage('https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&w=400&q=80', '140px', { borderRadius: '8px' }),
+        createText('Matching Accessories Kit — $29', '16px', '700', '#111827'),
+        createText('Pairs perfectly with your selection. Rated 4.8 stars.', '13px', '400', '#6b7280'),
+        createSpacer('12px'),
+        createButton('Add to Cart — $29', '#111827', '#ffffff'),
+        createText('No thanks', '12px', '400', '#9ca3af'),
+      ]
+    }
+  },
+  {
+    id: 'crosssell-free-gift',
+    name: 'Free Gift With Purchase',
+    kind: 'modal',
+    category: 'Cross-Sell',
+    desc: 'Increase cart value by showing a free gift threshold popup.',
+    thumbnail: 'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=400&q=80',
+    tags: ['Cross-Sell', 'Free Gift', 'Threshold', 'AOV'],
+    colors: { bg: '#fdf4ff', text: '#581c87', accent: '#9333ea' },
+    fields: {
+      position: 'center', size: 'md', animation: 'zoom', borderRadius: 20, layoutMode: 'blocks',
+      elements: [
+        createText('🎁 Free Gift Unlocked!', '28px', '800', '#581c87'),
+        createText('Spend $75+ today and receive a free gift at checkout.', '15px', '400', '#6b21a8'),
+        createSpacer('8px'),
+        createText('You\'re only $15 away from qualifying!', '16px', '700', '#9333ea'),
+        createSpacer('16px'),
+        createButton('Add $15 More To Qualify', '#9333ea', '#ffffff'),
+        createText('Proceed without gift', '12px', '400', '#9ca3af'),
+      ]
+    }
+  },
+
+  // ================= EXIT INTENT =================
+  {
+    id: 'exit-last-chance-coupon',
+    name: 'Exit — Last Chance Coupon',
+    kind: 'modal',
+    category: 'Exit Intent',
+    desc: 'Final offer before a visitor leaves — high-value coupon to bring them back to checkout.',
+    thumbnail: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=400&q=80',
+    tags: ['Exit Intent', 'Last Chance', 'Coupon', 'Recovery'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#dc2626' },
+    fields: {
+      position: 'center', size: 'md', animation: 'fade', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('⏳ Wait! Don\'t miss out', '28px', '800', '#111827'),
+        createSpacer('8px'),
+        createText('We don\'t do this often — but here\'s 20% off just for you.', '15px', '400', '#6b7280'),
+        createSpacer('12px'),
+        createCoupon('LASTCHANCE20'),
+        createTimer('#dc2626'),
+        createSpacer('16px'),
+        createForm('Claim 20% Off Now', '#dc2626'),
+        createText('No thanks, I prefer full price', '12px', '400', '#9ca3af'),
+      ]
+    }
+  },
+  {
+    id: 'exit-cart-recovery',
+    name: 'Exit — Cart Recovery',
+    kind: 'modal',
+    category: 'Exit Intent',
+    desc: 'Triggered when a visitor leaves the cart page. Discount + urgency to close the sale.',
+    thumbnail: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=400&q=80',
+    tags: ['Exit Intent', 'Cart Recovery', 'Urgency', 'Ecommerce'],
+    colors: { bg: '#0f172a', text: '#ffffff', accent: '#f59e0b' },
+    fields: {
+      position: 'center', size: 'md', animation: 'slide_up', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('🛒 Your cart is about to expire', '24px', '800', '#ffffff'),
+        createText('Items sell out fast. Complete your order in the next 10 minutes.', '14px', '400', '#94a3b8'),
+        createTimer('#f59e0b'),
+        createSpacer('12px'),
+        createButton('Complete My Order', '#f59e0b', '#0f172a'),
+        createText('Forget my cart', '12px', '400', '#475569'),
+      ]
+    }
+  },
+  {
+    id: 'exit-browse-abandon',
+    name: 'Exit — Browse Recovery',
+    kind: 'modal',
+    category: 'Exit Intent',
+    desc: 'Re-engage visitors who are browsing but haven\'t added anything to cart yet.',
+    thumbnail: 'https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=400&q=80',
+    tags: ['Exit Intent', 'Browse Abandon', 'Email Capture', 'Recovery'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#0ea5e9' },
+    fields: {
+      position: 'center', size: 'md', animation: 'fade', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('Still looking? Let us help 👇', '26px', '700', '#111827'),
+        createText('Sign up and we\'ll send you our best deals + a first-order discount.', '14px', '400', '#6b7280'),
+        createSpacer('16px'),
+        createForm('Show Me The Best Deals', '#0ea5e9'),
+        createText('No thanks', '12px', '400', '#9ca3af'),
+      ]
+    }
+  },
+  {
+    id: 'exit-saas-demo',
+    name: 'Exit — Book a Demo',
+    kind: 'modal',
+    category: 'Exit Intent',
+    desc: 'Capture B2B leads leaving without converting by offering a personalised demo.',
+    thumbnail: 'https://images.unsplash.com/photo-1432821596592-e2c18b78144f?auto=format&fit=crop&w=400&q=80',
+    tags: ['Exit Intent', 'SaaS', 'Demo', 'B2B'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#4f46e5' },
+    fields: {
+      position: 'center', size: 'md', animation: 'fade', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('Before you go...', '28px', '800', '#111827'),
+        createText('See ScrollPop in action with a personalised 15-minute demo. We\'ll show you exactly how to boost conversions.', '14px', '400', '#6b7280'),
+        createSpacer('16px'),
+        createForm('Book My Free Demo', '#4f46e5'),
+        createText('No thanks, I\'ll figure it out', '12px', '400', '#9ca3af'),
+      ]
+    }
+  },
+
+  // ================= SALES & PROMOTIONS =================
+  {
+    id: 'promo-flash-sale',
+    name: 'Flash Sale — Countdown',
+    kind: 'modal',
+    category: 'Sale & Promotions',
+    desc: 'Urgency-driven flash sale popup with countdown timer. Great for time-limited offers.',
+    thumbnail: 'https://images.unsplash.com/photo-1512411831835-23c267b2d56a?auto=format&fit=crop&w=400&q=80',
+    tags: ['Sale', 'Flash Sale', 'Countdown', 'Urgency'],
+    colors: { bg: '#7f1d1d', text: '#ffffff', accent: '#fbbf24' },
+    fields: {
+      position: 'center', size: 'md', animation: 'zoom', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('⚡ FLASH SALE', '13px', '800', '#fbbf24', { letterSpacing: '3px' }),
+        createSpacer('8px'),
+        createText('40% Off Everything', '36px', '900', '#ffffff', { lineHeight: '1.1' }),
+        createText('Ends tonight at midnight. Don\'t miss it.', '14px', '400', '#fca5a5'),
+        createTimer('#fbbf24'),
+        createSpacer('8px'),
+        createButton('Shop The Flash Sale', '#fbbf24', '#7f1d1d'),
+      ]
+    }
+  },
+  {
+    id: 'promo-discount-bar',
+    name: 'Promo Announcement Bar',
+    kind: 'bar',
+    category: 'Sale & Promotions',
+    desc: 'Persistent top or bottom bar announcing current sales without blocking content.',
+    thumbnail: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=400&q=80',
+    tags: ['Bar', 'Announcement', 'Sale', 'Minimal'],
+    colors: { bg: '#6366f1', text: '#ffffff', accent: '#ffffff' },
+    fields: {
+      position: 'top-center', size: 'lg', animation: 'slide_down', borderRadius: 0, layoutMode: 'blocks',
+      elements: [
+        createText('🎉  SUMMER SALE — 30% off all orders with code SUMMER30  |  Free shipping over $50', '13px', '600', '#ffffff'),
+      ]
+    }
+  },
+  {
+    id: 'promo-seasonal-holiday',
+    name: 'Christmas Sale',
+    kind: 'modal',
+    category: 'Sale & Promotions',
+    desc: 'Festive holiday sale popup with coupon reveal.',
+    thumbnail: 'https://images.unsplash.com/photo-1512411831835-23c267b2d56a?auto=format&fit=crop&w=400&q=80',
+    tags: ['Sale', 'Christmas', 'Holiday', 'Seasonal'],
+    colors: { bg: '#14532d', text: '#ffffff', accent: '#fbbf24' },
+    fields: {
+      position: 'center', size: 'md', animation: 'zoom', borderRadius: 20, layoutMode: 'blocks',
+      elements: [
+        createText('🎄', '56px', '400', '#fbbf24'),
+        createText('Merry Christmas! 🎁', '28px', '800', '#ffffff'),
+        createText('Here\'s a special gift from us to you.', '15px', '400', '#bbf7d0'),
+        createSpacer('12px'),
+        createCoupon('XMAS25'),
+        createSpacer('12px'),
+        createButton('Unwrap My 25% Off', '#fbbf24', '#14532d'),
+      ]
+    }
+  },
+  {
+    id: 'promo-black-friday',
+    name: 'Black Friday Blowout',
+    kind: 'modal',
+    category: 'Sale & Promotions',
+    desc: 'High-impact Black Friday popup. Maximum contrast, maximum urgency.',
+    thumbnail: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=400&q=80',
+    tags: ['Black Friday', 'Sale', 'Urgency', 'Holiday'],
+    colors: { bg: '#000000', text: '#ffffff', accent: '#eab308' },
+    fields: {
+      position: 'center', size: 'lg', animation: 'fade', borderRadius: 8, layoutMode: 'blocks',
+      elements: [
+        createText('BLACK FRIDAY', '40px', '900', '#eab308', { letterSpacing: '4px' }),
+        createText('50% OFF', '72px', '900', '#ffffff', { lineHeight: '1' }),
+        createText('SITEWIDE', '24px', '700', '#eab308', { letterSpacing: '6px' }),
+        createSpacer('8px'),
+        createText('Biggest sale of the year. Ends Sunday.', '14px', '400', '#a1a1aa'),
+        createTimer('#eab308'),
+        createSpacer('8px'),
+        createButton('Shop Black Friday', '#eab308', '#000000'),
+      ]
+    }
+  },
+  {
+    id: 'promo-valentine',
+    name: 'Valentine\'s Day Sale',
+    kind: 'modal',
+    category: 'Sale & Promotions',
+    desc: 'Romantic Valentine\'s Day offer popup.',
+    thumbnail: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=400&q=80',
+    tags: ['Valentine\'s Day', 'Sale', 'Holiday', 'Seasonal'],
+    colors: { bg: '#fff1f2', text: '#881337', accent: '#e11d48' },
+    fields: {
+      position: 'center', size: 'md', animation: 'zoom', borderRadius: 24, layoutMode: 'blocks',
+      elements: [
+        createText('💝', '52px', '400', '#e11d48'),
+        createText('Happy Valentine\'s Day', '28px', '800', '#881337'),
+        createText('Share the love — 20% off gifts for the ones that matter.', '15px', '400', '#9f1239'),
+        createSpacer('12px'),
+        createCoupon('LOVE20'),
+        createSpacer('12px'),
+        createButton('Shop Valentine\'s Gifts', '#e11d48', '#ffffff'),
+      ]
+    }
+  },
+
+  // ================= EMAIL CAPTURE =================
+  {
+    id: 'email-lightbox-offer',
+    name: 'Lightbox Email Offer',
+    kind: 'modal',
+    category: 'Email Capture',
+    desc: 'Classic lightbox email popup — clear CTA, coupon incentive, minimal fields.',
+    thumbnail: 'https://images.unsplash.com/photo-1432821596592-e2c18b78144f?auto=format&fit=crop&w=400&q=80',
+    tags: ['Email', 'Lead Gen', 'Lightbox', 'Coupon'],
+    colors: { bg: '#ffffff', text: '#111827', accent: '#059669' },
+    fields: {
+      position: 'center', size: 'md', animation: 'fade', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('Get 15% Off Your First Order', '26px', '800', '#111827'),
+        createText('Drop your email and we\'ll send your discount code instantly. No spam, ever.', '14px', '400', '#6b7280'),
+        createSpacer('16px'),
+        createForm('Get My 15% Off', '#059669'),
+        createSpacer('8px'),
+        createText('🔒 We respect your privacy. Unsubscribe any time.', '11px', '400', '#9ca3af'),
+      ]
+    }
+  },
+  {
+    id: 'email-course-lead',
+    name: 'Free Course Lead Capture',
+    kind: 'modal',
+    category: 'Email Capture',
+    desc: 'Capture emails by offering a free course or downloadable guide as the incentive.',
+    thumbnail: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=400&q=80',
+    tags: ['Email', 'Lead Gen', 'Free Course', 'Value'],
+    colors: { bg: '#eff6ff', text: '#1e3a5f', accent: '#2563eb' },
+    fields: {
+      position: 'center', size: 'md', animation: 'slide_up', borderRadius: 16, layoutMode: 'blocks',
+      elements: [
+        createText('📚 Free Course', '13px', '700', '#2563eb', { textTransform: 'uppercase', letterSpacing: '2px' }),
+        createSpacer('8px'),
+        createText('Learn How To Double Your Conversion Rate', '24px', '800', '#1e3a5f', { lineHeight: '1.2' }),
+        createText('Join 12,000+ marketers. Get instant access to the free 5-day email course.', '14px', '400', '#3b5998'),
+        createSpacer('16px'),
+        createForm('Send Me The Free Course', '#2563eb'),
+        createText('Instant access. No credit card required.', '11px', '400', '#9ca3af'),
+      ]
+    }
+  },
+  {
+    id: 'email-nanobar',
+    name: 'Email Nanobar',
+    kind: 'bar',
+    category: 'Email Capture',
+    desc: 'Persistent floating bar for email capture — least intrusive, always visible.',
+    thumbnail: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=400&q=80',
+    tags: ['Email', 'Nanobar', 'Bar', 'Minimal', 'Persistent'],
+    colors: { bg: '#111827', text: '#ffffff', accent: '#6366f1' },
+    fields: {
+      position: 'bottom-center', size: 'lg', animation: 'slide_up', borderRadius: 0, layoutMode: 'blocks',
+      elements: [
+        createText('📧  Join 5,000+ subscribers — get weekly tips & exclusive deals.', '13px', '500', '#e5e7eb'),
+        createForm('Subscribe', '#6366f1'),
+      ]
+    }
+  },
+  {
+    id: 'email-referral',
+    name: 'Refer a Friend',
+    kind: 'modal',
+    category: 'Email Capture',
+    desc: 'Drive referrals by giving existing customers a bonus for inviting friends.',
+    thumbnail: 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=400&q=80',
+    tags: ['Email', 'Referral', 'Loyalty', 'Give & Get'],
+    colors: { bg: '#f5f3ff', text: '#4c1d95', accent: '#7c3aed' },
+    fields: {
+      position: 'center', size: 'md', animation: 'zoom', borderRadius: 20, layoutMode: 'blocks',
+      elements: [
+        createText('Give $10 · Get $10', '32px', '900', '#4c1d95'),
+        createText('Invite a friend and you both get $10 off your next order.', '15px', '400', '#5b21b6'),
+        createSpacer('16px'),
+        createForm('Invite a Friend', '#7c3aed'),
+        createText('Your friend gets $10 off. You get $10 when they buy.', '12px', '400', '#7c3aed'),
+      ]
+    }
+  },
+
   // ================= GAMIFIED & INTERACTIVE =================
   {
     id: 'gamified-spin-wheel',

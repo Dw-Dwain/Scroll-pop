@@ -29,7 +29,7 @@ export type TemplatePreset = {
   id: string;
   name: string;
   kind: 'modal' | 'slide_in' | 'banner' | 'bar' | 'fullscreen' | 'floating_bubble' | 'notification_toast' | 'corner_popup' | 'gamified_overlay' | 'inline_form';
-  category: 'Lead Capture' | 'Sales' | 'Webinar' | 'Survey' | 'Feedback' | 'Gamified' | 'Holiday' | 'Ecommerce' | 'SaaS';
+  category: 'Lead Capture' | 'Email Capture' | 'Welcome' | 'Upsell' | 'Cross-Sell' | 'Exit Intent' | 'Sale & Promotions' | 'Sales' | 'Webinar' | 'Survey' | 'Feedback' | 'Gamified' | 'Holiday' | 'Ecommerce' | 'SaaS' | 'Fashion Editorial' | 'Beauty/Skincare' | 'Social Proof' | 'Urgency';
   desc: string;
   thumbnail: string;
   tags: string[];
