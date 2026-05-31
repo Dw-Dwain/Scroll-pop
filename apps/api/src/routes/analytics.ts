@@ -28,11 +28,21 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const clicks = counts['click'] ?? 0;
     const ctr = impressions > 0 ? (clicks / impressions) : 0;
 
-    // Also count ALL events for this tenant regardless of date (debug)
-    const [totalRow] = await db
+    // Debug: count events at multiple scopes to diagnose tenantId mismatch
+    const [forTenant] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(events)
       .where(eq(events.tenantId, request.tenantId));
+
+    const [allEvents] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(events);
+
+    // Sample of distinct tenantIds actually in the events table
+    const tenantSample = await db
+      .selectDistinct({ tenantId: events.tenantId })
+      .from(events)
+      .limit(5);
 
     return reply.send({
       data: {
@@ -44,8 +54,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         conversions: counts['conversion'] ?? 0,
         ctr: parseFloat(ctr.toFixed(4)),
         _debug: {
-          tenantId: request.tenantId,
-          totalEventsAllTime: totalRow?.count ?? 0,
+          myTenantId:            request.tenantId,
+          eventsForMyTenant:     forTenant?.count   ?? 0,
+          totalEventsInDB:       allEvents?.count   ?? 0,
+          tenantIdsInEventsTable: tenantSample.map(r => r.tenantId),
         },
       },
     });
