@@ -9,5 +9,8 @@
     "typecheck": "echo 'No TypeScript in Liquid extension'",
     "test":      "echo 'No tests for Liquid extension'",
     "deploy":    "shopify app deploy --source-control-url https://github.com/dwain-coder/Scroll-pop"
+  },
+  "devDependencies": {
+    "@shopify/cli": "^3.0.0"
   }
 }
