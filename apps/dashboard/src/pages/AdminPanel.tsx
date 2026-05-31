@@ -1,6 +1,8 @@
 import React from 'react';
 import { Shield, Users, Mail, CreditCard, Globe, Megaphone, Activity, RefreshCw, Lock } from 'lucide-react';
 import { usePlan, ADMIN_EMAIL, PLAN_PRICES } from '../hooks/usePlan';
+import { useCustom, useCustomMutation } from '@refinedev/core';
+import { getApiBase } from '../providers/dataProvider';
 import type { PlanId } from '../hooks/usePlan';
 
 interface AdminUser {
@@ -66,47 +68,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     );
   }
 
-  const [users, setUsers] = React.useState<AdminUser[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
   const [search, setSearch] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<'tenants' | 'system'>('tenants');
 
-  const fetchUsers = React.useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const isDesktop = !!(window as any).electronAPI?.isDesktop;
-      if (isDesktop) {
-        const token = localStorage.getItem('desktop_token');
-        const apiBase = (window as any).electronAPI.getLocalApiUrl();
-        const res = await fetch(`${apiBase}/api/v1/admin/users`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        setUsers((await res.json()).data ?? []);
-      } else {
-        const res = await fetch('/api/v1/admin/users', { headers: { 'X-Admin-Email': ADMIN_EMAIL } });
-        if (res.ok) {
-          setUsers((await res.json()).data ?? []);
-        } else {
-          const profileRaw = localStorage.getItem('_sp_profile') || localStorage.getItem('desktop_user');
-          const settingsRaw = localStorage.getItem('_sp_settings');
-          const profile = profileRaw ? JSON.parse(profileRaw) : {};
-          const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
-          setUsers([{
-            id: '1', email: profile.email ?? ADMIN_EMAIL, name: profile.name ?? 'Admin',
-            role: 'admin', avatarUrl: profile.avatar ?? profile.avatarUrl,
-            plan: settings.plan ?? 'free', orgName: settings.name ?? 'My Organization',
-          }]);
-        }
-      }
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to load users');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Fetch all tenants + platform stats from the real admin API (Clerk-authenticated).
+  const { data: tenantsData, isLoading: loading, isError, refetch } = useCustom({
+    url: `${getApiBase()}/admin/tenants`,
+    method: 'get',
+    queryOptions: { staleTime: 30_000 },
+  });
+  const { data: statsData } = useCustom({
+    url: `${getApiBase()}/admin/stats`,
+    method: 'get',
+    queryOptions: { staleTime: 30_000 },
+  });
 
-  React.useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  const users: AdminUser[] = ((tenantsData?.data as any) ?? []).map((t: any) => ({
+    id: t.id,
+    email: t.email ?? '—',
+    name: t.ownerName ?? t.name ?? '—',
+    role: 'owner',
+    plan: t.plan as PlanId,
+    orgName: t.name,
+    siteCount: t.siteCount ?? 0,
+    campaignCount: t.campaignCount ?? 0,
+    createdAt: t.createdAt,
+  }));
+
+  const error = isError ? 'Failed to load tenant list. Check API logs.' : '';
+  const fetchUsers = () => { refetch(); };
 
   if (!isAdmin) {
     return (
