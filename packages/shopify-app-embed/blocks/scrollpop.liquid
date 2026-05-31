@@ -1,0 +1,50 @@
+{% comment %}
+  ScrollPop App Embed Block
+  ─────────────────────────────────────────────────────────────────────────────
+  This block injects the ScrollPop snippet into the <head> of every page on the
+  merchant's Shopify store.  It is enabled / disabled from the Theme Customizer:
+
+    Customize → App Embeds → ScrollPop → toggle on
+
+  The merchant pastes their ScrollPop Public Key (from ScrollPop dashboard →
+  Sites → their store) into the "Public Key" setting field.  No code editing
+  required — works with any Shopify theme.
+{% endcomment %}
+
+{% if block.settings.public_key != blank %}
+  <script>
+  (function(w,d,s,p){
+    p=w.__sp=w.__sp||{};
+    if(p.loaded)return;p.loaded=true;
+    var el=d.createElement(s);el.async=true;el.defer=true;
+    el.src='https://cdn.scrollpop.online/v1/{{ block.settings.public_key | escape }}/p.js';
+    d.head.appendChild(el);
+  })(window,document,'script');
+  </script>
+{% else %}
+  {% comment %} Public key not set — snippet not loaded {% endcomment %}
+{% endif %}
+
+{% schema %}
+{
+  "name": "ScrollPop",
+  "target": "head",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "ScrollPop adds scroll-triggered affiliate popup campaigns to your Shopify store. After enabling this block, enter your Public Key below."
+    },
+    {
+      "type": "text",
+      "id": "public_key",
+      "label": "ScrollPop Public Key",
+      "placeholder": "Your public key from the ScrollPop dashboard",
+      "info": "Find your Public Key in the [ScrollPop dashboard](https://dashboard.scrollpop.online) → Sites → your Shopify store."
+    },
+    {
+      "type": "paragraph",
+      "content": "Need help? Visit [dashboard.scrollpop.online](https://dashboard.scrollpop.online) to create popup campaigns."
+    }
+  ]
+}
+{% endschema %}
