@@ -333,7 +333,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const [createError, setCreateError] = React.useState('');
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
   const [selectedSite, setSelectedSite] = React.useState<any | null>(null);
-  const [activeTab, setActiveTab] = React.useState<'snippet' | 'shopify' | 'wordpress'>('snippet');
+  const [activeTab, setActiveTab] = React.useState<'snippet' | 'shopify' | 'shopify-embed' | 'wordpress'>('snippet');
   const [embedMode, setEmbedMode] = React.useState<'cdn' | 'dev'>('cdn');
   const [devUrl, setDevUrl] = React.useState('https://whole-ends-divide.loca.lt');
   const [isEditOpen, setIsEditOpen] = React.useState(false);
@@ -498,7 +498,10 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
     const tabs: { key: string; label: string }[] = [
       { key: 'snippet', label: 'Code Snippet' },
     ];
-    if (site.platform === 'shopify') tabs.push({ key: 'shopify', label: 'Shopify OAuth' });
+    if (site.platform === 'shopify') {
+      tabs.push({ key: 'shopify', label: 'Shopify OAuth' });
+      tabs.push({ key: 'shopify-embed', label: 'App Embed Block' });
+    }
     if (site.platform === 'wordpress') tabs.push({ key: 'wordpress', label: 'WordPress Plugin' });
     return tabs;
   };
@@ -764,6 +767,83 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
               />
             )}
 
+            {/* Shopify App Embed Block tab */}
+            {activeTab === 'shopify-embed' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ padding: '12px 14px', background: 'rgba(150,191,72,0.06)', border: '1px solid rgba(150,191,72,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <strong>App Embed Block</strong> — the recommended way to add ScrollPop to Shopify. No theme code editing required. Works with Online Store 2.0 themes.
+                </div>
+
+                {/* Step 1 */}
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-500)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Open your theme customizer</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px 28px' }}>
+                    In your Shopify Admin go to <strong>Online Store → Themes → Customize</strong>.
+                  </p>
+                  <a
+                    href={`https://${selectedSite?.domain}/admin/themes/current/editor`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="btn btn-secondary btn-sm"
+                    style={{ marginLeft: 28, gap: 5, fontSize: 11 }}
+                  >
+                    <ExternalLink size={11} /> Open Theme Customizer
+                  </a>
+                </div>
+
+                {/* Step 2 */}
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-500)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Enable the ScrollPop embed block</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 0 28px' }}>
+                    In the Theme Customizer click <strong>App Embeds</strong> (bottom-left panel) → find <strong>ScrollPop</strong> → toggle it <strong>on</strong>.
+                  </p>
+                </div>
+
+                {/* Step 3 */}
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-500)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Paste your Public Key</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px 28px' }}>
+                    In the ScrollPop embed settings paste this site's Public Key:
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 28 }}>
+                    <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--bg-raised)', padding: '4px 10px', borderRadius: 4, border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedSite?.publicKey ?? '—'}
+                    </code>
+                    <button
+                      className="btn btn-icon btn-sm"
+                      onClick={() => { navigator.clipboard.writeText(selectedSite?.publicKey ?? ''); }}
+                      title="Copy public key"
+                    >
+                      <Copy size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 4 */}
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-500)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>4</div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Save and publish</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 0 28px' }}>
+                    Click <strong>Save</strong> in the Theme Customizer. ScrollPop will now load on every page of your store.
+                  </p>
+                </div>
+
+                <div style={{ padding: '10px 14px', background: 'var(--bg-raised)', borderRadius: 6, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+                  💡 <strong>Don't see ScrollPop in App Embeds?</strong> Make sure the ScrollPop app is installed on your store first via the <strong>Shopify OAuth</strong> tab, then refresh the Theme Customizer.
+                </div>
+              </div>
+            )}
+
             {/* WordPress tab */}
             {activeTab === 'wordpress' && (
               <WordPressConnectPanel
@@ -885,18 +965,31 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
               </div>
               <div>
                 <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Site Name</label>
-                <input type="text" required className="input" placeholder="My Shopify Store"
+                <input type="text" required className="input"
+                  placeholder={
+                    newSite.platform === 'shopify'   ? 'My Shopify Store' :
+                    newSite.platform === 'wordpress' ? 'My WordPress Site' :
+                    newSite.platform === 'donorbox'  ? 'My Donorbox Campaign' :
+                    newSite.platform === 'gofundme'  ? 'My GoFundMe Page' :
+                    'My Website'
+                  }
                   value={newSite.name} onChange={(e) => setNewSite({ ...newSite, name: e.target.value })} />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-                  {newSite.platform === 'shopify' ? 'Shopify Domain (yourstore.myshopify.com)' : 'Domain'}
+                  {newSite.platform === 'shopify' ? 'Shopify Domain (yourstore.myshopify.com)' : 'Website Domain'}
                 </label>
                 <input
                   type="text"
                   required
                   className="input"
-                  placeholder={newSite.platform === 'shopify' ? 'yourstore.myshopify.com' : 'mydomain.com'}
+                  placeholder={
+                    newSite.platform === 'shopify'   ? 'yourstore.myshopify.com' :
+                    newSite.platform === 'wordpress' ? 'mysite.com' :
+                    newSite.platform === 'donorbox'  ? 'donorbox.me/my-campaign' :
+                    newSite.platform === 'gofundme'  ? 'gofundme.com/f/my-page' :
+                    'mysite.com'
+                  }
                   value={newSite.domain}
                   onChange={(e) => setNewSite({ ...newSite, domain: e.target.value })}
                 />

@@ -1,0 +1,16 @@
+{
+  "name": "@scrollpop/shopify-app-embed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ScrollPop Shopify App Embed Block — injects the snippet via Theme Customizer",
+  "scripts": {
+    "build":     "echo 'Liquid extension — no build step'",
+    "lint":      "echo 'No linting for Liquid'",
+    "typecheck": "echo 'No TypeScript in Liquid extension'",
+    "test":      "echo 'No tests for Liquid extension'",
+    "deploy":    "shopify app deploy --source-control-url https://github.com/dwain-coder/Scroll-pop"
+  },
+  "devDependencies": {
+    "@shopify/cli": "^3.0.0"
+  }
+}

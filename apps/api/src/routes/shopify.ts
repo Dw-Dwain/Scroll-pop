@@ -34,8 +34,6 @@ function getConfig() {
   const apiSecret = process.env['SHOPIFY_API_SECRET'];
   const scopes = process.env['SHOPIFY_SCOPES'] ?? 'read_products,write_script_tags';
   const dashboardUrl = process.env['DASHBOARD_URL'] ?? 'https://dashboard.scrollpop.online';
-  // Must match the redirect URL registered in the Shopify app. Defaults to the
-  // live Render origin since api.scrollpop.online is not yet provisioned.
   const apiBaseUrl = process.env['API_BASE_URL'] ?? 'https://scroll-pop.onrender.com';
 
   if (!apiKey || !apiSecret) {

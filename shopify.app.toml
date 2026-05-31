@@ -1,0 +1,38 @@
+name       = "ScrollPop"
+client_id  = "37618fc8e087622a64ac244a2edd49f1"
+
+application_url = "https://scroll-pop.onrender.com"
+embedded        = false
+
+[auth]
+redirect_urls = [
+  "https://scroll-pop.onrender.com/api/v1/shopify/callback",
+  "https://scroll-pop-staging.onrender.com/api/v1/shopify/callback",
+]
+
+[webhooks]
+api_version = "2024-10"
+
+[[webhooks.subscriptions]]
+topics   = ["app/uninstalled"]
+uri      = "/api/v1/webhooks/shopify/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics   = ["shop/redact"]
+uri      = "/api/v1/webhooks/shopify/shop/redact"
+
+[[webhooks.subscriptions]]
+topics   = ["customers/redact"]
+uri      = "/api/v1/webhooks/shopify/customers/redact"
+
+[[webhooks.subscriptions]]
+topics   = ["customers/data_request"]
+uri      = "/api/v1/webhooks/shopify/customers/data_request"
+
+[access_scopes]
+# read_products   — lets the app read product info for affiliate slot suggestions
+# write_script_tags — lets the app inject the ScrollPop snippet via Script Tag
+scopes = "read_products,write_script_tags"
+
+[pos]
+embedded = false

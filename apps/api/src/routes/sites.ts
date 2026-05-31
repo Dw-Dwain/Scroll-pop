@@ -204,6 +204,27 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!site) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Site not found' } });
 
+    // ── Dev / staging bypass ──────────────────────────────────────────────────
+    // In non-production environments (NODE_ENV !== 'production') skip the live
+    // WordPress REST endpoint check and auto-verify.  This lets staging/dev
+    // testing proceed without needing the WP plugin installed and configured
+    // with the staging site's public key.
+    if (process.env['NODE_ENV'] !== 'production') {
+      const [devUpdated] = await db
+        .update(sites)
+        .set({ verifiedAt: new Date(), updatedAt: new Date() })
+        .where(eq(sites.id, site.id))
+        .returning();
+      return reply.send({
+        data: {
+          verified: true,
+          verifiedAt: devUpdated?.verifiedAt,
+          message: '✅ Verification bypassed in dev/staging mode.',
+        },
+      });
+    }
+    // ── End dev bypass ────────────────────────────────────────────────────────
+
     // Determine base URL for the WordPress site
     const wpBase = site.wpSiteUrl ?? `https://${site.domain}`;
     const statusUrl = `${wpBase.replace(/\/$/, '')}/wp-json/scrollpop/v1/status`;

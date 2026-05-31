@@ -406,7 +406,17 @@ const Root: React.FC = () => {
     return <DemoAppContent />;
   }
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/dashboard">
+    <ClerkProvider
+      publishableKey={CLERK_PUBLISHABLE_KEY}
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
+      allowedRedirectOrigins={[
+        'https://dashboard.scrollpop.online',
+        'https://scrollpop-dashboard.pages.dev',
+        'https://dev.scrollpop-dashboard.pages.dev',
+        /^https:\/\/[a-z0-9]+\.scrollpop-dashboard\.pages\.dev$/,
+      ]}
+    >
       <ClerkAppContent />
     </ClerkProvider>
   );
