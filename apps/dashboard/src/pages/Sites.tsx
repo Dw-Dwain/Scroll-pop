@@ -885,18 +885,31 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
               </div>
               <div>
                 <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Site Name</label>
-                <input type="text" required className="input" placeholder="My Shopify Store"
+                <input type="text" required className="input"
+                  placeholder={
+                    newSite.platform === 'shopify'   ? 'My Shopify Store' :
+                    newSite.platform === 'wordpress' ? 'My WordPress Site' :
+                    newSite.platform === 'donorbox'  ? 'My Donorbox Campaign' :
+                    newSite.platform === 'gofundme'  ? 'My GoFundMe Page' :
+                    'My Website'
+                  }
                   value={newSite.name} onChange={(e) => setNewSite({ ...newSite, name: e.target.value })} />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-                  {newSite.platform === 'shopify' ? 'Shopify Domain (yourstore.myshopify.com)' : 'Domain'}
+                  {newSite.platform === 'shopify' ? 'Shopify Domain (yourstore.myshopify.com)' : 'Website Domain'}
                 </label>
                 <input
                   type="text"
                   required
                   className="input"
-                  placeholder={newSite.platform === 'shopify' ? 'yourstore.myshopify.com' : 'mydomain.com'}
+                  placeholder={
+                    newSite.platform === 'shopify'   ? 'yourstore.myshopify.com' :
+                    newSite.platform === 'wordpress' ? 'mysite.com' :
+                    newSite.platform === 'donorbox'  ? 'donorbox.me/my-campaign' :
+                    newSite.platform === 'gofundme'  ? 'gofundme.com/f/my-page' :
+                    'mysite.com'
+                  }
                   value={newSite.domain}
                   onChange={(e) => setNewSite({ ...newSite, domain: e.target.value })}
                 />
