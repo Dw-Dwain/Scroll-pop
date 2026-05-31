@@ -66,17 +66,36 @@ When staging looks good:
 4. Once green → **Merge pull request**
 
 **What deploys after merge:**
-- Render auto-redeploys production API (`scroll-pop.onrender.com`)
 - Cloudflare Pages redeploys `dashboard.scrollpop.online`
 - GitHub Actions deploys Worker (snippet + edge) from `Dw-Dwain/Scroll-pop`
+- **Render does NOT auto-deploy** — you must manually sync `dwain-coder` (step 5b)
 
-### 5. After merging — sync dev back up
+### 5. After merging — sync dev + dwain-coder
 
 ```bash
+# Sync dev with the new main
 git checkout dev
 git pull origin main        # bring dev in sync with new main
 git push                    # update origin/dev + triggers fresh staging build
 ```
+
+### 5b. Sync dwain-coder (Render's source repo)
+
+**⚠️ Critical** — Render deploys from `dwain-coder/Scroll-pop`, not `Dw-Dwain`. After every
+PR merge on `Dw-Dwain`, you must push main to `dwain-coder` so the API gets the new code:
+
+```bash
+git checkout main
+git pull origin main
+git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" main
+```
+
+If `dwain-coder` has branch protection (it does), you need to:
+1. Temporarily remove it via GitHub → Settings → Branches → main → Edit
+2. Force push: `git push --force`
+3. Re-add protection
+
+Or if repos diverge: the Claude Code session can handle this — just ask.
 
 ---
 
@@ -153,6 +172,31 @@ in their Theme Customizer → App Embeds.
 
 Sites → select a Shopify site → **App Embed Block** tab — shows a guided 4-step
 install flow with a one-click public key copy button.
+
+---
+
+## Neon DB — monthly partition maintenance
+
+The `events` table is partitioned by calendar month (`events_YYYY_MM`). PostgreSQL
+**does not auto-create partitions** — inserts for a month with no partition silently fail
+(no error thrown, but the row is dropped). This killed analytics for all of 2026 until
+partitions were created manually.
+
+**Before each new month**, run this in the Neon SQL Editor (production AND dev branches):
+
+```sql
+-- Replace YYYY and MM with the next month
+CREATE TABLE IF NOT EXISTS events_YYYY_MM PARTITION OF events
+  FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-next-month-01');
+```
+
+Example for July 2026:
+```sql
+CREATE TABLE IF NOT EXISTS events_2026_07 PARTITION OF events
+  FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
+```
+
+A cron job / migration to auto-create future partitions is on the v2 roadmap.
 
 ---
 

@@ -1009,8 +1009,17 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   and resets frequency caps when user returns so triggers re-fire
 - CORS: methods `GET/POST/PUT/PATCH/DELETE/OPTIONS` explicitly set; dashboard origins +
   Pages preview subdomain pattern allowed
-- Analytics event pipeline: snippet → edge Worker → API `/e` → DB (Worker now has 10s
-  timeout on forwarding so events fail fast instead of hanging)
+- Analytics event pipeline: snippet → edge Worker → API `/e` → DB. Worker has 10s
+  timeout. **Root cause of empty analytics identified and fixed**: the events table is
+  partitioned by month but only had partitions through `events_2025_11` — every 2026
+  insert silently failed with "no partition found". 2026 monthly partitions created in
+  Neon console. Events now flow correctly end-to-end.
+- Analytics dashboard: range selector (7d/30d/90d) now actually filters data (was
+  cosmetic — API always returned 30d). Delta % are real curr-vs-prev calculations, not
+  hardcoded strings. Both also need to be created in the Neon dev branch for staging.
+- Sites page: campaign count and monthly views now pulled from DB via COUNT queries
+  (were always `00`/`0`). Enrichment wrapped in try/catch so a DB error never crashes
+  the site list.
 - `sendBeacon` / `fetch({keepalive:true})` for all event beaconing
 
 #### Design & UI
@@ -1023,8 +1032,11 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 
 ### ❌ Not Built Yet (v2 targets)
 - Real-time view limit enforcement in Worker (currently uncapped)
-- Stripe billing checkout UI (Upgrade/Downgrade button is placeholder — writes localStorage only)
+- Stripe billing: UI checkout wired to real Stripe API; needs `STRIPE_PRICE_*` env vars +
+  Shopify Partner webhook endpoint configured before going live
 - Stripe Usage Records metering (views are not reported to Stripe)
+- **Neon partition maintenance**: 2026 partitions created manually in production; need a
+  migration/cron to auto-create future monthly partitions before each month starts
 - `api.scrollpop.online` custom domain (API still at `scroll-pop.onrender.com`)
 - Clerk Organizations / team UI — personal accounts only; org-based path dormant
 - `scrollpop.online` marketing site
@@ -1064,7 +1076,9 @@ Priority order for the next release cycle:
 1. **Real view cap enforcement** — Worker reads tenant plan limits from KV, suppresses config when over limit. Sync limit to KV on plan change.
 2. **Stripe Usage Records** — flush monthly view counts to Stripe Usage API so overages are billed correctly.
 3. **Campaign scheduling** — `starts_at` / `ends_at` on campaigns. Worker checks timestamps.
-4. **`api.scrollpop.io` custom domain** — Cloudflare proxied to Render. HTTPS everywhere.
+4. **`api.scrollpop.online` custom domain** — Cloudflare proxied to Render. HTTPS everywhere.
+4a. **Neon partition auto-create** — Add a monthly cron/migration to create the next month's
+    events partition before month rollover, so analytics never silently breaks again.
 5. **Email notifications** — Resend/SendGrid integration. Alert at 80 % view cap, campaign go-live, billing failure.
 6. **Geo targeting** — add `geo_country` / `geo_region` to TargetingKind. Worker reads Cloudflare CF-IPCountry header.
 7. **UTM targeting** — match on `utm_source`, `utm_campaign`, `utm_medium` from URL params.

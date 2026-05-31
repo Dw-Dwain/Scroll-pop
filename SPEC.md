@@ -1,5 +1,8 @@
 # ScrollPop — Product Specification v1.0 (MVP)
 
+> **Status as of June 2026:** MVP is live at `dashboard.scrollpop.online`.
+> Checkboxes below reflect actual build state.
+
 ## Overview
 ScrollPop is a multi-tenant SaaS platform for building Google-compliant popup campaigns.
 It replaces back-button hijacking (banned by Google June 15, 2026) with scroll-depth,
@@ -11,33 +14,38 @@ publishers displaying product ads that users can choose to engage with.
 ## Phase 1: MVP Scope
 
 ### What ships in MVP
-- [ ] Tenant onboarding (Clerk auth, org creation)
-- [ ] Site registration + public_key issuance + install verification
-- [ ] Campaign CRUD (create / read / update / archive)
-- [ ] Design editor (template-based, 8 starter templates, no drag-and-drop yet)
-- [ ] Triggers: scroll_pct, dwell_time, inactivity (NO back-button, ever)
-- [ ] Targeting: URL match (exact / contains / regex), device (mobile/desktop/all)
-- [ ] Affiliate slots: up to 3 products per campaign (image + CTA URL + click tracker URL)
-- [ ] Frequency capping: once_per_session, once_per_day, once_per_visitor
-- [ ] JS snippet runtime (scroll trigger + shadow DOM + event beaconing)
-- [ ] WordPress plugin (thin PHP, injects snippet via wp_head)
-- [ ] Raw HTML install instructions (copy-paste snippet)
-- [ ] Basic analytics: impressions, views, clicks, CTR, dismissals (last 30 days)
-- [ ] Stripe billing: Free, Starter ($19), Growth ($49)
-- [ ] Admin dashboard (Refine-based, shadcn/ui)
-- [ ] Cloudflare Worker: config endpoint + event ingest endpoint
+- [x] Tenant onboarding (Clerk auth, personal-account model — no org creation required)
+- [x] Site registration + public_key issuance + install verification (WP bypass in dev/staging)
+- [x] Campaign CRUD (create / read / update / archive) — 3-step wizard (Details → Design → Launch)
+- [x] Design editor — full visual canvas builder (drag-and-drop, 38+ templates across 14 categories)
+- [x] Triggers: scroll_pct, dwell_time, inactivity, exit_intent_mouse (NO back-button, ever)
+- [x] Targeting: URL match (exact / contains / regex), device (mobile/desktop/all)
+- [x] Affiliate slots: up to 3 products per campaign (image + CTA URL + click tracker URL)
+- [x] Frequency capping: once_per_session, once_per_day, once_per_visitor, always
+- [x] JS snippet runtime — WYSIWYG element renderer (positions/colors/fonts match editor exactly)
+- [x] Close button: 2-step flow (1st click opens ad in new tab, 2nd click dismisses + resets cap)
+- [x] WordPress plugin (thin PHP, injects snippet via wp_head, downloadable from GitHub releases)
+- [x] Shopify App Embed Block (theme extension, Theme Customizer → App Embeds)
+- [x] Raw HTML / Shopify theme.liquid install instructions in dashboard
+- [x] Analytics: impressions, views, clicks, CTR, dismissals (7d/30d/90d selectable)
+    - **Note**: events table is partitioned by month — new partitions must be created in Neon
+      before each calendar month or inserts silently fail (2026 partitions created manually)
+- [x] Stripe billing UI: Upgrade/Downgrade calls real Stripe Checkout; needs `STRIPE_PRICE_*` env vars
+- [x] Edge enforcement: monthly view limit checked before returning campaign config
+- [x] Admin dashboard — super-admin panel (email-gated: `dwain3991@gmail.com` only)
+- [x] Cloudflare Worker: snippet CDN + config endpoint + event ingest endpoint (custom domains live)
+- [x] Staging environment: `staging.scrollpop.online` → `scroll-pop-staging.onrender.com` → Neon dev branch
 
-### What does NOT ship in MVP
-- A/B testing (v2)
-- Drag-and-drop design builder (v2 — use template selector for now)
-- Exit-intent mouse trigger (v2)
-- Shopify App Store app (v2)
-- Geo targeting, UTM targeting, referrer targeting (v2)
-- Email integrations (Mailchimp, Klaviyo) (v2)
-- Zapier webhook (v2)
-- Scale/Agency tiers (v2)
-- Compliance Center dashboard (v2)
-- Spin-to-win popup type (v2)
+### What does NOT ship in MVP (v2 targets)
+- A/B testing
+- Geo targeting, UTM targeting, referrer targeting
+- Email integrations (Mailchimp, Klaviyo)
+- Outbound webhook on conversion events
+- Shopify App Store listing
+- Scale/Agency tier Stripe price IDs (need configuring)
+- Compliance Center dashboard
+- Teaser + success step WYSIWYG (snippet uses built-in layout for those two steps)
+- Neon partition auto-creation (manual monthly task until cron is built)
 
 ---
 
