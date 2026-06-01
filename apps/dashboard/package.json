@@ -22,7 +22,6 @@
     "date-fns": "^4.3.0",
     "lucide-react": "^0.395.0",
     "motion": "^12.40.0",
-    "posthog-js": "^1.376.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.6.0",
