@@ -56,6 +56,12 @@ isolated Neon dev database. Safe to create/delete anything.
 > ℹ️ WordPress verification is **bypassed** on staging (`NODE_ENV=development`).
 > Clicking "Verify" auto-succeeds without needing the WP plugin installed.
 
+> 🔒 **Staging is locked to `dwain3991@gmail.com` only.** Anyone else who signs in is
+> auto-signed-out and shown a "Staging — Restricted Access" screen. This is enforced
+> at runtime by a hostname check (`window.location.hostname === 'staging.scrollpop.online'`)
+> — no env var or build config needed. It cannot be bypassed by Cloudflare Pages
+> auto-deploy overwriting a CI build.
+
 ### 4. Ship to production — open a PR
 
 When staging looks good:
@@ -91,12 +97,10 @@ git pull origin main
 git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" main
 ```
 
-If `dwain-coder` has branch protection (it does), you need to:
-1. Temporarily remove it via GitHub → Settings → Branches → main → Edit
-2. Force push: `git push --force`
-3. Re-add protection
+`allow_force_pushes` is enabled on `dwain-coder/Scroll-pop` at the repo level, so
+`--force` works without touching branch protection settings.
 
-Or if repos diverge: the Claude Code session can handle this — just ask.
+If repos diverge significantly: ask Claude Code to handle the sync.
 
 ---
 

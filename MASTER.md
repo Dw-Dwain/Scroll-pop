@@ -1,7 +1,7 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 1, 2026 · v0.1.1-beta
+> Last updated: June 1, 2026 · v0.1.2-beta
 
 ---
 
@@ -729,6 +729,27 @@ When a user is deleted in the Clerk dashboard, the `user.deleted` webhook fires 
 
 > ⚠️ Requires `user.deleted` enabled in the Clerk webhook subscription settings.
 
+### Admin console security
+- `isAdmin` in `usePlan.ts` requires the `/me` API to return the exact `ADMIN_EMAIL`.
+  There is **no localStorage fallback** — `isAdmin` is `false` until the API confirms.
+  This prevents any cached/injected localStorage value from granting console access.
+- `assertSuperAdmin` on the API checks exact email from the DB — cannot be spoofed.
+- `@novatise.com` users get `isUnlimited = true` (agency plan limits) but `isAdmin = false`.
+
+### Admin Console — Sync with Clerk
+`POST /api/v1/admin/sync` reconciles the DB with live Clerk user list:
+- Deletes user rows + personal tenants for Clerk-deleted users
+- Soft-deletes orphaned `personal_*` novatise.com tenants (pre-shared-org)
+- Called by the "Sync & Refresh" button in the admin panel; staleTime = 0 so data is always fresh
+
+### Staging lock
+`staging.scrollpop.online` enforces a hostname-based gate at runtime:
+```typescript
+const STAGING_MODE = window.location.hostname === 'staging.scrollpop.online';
+```
+Only `dwain3991@gmail.com` can sign in. Anyone else is auto-signed-out immediately.
+Sign-up is hidden. This is enforced in-browser — no build config or env var needed.
+
 ### Dev Bypass (non-production only)
 If `NODE_ENV !== 'production'` and no Clerk auth is present, the preHandler creates/reuses a demo tenant (`org_demo_12345`) and sets tenant context automatically. This lets you test locally without a Clerk account.
 
@@ -1103,13 +1124,16 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 
 #### CI/CD & Deploy
 - All in-code infra references repointed from placeholder `scrollpop.io` to owned `scrollpop.online`
-- **Dashboard deploy wired into CI** (`deploy-dashboard` + `deploy-dashboard-staging` jobs
-  added to `ci.yml`). Previously only API (Render) and Worker (Cloudflare) deployed from CI —
-  the dashboard was never deploying automatically. Now: `main` push → `dashboard.scrollpop.online`;
-  `dev` push → `staging.scrollpop.online` (uses `VITE_API_URL_STAGING`).
+- **Dashboard deploy wired into CI** (`deploy-dashboard` + `deploy-dashboard-staging` jobs).
+  `main` push → `dashboard.scrollpop.online`; `dev` push → `staging.scrollpop.online`.
+  Non-secret VITE vars (`VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`) hardcoded in ci.yml —
+  they are publishable values, not secrets.
 - Worker deploy gracefully skips on repos without the CF token (two-repo split)
-- `dwain-coder/Scroll-pop` `allow_force_pushes` enabled — future syncs don't need branch
-  protection toggle dance
+- `dwain-coder/Scroll-pop` `allow_force_pushes` enabled — syncs are a single `git push --force`
+- **pnpm v11 build scripts**: `better-sqlite3` in `ignoredBuiltDependencies` (root package.json)
+  to silence its blocked postinstall. `posthog-js` removed from npm — it pulled in `core-js` +
+  `protobufjs` which pnpm v11 blocks and cannot be silenced without interactive `approve-builds`.
+  PostHog to be added via CDN snippet when key is configured.
 
 #### Design & UI
 - Multi-page docs, Terms, Privacy, Status, License pages
@@ -1642,6 +1666,42 @@ Full migration checklist:
 7. Update `API_ORIGIN` Worker secret: `wrangler secret put API_ORIGIN`
 8. Update Stripe webhook endpoint URL in Stripe dashboard
 9. Keep old Render service running until DNS propagates
+
+---
+
+---
+
+## Session Log — June 1, 2026 (continued)
+
+### pnpm v11 build fix
+`posthog-js` pulled in `core-js` and `protobufjs` as transitive dependencies. pnpm v11's
+new security model blocks their postinstall scripts and exits with code 1 (`ERR_PNPM_IGNORED_BUILDS`).
+Three config attempts failed (`onlyBuiltDependencies`, `ignoredBuiltDependencies`, lockfile block).
+Root fix: removed `posthog-js` from npm. PostHog will be re-added via CDN `<script>` tag when
+`VITE_POSTHOG_KEY` is actually configured, eliminating the dependency entirely.
+
+### Snippet size fix
+Analytics additions (`getScrollDepthPct`, `getTrafficSource`, new beacon calls) pushed the snippet
+to 10,250 bytes gzipped — 10 bytes over the 10,240 byte CI gate. Fixed by:
+- Removing `getTrafficSource()` from snippet (referrer already sent; API can parse source server-side)
+- Removing redundant `popup_submit` beacon (covered by `conversion`)
+Result: 10,207 bytes gzipped. ✅
+
+### Admin console security hardening
+`isAdmin` in `usePlan.ts` previously fell back to `detectAdminLocal()` which checks
+`localStorage.desktop_user`. Any user with `{role: 'admin'}` in localStorage could access
+the admin console. Fixed: `isAdmin` now only true when `/me` API confirms `dwain3991@gmail.com`
+— no localStorage fallback. `dwain@novatise.com` users confirmed blocked from admin console.
+
+### Staging lock fix
+`VITE_STAGING_MODE=true` was set in the CI build, but Cloudflare Pages has its own GitHub
+auto-deploy that uses its own env vars (without `VITE_STAGING_MODE`). Last deploy wins.
+Fixed: hostname check at runtime (`window.location.hostname === 'staging.scrollpop.online'`)
+— works regardless of how the bundle was built or deployed.
+
+### Admin Clerk sync
+`POST /admin/sync` + `DELETE /admin/tenants/:id` added. Refresh button in admin panel
+now calls sync first (cleans stale Clerk-deleted users) then refetches. staleTime = 0.
 
 ---
 

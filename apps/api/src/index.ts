@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { db } from './db/client.js';
-import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events } from './db/schema.js';
+import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from './db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
 // Routes
@@ -265,8 +265,14 @@ async function bootstrap() {
         .digest('hex')
         .slice(0, 8);
 
+      const siteTenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, site.tenantId),
+        columns: { plan: true },
+      });
+
       const payload = {
         siteId: site.id,
+        plan: siteTenant?.plan ?? 'free',
         campaigns: campaignConfigs,
         version,
       };
