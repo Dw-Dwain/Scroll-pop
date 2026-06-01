@@ -27,6 +27,6 @@
     "typescript": "^5.5.0"
   },
   "pnpm": {
-    "ignoredBuiltDependencies": ["better-sqlite3", "core-js", "protobufjs"]
+    "ignoredBuiltDependencies": ["better-sqlite3"]
   }
 }

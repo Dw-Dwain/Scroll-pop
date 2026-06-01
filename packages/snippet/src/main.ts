@@ -910,11 +910,10 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
 
   // Switch to success congratulations screen state
   const transitionToSuccess = (email: string) => {
-    // Beacon email_capture (lead collected) + conversion (outcome)
+    // email_capture = lead collected; conversion = outcome (covers popup_submit)
     if (email && email !== 'anonymous@scrollpop.online') {
       beaconEvent(campaign, 'email_capture', slot?.id, { hasEmail: true });
     }
-    beaconEvent(campaign, 'popup_submit', slot?.id, { displayDuration: getDisplayDuration() });
     beaconEvent(campaign, 'conversion', slot?.id, { email });
 
     const couponTxt = slot?.coupon || 'WELCOME50';
@@ -1208,19 +1207,6 @@ function getScrollDepthPct(): number {
   return Math.min(100, Math.round((scrolled / total) * 100));
 }
 
-function getTrafficSource(): string {
-  const params = new URLSearchParams(window.location.search);
-  const utmSource = params.get('utm_source');
-  if (utmSource) return utmSource.slice(0, 100);
-  if (document.referrer) {
-    try {
-      const host = new URL(document.referrer).hostname.replace(/^www\./, '');
-      return host.slice(0, 100);
-    } catch { /* ignore */ }
-  }
-  return 'direct';
-}
-
 function beaconEvent(
   campaign: CampaignConfig,
   eventType: BeaconEventType,
@@ -1239,7 +1225,6 @@ function beaconEvent(
       pageUrl:        window.location.href,
       referrer:       document.referrer,
       scrollDepthPct: getScrollDepthPct(),
-      trafficSource:  getTrafficSource(),
       meta:           extraMeta ?? null,
     }],
   };
