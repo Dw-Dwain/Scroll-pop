@@ -1088,7 +1088,7 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   Neon console. Events now flow correctly end-to-end.
 - Analytics dashboard: range selector (7d/30d/90d) now actually filters data (was
   cosmetic — API always returned 30d). Delta % are real curr-vs-prev calculations, not
-  hardcoded strings. Both also need to be created in the Neon dev branch for staging.
+  hardcoded strings.
 - Sites page: campaign count and monthly views now pulled from DB via COUNT queries
   (were always `00`/`0`). Enrichment wrapped in try/catch so a DB error never crashes
   the site list.
@@ -1096,8 +1096,8 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 
 #### CI/CD & Deploy
 - All in-code infra references repointed from placeholder `scrollpop.io` to owned `scrollpop.online`
-- **Dashboard deploy wired into CI** (`deploy-dashboard` + `deploy-dashboard-staging` jobs).
-  `main` push → `dashboard.scrollpop.online`; `dev` push → `staging.scrollpop.online`.
+- **Dashboard deploy wired into CI** (`deploy-dashboard` job).
+  `main` push → `dashboard.scrollpop.online`.
   Non-secret VITE vars (`VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`) hardcoded in ci.yml —
   they are publishable values, not secrets.
 - Worker deploy gracefully skips on repos without the CF token (two-repo split)
@@ -1252,7 +1252,7 @@ Longer-horizon features:
 ### ADR-006: Neon over Supabase as production DB
 **Decision:** Neon PostgreSQL (with TimescaleDB extension) as the production database.  
 **Note:** Supabase was initially assumed to be the production database. During deployment, it was discovered the actual connection string pointed to Neon. Supabase credentials were also set up but are not used for production.  
-**Reason (Neon):** Better serverless cold-start performance, branching for dev/staging, simpler connection pooling.
+**Reason (Neon):** Better serverless cold-start performance, simpler connection pooling.
 
 ### ADR-007: pnpm workspaces + Turborepo over Nx
 **Decision:** pnpm + Turborepo for monorepo management.  
@@ -1467,11 +1467,8 @@ A record of every step taken to go from code to live production. Useful if you e
 ### Dashboard CI deploy (was missing entirely)
 **Problem:** The `ci.yml` had no deploy step for the dashboard — only API (Render) and Worker (Cloudflare) were wired. Every push was deploying the backend but leaving the frontend static.
 
-**Fixed in:** `.github/workflows/ci.yml` — Added two jobs:
+**Fixed in:** `.github/workflows/ci.yml` — Added deploy job:
 - `deploy-dashboard` (on `main`) — builds `apps/dashboard`, deploys to Cloudflare Pages `branch=main`
-- `deploy-dashboard-staging` (on `dev`) — same but uses `VITE_API_URL_STAGING`, deploys `branch=dev`
-
-New GitHub secret required: `VITE_API_URL_STAGING` = `https://scroll-pop-staging.onrender.com`
 
 ### dwain-coder sync
 Synced `dwain-coder/Scroll-pop` `main` with all changes via force push (repos had diverged at merge-commit topology). Enabled `allow_force_pushes` on `dwain-coder/Scroll-pop` at repo level so future syncs don't require toggling branch protection.
@@ -1665,11 +1662,7 @@ Result: 10,207 bytes gzipped. ✅
 the admin console. Fixed: `isAdmin` now only true when `/me` API confirms `dwain3991@gmail.com`
 — no localStorage fallback. `dwain@novatise.com` users confirmed blocked from admin console.
 
-### Staging lock fix
-`VITE_STAGING_MODE=true` was set in the CI build, but Cloudflare Pages has its own GitHub
-auto-deploy that uses its own env vars (without `VITE_STAGING_MODE`). Last deploy wins.
-Fixed: hostname check at runtime (`window.location.hostname === 'staging.scrollpop.online'`)
-— works regardless of how the bundle was built or deployed.
+
 
 ### Admin Clerk sync
 `POST /admin/sync` + `DELETE /admin/tenants/:id` added. Refresh button in admin panel
