@@ -1,7 +1,7 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: May 29, 2026 · v0.1.0-beta
+> Last updated: June 1, 2026 · v0.1.1-beta
 
 ---
 
@@ -533,6 +533,13 @@ All routes prefixed `/api/v1/`. Auth: Clerk JWT Bearer token (except public rout
 | GET | /api/v1/me | Current user + tenant + plan |
 | GET/PATCH | /api/v1/tenants/:id | Tenant details |
 
+### Admin (super-admin only — dwain3991@gmail.com)
+| Method | Path | Description |
+|---|---|---|
+| GET | /api/v1/admin/tenants | All tenants with owner email, plan, site/campaign counts |
+| PATCH | /api/v1/admin/tenants/:id/plan | Manually change a tenant's plan + view limit |
+| GET | /api/v1/admin/stats | Platform-wide totals: tenants, sites, campaigns |
+
 ---
 
 ## 8. Snippet (Client Runtime)
@@ -687,17 +694,40 @@ On `wp_footer` action: echoes the `<script>` inline stub with the stored public 
 
 ## 12. Auth & Multi-Tenancy
 
+### Account tiers
+
+| Account | Email | Access level |
+|---|---|---|
+| **Super-admin** | `dwain3991@gmail.com` | God mode — admin console, unlimited plan, all tenants visible |
+| **Novatise agency** | `*@novatise.com` | Unlimited agency plan (2M views), NO admin console access |
+| **Regular user** | any other email | Normal plan-gated access |
+
+`isAdmin` (admin console gate) and `isUnlimited` (plan limits bypass) are **separate flags** in `usePlan.ts`. Novatise users get `isUnlimited = true` but `isAdmin = false`.
+
+### Novatise shared org
+All `@novatise.com` emails share a single tenant keyed `org_novatise` (name: "Novatise", plan: agency). On first login without a Clerk org, `tenant-context.ts` routes them to this shared tenant instead of creating individual personal tenants. The org is auto-created if it doesn't exist.
+
 ### Clerk Organisation = Tenant
-Every Clerk Organisation maps 1:1 to a `tenants` table row. The `clerkOrgId` is the foreign key.
+Every Clerk Organisation maps 1:1 to a `tenants` table row. The `clerkOrgId` is the foreign key.  
+Personal accounts (no Clerk org) get an auto-provisioned tenant keyed `personal_{clerkUserId}`.  
+Exception: `@novatise.com` emails → shared `org_novatise` tenant (see above).
 
 ### JWT Flow
 1. Browser → Clerk session → `getToken()` returns a short-lived JWT
 2. Dashboard sends `Authorization: Bearer {jwt}` to API
 3. `tenant-context.ts` preHandler decodes JWT via `@clerk/fastify` `getAuth(request)`
-4. Looks up tenant from `auth.orgId` (Clerk org ID)
+4. Looks up tenant from `auth.orgId` (Clerk org ID), or provisions personal/Novatise tenant
 5. Looks up user from `auth.userId`
 6. Looks up membership + role
 7. Sets `request.tenantId`, `request.userId`, `request.memberRole` on every request
+
+### User deletion sync
+When a user is deleted in the Clerk dashboard, the `user.deleted` webhook fires and:
+1. Soft-deletes their personal tenant (sets `deleted_at`) — removes them from admin panel
+2. Removes all `tenant_members` entries
+3. Hard-deletes the user row (no `deleted_at` on users table)
+
+> ⚠️ Requires `user.deleted` enabled in the Clerk webhook subscription settings.
 
 ### Dev Bypass (non-production only)
 If `NODE_ENV !== 'production'` and no Clerk auth is present, the preHandler creates/reuses a demo tenant (`org_demo_12345`) and sets tenant context automatically. This lets you test locally without a Clerk account.
@@ -768,27 +798,48 @@ All registered automatically during OAuth. All respond 200 immediately and perfo
 
 ### Pipeline Steps
 ```
-push / PR to main
-  ├── Install (pnpm install --frozen-lockfile)
-  ├── Typecheck (tsc --noEmit for all 4 packages)
-  ├── Lint (ESLint flat config)
-  ├── Build snippet (node build.mjs)
-  ├── Size check (snippet ≤10 KB gzipped)
-  ├── Unit tests (vitest)
-  └── on main only:
-      ├── Deploy API → Render (render deploy hook)
-      ├── Deploy Worker → Cloudflare (wrangler deploy)
-      └── Deploy Dashboard → Cloudflare Pages (pages:deploy)
+push to dev
+  ├── Lint + Typecheck + Unit Tests
+  ├── Snippet size check (≤10 KB gzipped)
+  ├── No history.*/popstate check
+  ├── Deploy API → Render staging (RENDER_STAGING_DEPLOY_HOOK_URL)
+  └── Deploy Dashboard → Cloudflare Pages (branch=dev → staging.scrollpop.online)
+
+push / PR merge to main
+  ├── Lint + Typecheck + Unit Tests
+  ├── Snippet size check (≤10 KB gzipped)
+  ├── No history.*/popstate check
+  ├── Deploy API → Render production (RENDER_DEPLOY_HOOK_URL)
+  │     ⚠️ Render deploys from dwain-coder/Scroll-pop — sync manually after merge (see CONTRIBUTING §5b)
+  ├── Deploy Worker → Cloudflare (wrangler deploy)
+  └── Deploy Dashboard → Cloudflare Pages (branch=main → dashboard.scrollpop.online)
 ```
 
-### Environment Secrets (GitHub Actions)
+### Environment Secrets (GitHub Actions — Dw-Dwain/Scroll-pop)
 ```
-RENDER_DEPLOY_HOOK_URL
-CLOUDFLARE_API_TOKEN
+RENDER_DEPLOY_HOOK_URL            Render production deploy hook
+RENDER_STAGING_DEPLOY_HOOK_URL    Render staging deploy hook
+CLOUDFLARE_API_TOKEN              Worker deploy + KV purge
 CLOUDFLARE_ACCOUNT_ID
-VITE_API_URL                    (for Pages build)
-VITE_CLERK_PUBLISHABLE_KEY      (for Pages build)
+VITE_API_URL                      Production API URL (baked into dashboard build)
+VITE_API_URL_STAGING              Staging API URL (baked into staging dashboard build)
+VITE_CLERK_PUBLISHABLE_KEY        Same key for both envs
+VITE_POSTHOG_KEY
+VITE_STRIPE_PUBLISHABLE_KEY
 ```
+
+### Two-repo deploy split
+| Repo | Owner | CI deploys |
+|---|---|---|
+| `Dw-Dwain/Scroll-pop` | Dw-Dwain | Cloudflare Worker + Cloudflare Pages dashboard |
+| `dwain-coder/Scroll-pop` | dwain-coder | Render API (connected directly to Render) |
+
+After every `main` merge on `Dw-Dwain`, sync `dwain-coder` so Render picks up the new API code:
+```bash
+git checkout main && git pull
+git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" main --force
+```
+`allow_force_pushes` is enabled on `dwain-coder/Scroll-pop` so no branch-protection dance is needed.
 
 ---
 
@@ -990,9 +1041,20 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   Cloudflare secrets (Worker deploy). CI skips Worker deploy silently on the repo without the token.
 
 #### Auth & Accounts
+- **Super-admin isolation**: `dwain3991@gmail.com` is the sole platform super-admin with
+  access to the Admin Console. `isAdmin` (console gate) and `isUnlimited` (plan bypass) are
+  separate flags — Novatise users get unlimited plan limits without admin console access.
+- **Novatise shared org**: all `@novatise.com` emails auto-route to a single shared tenant
+  (`org_novatise`, agency plan, 2M views) instead of each getting a separate personal tenant.
+- **Admin Console**: super-admin view showing all tenants, plan badges, MRR (excludes
+  super-admin's own tenant from revenue calc). "Super Admin" badge correctly shown on
+  the admin row (was dead code before — fixed to detect by email not role field).
+- **`user.deleted` webhook**: deleting a user in Clerk now soft-deletes their personal
+  tenant, removes org memberships, and hard-deletes the user row — propagates immediately
+  to the admin panel. Requires `user.deleted` enabled in Clerk webhook settings.
 - Auth via Clerk — **personal-account model**: each signed-in user gets an auto-provisioned
   tenant (`personal_<clerkUserId>`) on first request; org-based multi-tenant path preserved
-  in `tenant-context.ts` for later but no org-creation UI exists yet
+  for later; Novatise shared org is the first use of the org path.
 - Email/password sign-up (real Clerk flow: create → email verification code → active session)
   plus Google/GitHub OAuth in both SignIn and SignUp pages
 - Profile name saved to Clerk via `user.update()`; password/2FA routed to Clerk's own
@@ -1039,9 +1101,17 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   the site list.
 - `sendBeacon` / `fetch({keepalive:true})` for all event beaconing
 
-#### Design & UI
+#### CI/CD & Deploy
 - All in-code infra references repointed from placeholder `scrollpop.io` to owned `scrollpop.online`
-- CI/CD pipeline (GitHub Actions) — Worker deploy gracefully skips on repos without the CF token
+- **Dashboard deploy wired into CI** (`deploy-dashboard` + `deploy-dashboard-staging` jobs
+  added to `ci.yml`). Previously only API (Render) and Worker (Cloudflare) deployed from CI —
+  the dashboard was never deploying automatically. Now: `main` push → `dashboard.scrollpop.online`;
+  `dev` push → `staging.scrollpop.online` (uses `VITE_API_URL_STAGING`).
+- Worker deploy gracefully skips on repos without the CF token (two-repo split)
+- `dwain-coder/Scroll-pop` `allow_force_pushes` enabled — future syncs don't need branch
+  protection toggle dance
+
+#### Design & UI
 - Multi-page docs, Terms, Privacy, Status, License pages
 - Profile password/2FA/sign-in methods route to Clerk's real account-security dialog
 - Settings/Profile actions that have no backend show honest "not available" messaging
@@ -1374,6 +1444,41 @@ A record of every step taken to go from code to live production. Useful if you e
 - [ ] Sentry DSN → call `Sentry.init()` in API + Dashboard
 - [ ] PostHog → call `posthog.init()` in Dashboard
 - [ ] `api.scrollpop.online` custom domain (Cloudflare DNS → Render)
+
+---
+
+## Session Log — June 1, 2026
+
+### Account hierarchy & admin isolation
+**Problem:** `@novatise.com` emails were treated as super-admins — they could access the Admin Console API routes and the admin panel UI. Multiple `@novatise.com` logins each got their own personal tenant instead of sharing one org.
+
+**Fixed in:**
+- `apps/api/src/routes/admin.ts` — `isAdminUser()` now exact-email-only (`dwain3991@gmail.com`). Domain wildcard removed.
+- `apps/api/src/plugins/tenant-context.ts` — Added `NOVATISE_ORG_KEY = 'org_novatise'`. Personal-account path now routes `@novatise.com` emails to the shared Novatise tenant (agency plan, 2M views) instead of `personal_{clerkUserId}`.
+- `apps/dashboard/src/hooks/usePlan.ts` — Split `isAdmin` (super-admin only) from `isUnlimited` (super-admin + novatise.com). Plan limits, `hasFeature`, `withinLimit`, `meetsMinPlan` all use `isUnlimited`. `isAdmin` now purely gates the Admin Console.
+- `apps/dashboard/src/pages/AdminPanel.tsx` — Badge detection fixed: was `u.role === 'admin'` (dead code, role is always `'owner'`), now `u.email === ADMIN_EMAIL`. Shows "Super Admin" + shield icon. MRR/paid counts exclude the super-admin's own tenant.
+
+### user.deleted webhook
+**Problem:** Deleting a user in the Clerk dashboard had no effect on the ScrollPop DB — they still appeared in the admin panel.
+
+**Fixed in:** `apps/api/src/routes/webhooks.ts` — Added `user.deleted` case:
+1. Soft-deletes `personal_{clerkUserId}` tenant
+2. Deletes all `tenant_members` entries
+3. Hard-deletes user row (no `deleted_at` on users table)
+
+> ⚠️ Enable `user.deleted` in Clerk Dashboard → Webhooks → your endpoint → subscribed events.
+
+### Dashboard CI deploy (was missing entirely)
+**Problem:** The `ci.yml` had no deploy step for the dashboard — only API (Render) and Worker (Cloudflare) were wired. Every push was deploying the backend but leaving the frontend static.
+
+**Fixed in:** `.github/workflows/ci.yml` — Added two jobs:
+- `deploy-dashboard` (on `main`) — builds `apps/dashboard`, deploys to Cloudflare Pages `branch=main`
+- `deploy-dashboard-staging` (on `dev`) — same but uses `VITE_API_URL_STAGING`, deploys `branch=dev`
+
+New GitHub secret required: `VITE_API_URL_STAGING` = `https://scroll-pop-staging.onrender.com`
+
+### dwain-coder sync
+Synced `dwain-coder/Scroll-pop` `main` with all changes via force push (repos had diverged at merge-commit topology). Enabled `allow_force_pushes` on `dwain-coder/Scroll-pop` at repo level so future syncs don't require toggling branch protection.
 
 ---
 
