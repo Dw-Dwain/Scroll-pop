@@ -27,6 +27,15 @@
     "typescript": "^5.5.0"
   },
   "pnpm": {
-    "ignoredBuiltDependencies": ["better-sqlite3"]
+    "ignoredBuiltDependencies": ["better-sqlite3"],
+    "onlyBuiltDependencies": [
+      "core-js",
+      "protobufjs",
+      "@clerk/shared",
+      "esbuild",
+      "workerd",
+      "sharp",
+      "electron"
+    ]
   }
 }
