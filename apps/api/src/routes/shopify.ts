@@ -23,8 +23,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import { db } from '../db/client.js';
-import { shopifyInstallations, sites, tenants } from '../db/schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { shopifyInstallations, sites, tenants, events } from '../db/schema.js';
+import { eq, and, isNull, gte, desc } from 'drizzle-orm';
 import { redis } from '../index.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -545,6 +545,91 @@ export const shopifyWebhookRoutes: FastifyPluginAsync = async (fastify) => {
     request.log.info({ shop: body.shop_domain, customerId: body.customer?.id }, '[GDPR] customers/data_request received');
 
     // ScrollPop stores anonymous visitor IDs only — no personal customer data.
+    return reply.code(200).send({ received: true });
+  });
+
+  // ── POST /webhooks/shopify/orders/paid — Revenue attribution ─────────────
+  // Receives Shopify order.paid events and attributes revenue to the last
+  // popup interaction for that store (last-touch model, 24h attribution window).
+  // To receive this webhook: register topic "orders/paid" during OAuth install.
+  fastify.post('/shopify/orders/paid', async (request, reply) => {
+    if (!verifyShopifyWebhook(request, reply)) return;
+
+    const body = request.body as {
+      id?: number;
+      order_number?: number;
+      total_price?: string;
+      currency?: string;
+      myshopify_domain?: string;
+    };
+
+    const shop = body.myshopify_domain ?? '';
+    const shopifyOrderId = String(body.id ?? '');
+    const totalPrice = parseFloat(body.total_price ?? '0');
+    const revenueCents = Math.round(totalPrice * 100);
+
+    if (!shop || !shopifyOrderId || revenueCents <= 0) {
+      return reply.code(200).send({ received: true });
+    }
+
+    try {
+      // Look up the site for this Shopify store
+      const installation = await db.query.shopifyInstallations.findFirst({
+        where: and(
+          eq(shopifyInstallations.shop, shop),
+          isNull(shopifyInstallations.uninstalledAt)
+        ),
+        columns: { siteId: true, tenantId: true },
+      });
+
+      if (!installation?.siteId || !installation.tenantId) {
+        request.log.info({ shop }, 'orders/paid: no active installation found');
+        return reply.code(200).send({ received: true });
+      }
+
+      // Find the most recent popup interaction for this site in the last 24 hours.
+      // This is a last-touch attribution model: the last campaign the visitor
+      // interacted with gets credit for the purchase.
+      const windowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const lastInteraction = await db.query.events.findFirst({
+        where: and(
+          eq(events.tenantId, installation.tenantId),
+          eq(events.siteId, installation.siteId),
+          gte(events.ts, windowStart)
+        ),
+        orderBy: [desc(events.ts)],
+        columns: { campaignId: true, visitorId: true, sessionId: true, trafficSource: true },
+      });
+
+      if (!lastInteraction) {
+        request.log.info({ shop }, 'orders/paid: no recent popup interaction found for attribution');
+        return reply.code(200).send({ received: true });
+      }
+
+      // Write a purchase_completed event attributed to that campaign
+      await db.insert(events).values({
+        tenantId: installation.tenantId,
+        siteId: installation.siteId,
+        campaignId: lastInteraction.campaignId,
+        eventType: 'purchase_completed',
+        visitorId: lastInteraction.visitorId,
+        sessionId: lastInteraction.sessionId,
+        shopifyOrderId,
+        revenueCents,
+        trafficSource: lastInteraction.trafficSource,
+        device: 'unknown',
+        pageUrl: `https://${shop}/`,
+        referrer: '',
+        ts: new Date(),
+      });
+
+      request.log.info({ shop, shopifyOrderId, revenueCents, campaignId: lastInteraction.campaignId },
+        'orders/paid: revenue attributed to campaign');
+    } catch (err) {
+      request.log.error({ err }, 'orders/paid: attribution failed');
+    }
+
     return reply.code(200).send({ received: true });
   });
 };

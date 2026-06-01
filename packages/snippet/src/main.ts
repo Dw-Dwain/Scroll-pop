@@ -893,10 +893,10 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   // dismiss() — close the popup and minimise to the teaser badge.
   // Beacons the 'dismiss' event exactly once.
   let dismissed = false;
-  const dismiss = () => {
+  const dismiss = (isClose = false) => {
     if (dismissed) return;
     dismissed = true;
-    beaconEvent(campaign, 'dismiss', slot?.id, { displayDuration: getDisplayDuration() });
+    beaconEvent(campaign, isClose ? 'popup_close' : 'dismiss', slot?.id, { displayDuration: getDisplayDuration() });
     if (popupCard) popupCard.style.display = 'none';
     if (overlay)   overlay.style.display = 'none';
     if (teaser)    teaser.style.display = 'flex';
@@ -910,7 +910,11 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
 
   // Switch to success congratulations screen state
   const transitionToSuccess = (email: string) => {
-    // Record conversion event with email input!
+    // Beacon email_capture (lead collected) + conversion (outcome)
+    if (email && email !== 'anonymous@scrollpop.online') {
+      beaconEvent(campaign, 'email_capture', slot?.id, { hasEmail: true });
+    }
+    beaconEvent(campaign, 'popup_submit', slot?.id, { displayDuration: getDisplayDuration() });
     beaconEvent(campaign, 'conversion', slot?.id, { email });
 
     const couponTxt = slot?.coupon || 'WELCOME50';
@@ -963,14 +967,15 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
       beaconEvent(campaign, 'click', slot?.id, { destinationUrl: closeUrl, displayDuration: getDisplayDuration() });
       // No dismiss yet — user sees popup again when they return
     } else {
-      // Second click (or first click with no URL): dismiss + reset frequency cap
-      dismiss();
+      // Second click (or first click with no URL): close (intentional X press)
+      dismiss(true);
       sessionStorage.removeItem(`_sp_session_${campaign.id}`);
       try { localStorage.removeItem(`_sp_fr_${campaign.id}`); } catch {}
     }
   });
-  shadow.getElementById('dismiss-text')?.addEventListener('click', dismiss);
-  shadow.getElementById('overlay')?.addEventListener('click', dismiss);
+  // Overlay/dismiss-text clicks are passive dismissals, not intentional close
+  shadow.getElementById('dismiss-text')?.addEventListener('click', () => dismiss(false));
+  shadow.getElementById('overlay')?.addEventListener('click', () => dismiss(false));
   shadow.getElementById('teaser-badge')?.addEventListener('click', reopen);
 
   // Wire up CTA click → beacon then navigate
@@ -1191,31 +1196,57 @@ function pickWeightedSlot(slots: AffiliateSlot[]): AffiliateSlot | null {
 
 // ─── Event Beaconing ──────────────────────────────────────────────────────────
 
+type BeaconEventType =
+  | 'impression' | 'view' | 'click' | 'dismiss' | 'conversion'
+  | 'popup_close' | 'popup_submit' | 'popup_expand' | 'popup_minimize'
+  | 'email_capture' | 'sms_capture' | 'discount_redeemed'
+  | 'checkout_started' | 'purchase_completed' | 'trigger_fired';
+
+function getScrollDepthPct(): number {
+  const scrolled = window.scrollY;
+  const total = Math.max(document.body.scrollHeight - window.innerHeight, 1);
+  return Math.min(100, Math.round((scrolled / total) * 100));
+}
+
+function getTrafficSource(): string {
+  const params = new URLSearchParams(window.location.search);
+  const utmSource = params.get('utm_source');
+  if (utmSource) return utmSource.slice(0, 100);
+  if (document.referrer) {
+    try {
+      const host = new URL(document.referrer).hostname.replace(/^www\./, '');
+      return host.slice(0, 100);
+    } catch { /* ignore */ }
+  }
+  return 'direct';
+}
+
 function beaconEvent(
   campaign: CampaignConfig,
-  eventType: 'impression' | 'view' | 'click' | 'dismiss' | 'conversion',
+  eventType: BeaconEventType,
   affiliateSlotId?: string,
   extraMeta?: Record<string, unknown>
 ): void {
   const payload = {
     events: [{
-      campaignId: campaign.id,
-      siteId: activeSiteId,
+      campaignId:     campaign.id,
+      siteId:         activeSiteId,
       eventType,
       affiliateSlotId: affiliateSlotId ?? null,
-      visitorId: getVisitorId(),
-      sessionId: getSessionId(),
-      device: getDevice(),
-      pageUrl: window.location.href,
-      referrer: document.referrer,
-      meta: extraMeta ?? null,
+      visitorId:      getVisitorId(),
+      sessionId:      getSessionId(),
+      device:         getDevice(),
+      pageUrl:        window.location.href,
+      referrer:       document.referrer,
+      scrollDepthPct: getScrollDepthPct(),
+      trafficSource:  getTrafficSource(),
+      meta:           extraMeta ?? null,
     }],
   };
 
   const url = `${EDGE_URL}/e`;
   const body = JSON.stringify(payload);
 
-  // Use sendBeacon when available (fires even if page unloads)
   if (navigator.sendBeacon) {
     navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
   } else {

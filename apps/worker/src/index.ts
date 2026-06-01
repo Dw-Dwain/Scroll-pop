@@ -155,6 +155,12 @@ interface RawEvent {
   pageUrl?: string;
   referrer?: string;
   metadata?: Record<string, unknown>;
+  // Phase 2: richer analytics fields
+  scrollDepthPct?: number;
+  trafficSource?: string;
+  abVariantId?: string;
+  shopifyOrderId?: string;
+  revenueCents?: number;
 }
 
 async function handleIngest(
