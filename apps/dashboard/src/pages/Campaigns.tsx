@@ -104,6 +104,7 @@ function CampaignThumbnail({ config, status, kind }: { config: any; status: stri
         position: 'relative',
         transform: `scale(${scale})`,
         transformOrigin: 'center center',
+        flexShrink: 0,
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
         overflow: 'hidden',
         zIndex: 1,

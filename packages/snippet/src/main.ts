@@ -1166,7 +1166,8 @@ function beaconEvent(
   const body = JSON.stringify(payload);
 
   if (navigator.sendBeacon) {
-    navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+    // MUST use text/plain for sendBeacon to avoid CORS preflight issues that cause silent failure
+    navigator.sendBeacon(url, new Blob([body], { type: 'text/plain' }));
   } else {
     fetch(url, {
       method: 'POST',
