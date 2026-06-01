@@ -47,5 +47,5 @@ export interface FAQItem {
   id: string;
   question: string;
   answer: string;
-  category: 'product' | 'wordpress' | 'shopify' | 'performance';
+  category: 'product' | 'wordpress' | 'shopify' | 'performance' | 'billing';
 }
