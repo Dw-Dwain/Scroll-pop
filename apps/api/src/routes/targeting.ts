@@ -5,7 +5,7 @@ import { targetingRules, campaigns } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
 const CreateTargetingBody = z.object({
-  kind: z.enum(['url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor']),
+  kind: z.enum(['url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor', 'geo', 'session_page_views', 'utm', 'ab_test']),
   operator: z.enum(['include', 'exclude']).default('include'),
   value: z.record(z.unknown()),
 });

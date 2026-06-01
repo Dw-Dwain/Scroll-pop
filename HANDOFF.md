@@ -24,6 +24,7 @@ No Tailwind dark: classes, no glassmorphism, no backdrop-filter, no gradient blo
 - **Migration Rollbacks**: Added a missing `0004_analytics_index.down.sql` file to ensure all migrations are reversible as per the non-negotiable architectural rules.
 - **Snippet Size CI Checks**: The 10KB gzip CI check issue in `CONTRIBUTING.md` was resolved. It is now a hard CI gate without naming character issues. 
 - **Type Checking**: Fixed lingering `PUBLISHABLE_KEY` and literal typing typescript errors in `CampaignDesign.tsx` and `main.tsx`.
+- **Removed Staging Environment**: Purged the staging environment and its configurations. All related legacy config and docs were removed to simplify the pipeline.
 
 ### Campaign Trigger State Hydration (The "Triggers Not Saving" Bug Fix)
 - **Identified The Bug**: When clicking "Edit" on a campaign, `CampaignDesign.tsx` loaded the design JSON but never fetched the remote triggers, targeting, and frequency configurations. It defaulted to local `prefs` and overwrote the backend state upon saving.
@@ -33,6 +34,10 @@ No Tailwind dark: classes, no glassmorphism, no backdrop-filter, no gradient blo
   - Added robust parsing inside `bootstrapCampaign` to transform the backend arrays into the `campaign.triggers` sidebar UI state (e.g. mapping `{ type: 'exit_intent_mouse' }` to `exitIntent = true`).
   - The UI now accurately renders your previously saved triggers on edit, and the `handleSave` function persists these successfully.
 
+### Advanced Targeting & Trigger Expansion
+- **Implemented Missing Schema Values**: Added support for advanced targeting types (`geo`, `session_page_views`, `utm`, `ab_test`) to the Postgres database via a new migration (`0005_advanced_targeting`). Added `interval_days` to frequency rules for precise capping (e.g., "Every 7d").
+- **API & UI Serialization**: Updated `CampaignDesign.tsx` to properly hydrate and save all sidebar inputs to the backend. Updated `frequency.ts` and `targeting.ts` routes to accept these values.
+- **Snippet Execution**: Upgraded the Edge Snippet (`packages/snippet/src/main.ts`) to actively enforce `utm` matching, `session_page_views` (via sessionStorage), and `ab_test` splits (via stable localStorage rollouts).
 ---
 
 ## Next Steps for Claude Code

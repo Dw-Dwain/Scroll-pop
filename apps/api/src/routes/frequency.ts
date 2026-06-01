@@ -6,6 +6,7 @@ import { campaigns, frequencyRules } from '../db/schema.js';
 
 const UpsertFrequencyBody = z.object({
   frequency: z.enum(['once_per_session', 'once_per_day', 'once_per_visitor', 'always']),
+  intervalDays: z.number().int().min(1).optional(),
 });
 
 export const frequencyRoutes: FastifyPluginAsync = async (fastify) => {
@@ -47,6 +48,7 @@ export const frequencyRoutes: FastifyPluginAsync = async (fastify) => {
           campaignId: request.params.id,
           tenantId: request.tenantId,
           frequency: body.frequency,
+          intervalDays: body.intervalDays ?? null,
         })
         .returning();
 
@@ -55,7 +57,7 @@ export const frequencyRoutes: FastifyPluginAsync = async (fastify) => {
 
     const [updated] = await db
       .update(frequencyRules)
-      .set({ frequency: body.frequency })
+      .set({ frequency: body.frequency, intervalDays: body.intervalDays ?? null })
       .where(and(eq(frequencyRules.id, existing.id), eq(frequencyRules.tenantId, request.tenantId)))
       .returning();
 

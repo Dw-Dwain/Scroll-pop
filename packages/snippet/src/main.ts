@@ -34,7 +34,7 @@ interface TriggerConfig {
 
 interface TargetingRule {
   id: string;
-  kind: 'url_exact' | 'url_contains' | 'url_regex' | 'device' | 'returning_visitor';
+  kind: 'url_exact' | 'url_contains' | 'url_regex' | 'device' | 'returning_visitor' | 'geo' | 'session_page_views' | 'utm' | 'ab_test';
   operator: 'include' | 'exclude';
   value: Record<string, unknown>;
 }
@@ -255,6 +255,41 @@ function evaluateRule(rule: TargetingRule): boolean {
       const isReturning = !!localStorage.getItem('_sp_visited');
       localStorage.setItem('_sp_visited', '1');
       return isReturning === (value['is_returning'] as boolean);
+    }
+
+    case 'geo':
+      // Geo-targeting is typically handled at the edge/Cloudflare level by
+      // discarding the campaign before it even reaches the browser.
+      return true;
+
+    case 'session_page_views': {
+      let count = parseInt(sessionStorage.getItem('_sp_page_count') || '0', 10);
+      if (!window.sessionStorage.getItem('_sp_page_counted')) {
+        count += 1;
+        sessionStorage.setItem('_sp_page_count', count.toString());
+        sessionStorage.setItem('_sp_page_counted', '1');
+      }
+      const targetCount = (value['count'] as number) || 0;
+      return count >= targetCount;
+    }
+
+    case 'utm': {
+      const source = (value['source'] as string) || '';
+      return window.location.search.toLowerCase().includes(source.toLowerCase());
+    }
+
+    case 'ab_test': {
+      const percent = (value['percent'] as number) || 100;
+      if (percent >= 100) return true;
+      if (percent <= 0) return false;
+      // Store rollout assignment to keep it stable per visitor
+      const abKey = `_sp_ab_${rule.id}`;
+      let assigned = localStorage.getItem(abKey);
+      if (!assigned) {
+        assigned = (Math.random() * 100 <= percent) ? '1' : '0';
+        localStorage.setItem(abKey, assigned);
+      }
+      return assigned === '1';
     }
 
     default:

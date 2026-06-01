@@ -1,6 +1,6 @@
 {
-  "id": "33a42a1d-f074-45d9-8018-376cc74b7662",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "1a7d8594-5f07-486c-bc61-f7f95473e0e8",
+  "prevId": "33a42a1d-f074-45d9-8018-376cc74b7662",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -349,6 +349,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'once_per_session'"
+        },
+        "interval_days": {
+          "name": "interval_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1135,7 +1141,11 @@
         "url_contains",
         "url_regex",
         "device",
-        "returning_visitor"
+        "returning_visitor",
+        "geo",
+        "session_page_views",
+        "utm",
+        "ab_test"
       ]
     },
     "public.trigger_type": {

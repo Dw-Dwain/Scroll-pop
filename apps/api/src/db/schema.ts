@@ -42,6 +42,7 @@ export const triggerTypeEnum = pgEnum('trigger_type', [
 
 export const targetingKindEnum = pgEnum('targeting_kind', [
   'url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor',
+  'geo', 'session_page_views', 'utm', 'ab_test',
 ]);
 
 export const operatorEnum = pgEnum('operator', ['include', 'exclude']);
@@ -269,6 +270,7 @@ export const frequencyRules = pgTable('frequency_rules', {
     .notNull()
     .references(() => tenants.id, { onDelete: 'cascade' }),
   frequency: frequencyEnum('frequency').notNull().default('once_per_session'),
+  intervalDays: integer('interval_days'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),

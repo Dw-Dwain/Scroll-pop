@@ -53,20 +53,32 @@ function bootstrapCampaign(
   let deviceTargeting = 'all';
   let newVisitorOnly = false;
   let pageTargeting = '*';
+  let geoTargeting = 'All Countries';
+  let sessionPageCount = 0;
+  let utmSource = '';
+  let abTestPercent = 100;
 
   if (targetingData.length > 0) {
     targetingData.forEach((t) => {
       if (t.kind === 'device') deviceTargeting = t.value?.device || 'all';
       if (t.kind === 'returning_visitor') newVisitorOnly = t.value?.returning === false;
       if (t.kind === 'url_contains') pageTargeting = t.value?.pattern || '*';
+      if (t.kind === 'geo') geoTargeting = t.value?.country || 'All Countries';
+      if (t.kind === 'session_page_views') sessionPageCount = t.value?.count || 0;
+      if (t.kind === 'utm') utmSource = t.value?.source || '';
+      if (t.kind === 'ab_test') abTestPercent = t.value?.percent || 100;
     });
   } else {
     deviceTargeting = config.steps?.main?.triggers?.deviceTargeting ?? 'all';
     newVisitorOnly = config.steps?.main?.triggers?.newVisitorOnly ?? false;
     pageTargeting = config.steps?.main?.triggers?.pageTargeting ?? '*';
+    geoTargeting = config.steps?.main?.triggers?.geoTargeting ?? 'All Countries';
+    sessionPageCount = config.steps?.main?.triggers?.sessionPageCount ?? 0;
+    utmSource = config.steps?.main?.triggers?.utmSource ?? '';
+    abTestPercent = config.steps?.main?.triggers?.abTestPercent ?? 100;
   }
 
-  const frequencyCapDays = frequencyData?.frequency ? (frequencyData.frequency === 'always' ? 0 : 7) : (config.steps?.main?.triggers?.frequencyCapDays ?? 7);
+  const frequencyCapDays = frequencyData?.frequency ? (frequencyData.frequency === 'always' ? 0 : (frequencyData.intervalDays || 7)) : (config.steps?.main?.triggers?.frequencyCapDays ?? 7);
 
   if (config.steps) {
     return {
@@ -82,12 +94,12 @@ function bootstrapCampaign(
         timeDelaySeconds,
         pageTargeting,
         deviceTargeting: deviceTargeting as 'all' | 'desktop' | 'mobile' | 'tablet',
-        geoTargeting: config.steps.main?.triggers?.geoTargeting ?? 'All Countries',
+        geoTargeting,
         frequencyCapDays,
         newVisitorOnly,
-        sessionPageCount: config.steps.main?.triggers?.sessionPageCount ?? 0,
-        utmSource: config.steps.main?.triggers?.utmSource ?? '',
-        abTestPercent: config.steps.main?.triggers?.abTestPercent ?? 100,
+        sessionPageCount,
+        utmSource,
+        abTestPercent,
       },
       conversions: 0,
       views: 0,
@@ -660,6 +672,17 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       if (t.deviceTargeting && t.deviceTargeting !== 'all') targetingList.push({ kind: 'device', operator: 'include', value: { device: t.deviceTargeting } });
       if (t.newVisitorOnly) targetingList.push({ kind: 'returning_visitor', operator: 'include', value: { returning: false } });
       if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') targetingList.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
+      if (t.geoTargeting && t.geoTargeting !== 'All Countries') targetingList.push({ kind: 'geo', operator: 'include', value: { country: t.geoTargeting } });
+      if (t.sessionPageCount > 0) targetingList.push({ kind: 'session_page_views', operator: 'include', value: { count: t.sessionPageCount } });
+      if (t.utmSource && t.utmSource.trim() !== '') targetingList.push({ kind: 'utm', operator: 'include', value: { source: t.utmSource.trim() } });
+      if (t.abTestPercent < 100) targetingList.push({ kind: 'ab_test', operator: 'include', value: { percent: t.abTestPercent } });
+    }
+
+    let freqMode = 'always';
+    let freqInterval = 0;
+    if (t?.frequencyCapDays && t.frequencyCapDays > 0) {
+      freqMode = 'once_per_day'; // You could also use once_per_visitor with an interval
+      freqInterval = t.frequencyCapDays;
     }
 
     // Save design
@@ -670,7 +693,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
           // After design succeeds, save triggers
           try {
             await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'put', values: triggersList });
-            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency: t?.frequency ?? 'once_per_session' } });
+            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency: freqMode, intervalDays: freqInterval } });
             await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'put', values: targetingList });
           } catch (err) {
             console.error('Failed to save triggers/targeting:', err);
