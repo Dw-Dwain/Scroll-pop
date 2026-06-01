@@ -34,8 +34,8 @@
     {
       "name": "ScrollPop Marketing Site",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "react-example", "dev", "--", "--port", "4445"],
-      "port": 4445
+      "runtimeArgs": ["--filter", "react-example", "dev"],
+      "port": 3000
     }
   ]
 }
