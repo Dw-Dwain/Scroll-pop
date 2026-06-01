@@ -236,12 +236,13 @@ scrollpop/
 
 ## 5. Infrastructure & Services
 
-### Production URLs (Live as of May 30, 2026)
+### Production URLs (Live as of June 2026)
 | Service | URL | Host |
 |---|---|---|
+| **Marketing site** | **https://scrollpop.online** | Cloudflare Pages (`scrollpop-site` project) |
 | API | https://scroll-pop.onrender.com | Render.com **Pro ($25/mo)** — always warm |
-| Dashboard | https://dashboard.scrollpop.online | Cloudflare Pages |
-| Dashboard (CF subdomain) | https://scrollpop-dashboard.pages.dev | Cloudflare Pages (alias) |
+| Dashboard (app) | https://dashboard.scrollpop.online | Cloudflare Pages (`scrollpop-dashboard` project) |
+| Dashboard (CF alias) | https://scrollpop-dashboard.pages.dev | Cloudflare Pages (auto alias) |
 | Snippet CDN | **https://cdn.scrollpop.online** | Cloudflare Worker custom domain ✅ live |
 | Edge / Config / Events | **https://edge.scrollpop.online** | Cloudflare Worker custom domain ✅ live |
 | Neon DB | ep-autumn-frost-aoudjxlw.c-2.ap-southeast-1.aws.neon.tech | Neon (ap-southeast-1) |
@@ -251,14 +252,30 @@ scrollpop/
 ### Staging URLs (dev branch — isolated from production)
 | Service | URL | Host |
 |---|---|---|
-| Staging API | https://scroll-pop-staging.onrender.com | Render.com Free (cold starts OK for staging) |
-| Staging Dashboard | https://staging.scrollpop.online | Cloudflare Pages (Preview → custom domain) |
+| Staging API | https://scroll-pop-staging.onrender.com | Render.com Free |
+| Staging Dashboard | https://staging.scrollpop.online | Cloudflare Pages (`scrollpop-staging` project) |
 | Staging DB | Neon `dev` branch (`br-flat-leaf-ao5st8va`) | Neon — schema-only fork of production |
 
 **Staging deploy flow:** push to `dev` → CI checks pass → `deploy-staging` job triggers
 `RENDER_STAGING_DEPLOY_HOOK_URL` secret → staging API rebuilds from `dev` branch.
-CF Pages auto-rebuilds `dev.scrollpop-dashboard.pages.dev` on every `dev` push.
 Both point at the Neon dev branch — **zero risk to production data**.
+
+### Marketing site
+Source: `site-plan/` directory in the repo.
+Content files: `site-plan/src/components/` — one file per page.
+
+| File | Page |
+|---|---|
+| `HomeView.tsx` | Homepage (hero, features, how-it-works, testimonials, FAQ, CTA) |
+| `PricingView.tsx` | Pricing page (5 tiers, monthly/annual toggle) |
+| `WordPressShopifyGuide.tsx` | Install guide (WordPress / Shopify / HTML tabs) |
+| `TemplatesView.tsx` | Template gallery |
+| `ContactView.tsx` | Contact form |
+| `Header.tsx` | Navigation + announcement strip |
+| `Footer.tsx` | Footer links |
+
+To edit content: change the relevant TSX file on `dev`, push → Cloudflare Pages auto-rebuilds
+`scrollpop.online` within ~2 minutes. Preview locally at `http://localhost:3000` via `/run`.
 
 ### Domain
 | Domain | Registrar | DNS | Purpose |
