@@ -557,9 +557,14 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   const isSpinWheel = popupType === 'spinwheel' || design.headline?.toLowerCase().includes('spin') || campaignId.includes('spin');
   const isScratchCard = popupType === 'scratchcard' || design.headline?.toLowerCase().includes('scratch') || campaignId.includes('scratch');
 
+  const getStep = (id: string) => {
+    const s = (design as any).steps;
+    return Array.isArray(s) ? s.find((x: any) => x.id === id) : s?.[id];
+  };
+
   // Visual-builder element mode: render the main step's positioned elements
   // (matches the dashboard canvas) instead of the fixed flat-field layout.
-  const mainStep = Array.isArray((design as any).steps) ? (design as any).steps.find((s: any) => s.id === 'main') : (design as any).steps?.main;
+  const mainStep = getStep('main');
   const elementMode = !isSpinWheel && !isScratchCard && Array.isArray(mainStep?.elements) && mainStep.elements.length > 0;
   const hasCloseEl = elementMode && mainStep.elements.some((e: any) => e.type === 'close');
 
@@ -589,120 +594,64 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
 
   const htmlChunks: string[] = [];
 
+  const add = (...args: string[]) => htmlChunks.push(...args);
+
   // Build style tag
-  htmlChunks.push('<style>');
-  htmlChunks.push(':host { all: initial; font-family: system-ui, sans-serif; }');
-  if (design.overlayEnabled) {
-    htmlChunks.push('.overlay { position: fixed; inset: 0; z-index: 2147483646; background: rgba(0,0,0,');
-    htmlChunks.push(String(design.overlayOpacity ?? 0.5));
-    htmlChunks.push('); animation: sp-fade-in 0.2s ease; }');
-  }
-  htmlChunks.push('.popup { position: fixed; z-index: 2147483647; background: ');
-  htmlChunks.push(design.backgroundColor);
-  htmlChunks.push('; ');
-  if (design.backgroundImage) {
-    htmlChunks.push('background-image: url(');
-    htmlChunks.push(design.backgroundImage);
-    htmlChunks.push('); background-size: cover; background-position: center; ');
-  }
-  htmlChunks.push('color: ');
-  htmlChunks.push(design.textColor);
-  htmlChunks.push('; border-radius: ');
-  htmlChunks.push(String(design.borderRadius));
-  htmlChunks.push('px; box-shadow: ');
-  htmlChunks.push(getShadowCSS(design.boxShadow));
-  htmlChunks.push('; ');
-  if (design.boxShadow === 'glass') {
-    htmlChunks.push('backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); ');
-  }
-  htmlChunks.push('margin: ');
-  htmlChunks.push(design.margin ?? '0px');
-  htmlChunks.push('; width: ');
-  htmlChunks.push(width);
-  htmlChunks.push('; max-width: calc(100vw - 32px); ');
-  htmlChunks.push(positionStyles);
-  htmlChunks.push(' animation: ');
-  htmlChunks.push(getAnimation(design.animation));
-  htmlChunks.push('; overflow: hidden; }');
-  htmlChunks.push('.popup-inner { padding: ');
-  htmlChunks.push(design.padding ?? '24px');
-  htmlChunks.push('; display: flex; flex-direction: column; gap: ');
-  htmlChunks.push(design.gap ?? '12px');
-  htmlChunks.push('; }');
-  htmlChunks.push('.close-btn { position: absolute; ');
-  htmlChunks.push(design.closeButtonPosition === 'top-right' ? 'top: 12px; right: 12px;' : 'top: 12px; left: 12px;');
-  htmlChunks.push(' background: none; border: none; cursor: pointer; font-size: 18px; color: ');
-  htmlChunks.push(design.textColor);
-  htmlChunks.push('; opacity: 0.6; padding: 4px 8px; border-radius: 4px; z-index: 50; }');
-  htmlChunks.push('.close-btn:hover { opacity: 1; background: rgba(0,0,0,0.1); }');
-  htmlChunks.push('.headline { font-size: 20px; font-weight: 700; margin: 0; line-height: 1.3; }');
-  htmlChunks.push('.subheadline { font-size: 14px; opacity: 0.8; margin: 0; }');
-  htmlChunks.push('.body-text { font-size: 14px; margin: 0; line-height: 1.5; }');
-  htmlChunks.push('.product-image { width: 100%; border-radius: 8px; margin: 0; display: block; }');
-  
-  // Inputs & Email Capture Styles
-  htmlChunks.push('.email-input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; color: #1f2937; background: #ffffff; outline: none; }');
-  htmlChunks.push('.email-input:focus { border-color: ');
-  htmlChunks.push(design.accentColor);
-  htmlChunks.push('; }');
-
-  htmlChunks.push('.cta-btn { display: inline-block; width: 100%; text-align: center; border: none; cursor: pointer; background: ');
-  htmlChunks.push(design.accentColor);
-  htmlChunks.push('; color: #fff; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; text-decoration: none; box-sizing: border-box; transition: opacity 0.15s; }');
-  htmlChunks.push('.cta-btn:hover { opacity: 0.9; }');
-  htmlChunks.push('.cta-link { color: ');
-  htmlChunks.push(design.accentColor);
-  htmlChunks.push('; text-decoration: underline; font-size: 14px; cursor: pointer; }');
-  htmlChunks.push('.dismiss-text { text-align: center; margin-top: 4px; font-size: 12px; opacity: 0.6; cursor: pointer; }');
-  htmlChunks.push('.dismiss-text:hover { opacity: 1; }');
-  htmlChunks.push('.powered-by { text-align: center; margin-top: 4px; font-size: 10px; opacity: 0.4; }');
-
-  // Gamified elements styling
-  htmlChunks.push('.gamified-container { display: flex; flex-direction: row; gap: 20px; align-items: center; justify-content: center; }');
-  htmlChunks.push('.gamified-left { flex: 1; display: flex; flex-direction: column; gap: 10px; }');
-  htmlChunks.push('.gamified-right { display: flex; align-items: center; justify-content: center; shrink-0; }');
-  
-  // Spin Wheel CSS
-  htmlChunks.push('.spin-wrapper { position: relative; width: 220px; height: 220px; background: #1e1b4b; border-radius: 50%; border: 4px solid #312e81; box-shadow: 0 4px 12px rgba(0,0,0,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center; }');
-  htmlChunks.push('.spin-wheel-svg { width: 100%; height: 100%; transform: rotate(0deg); transition: transform 3s cubic-bezier(0.15, 0.85, 0.25, 1); }');
-  htmlChunks.push('.spin-peg { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 14px solid #f59e0b; z-index: 20; }');
-  htmlChunks.push('.spin-center-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; background: #ffffff; border: 3px solid #1e1b4b; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; color: #1e1b4b; cursor: pointer; z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }');
-
-  // Scratch Card CSS
-  htmlChunks.push('.scratch-container { position: relative; width: 260px; height: 150px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; background: #000000; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.4); }');
-  htmlChunks.push('.scratch-canvas { position: absolute; inset: 0; cursor: crosshair; z-index: 10; touch-action: none; }');
-  htmlChunks.push('.scratch-prize { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #ffffff; font-family: monospace; z-index: 1; }');
-
-  // Success Code Copy block
-  htmlChunks.push('.success-coupon-box { display: flex; align-items: center; justify-content: center; gap: 8px; border: 2px dashed ');
-  htmlChunks.push(design.accentColor);
-  htmlChunks.push('; border-radius: 8px; padding: 12px; background: rgba(99, 102, 241, 0.05); font-size: 18px; font-weight: 800; font-family: monospace; letter-spacing: 2px; text-align: center; cursor: pointer; transition: background 0.2s; }');
-  htmlChunks.push('.success-coupon-box:hover { background: rgba(99, 102, 241, 0.1); }');
-  htmlChunks.push('.success-icon { width: 44px; height: 44px; background: #d1fae5; color: #065f46; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px auto; font-size: 20px; }');
-
-  // Real-time Email Correction Styles
-  htmlChunks.push('.email-suggest { font-size: 11px; color: ');
-  htmlChunks.push(design.accentColor);
-  htmlChunks.push('; background: rgba(99, 102, 241, 0.08); padding: 6px 12px; border-radius: 6px; margin-top: -4px; margin-bottom: 4px; cursor: pointer; display: none; align-items: center; gap: 4px; font-weight: 600; }');
-  htmlChunks.push('.email-suggest:hover { background: rgba(99, 102, 241, 0.15); }');
+  htmlChunks.push(`
+<style>
+:host { all: initial; font-family: system-ui, sans-serif; }
+${design.overlayEnabled ? `.overlay { position: fixed; inset: 0; z-index: 2147483646; background: rgba(0,0,0,${design.overlayOpacity ?? 0.5}); animation: sp-fade-in 0.2s ease; }` : ''}
+.popup { position: fixed; z-index: 2147483647; background: ${design.backgroundColor};
+${design.backgroundImage ? `background-image: url(${design.backgroundImage}); background-size: cover; background-position: center; ` : ''}
+color: ${design.textColor}; border-radius: ${design.borderRadius}px; box-shadow: ${getShadowCSS(design.boxShadow)};
+${design.boxShadow === 'glass' ? 'backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); ' : ''}
+margin: ${design.margin ?? '0px'}; width: ${width}; max-width: calc(100vw - 32px); ${positionStyles} animation: ${getAnimation(design.animation)}; overflow: hidden; }
+.popup-inner { padding: ${design.padding ?? '24px'}; display: flex; flex-direction: column; gap: ${design.gap ?? '12px'}; }
+.close-btn { position: absolute; ${design.closeButtonPosition === 'top-right' ? 'top: 12px; right: 12px;' : 'top: 12px; left: 12px;'} background: none; border: none; cursor: pointer; font-size: 18px; color: ${design.textColor}; opacity: 0.6; padding: 4px 8px; border-radius: 4px; z-index: 50; }
+.close-btn:hover { opacity: 1; background: rgba(0,0,0,0.1); }
+.headline { font-size: 20px; font-weight: 700; margin: 0; line-height: 1.3; }
+.subheadline { font-size: 14px; opacity: 0.8; margin: 0; }
+.body-text { font-size: 14px; margin: 0; line-height: 1.5; }
+.product-image { width: 100%; border-radius: 8px; margin: 0; display: block; }
+.email-input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; color: #1f2937; background: #ffffff; outline: none; }
+.email-input:focus { border-color: ${design.accentColor}; }
+.cta-btn { display: inline-block; width: 100%; text-align: center; border: none; cursor: pointer; background: ${design.accentColor}; color: #fff; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; text-decoration: none; box-sizing: border-box; transition: opacity 0.15s; }
+.cta-btn:hover { opacity: 0.9; }
+.cta-link { color: ${design.accentColor}; text-decoration: underline; font-size: 14px; cursor: pointer; }
+.dismiss-text { text-align: center; margin-top: 4px; font-size: 12px; opacity: 0.6; cursor: pointer; }
+.dismiss-text:hover { opacity: 1; }
+.powered-by { text-align: center; margin-top: 4px; font-size: 10px; opacity: 0.4; }
+.gamified-container { display: flex; flex-direction: row; gap: 20px; align-items: center; justify-content: center; }
+.gamified-left { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.gamified-right { display: flex; align-items: center; justify-content: center; shrink-0; }
+.spin-wrapper { position: relative; width: 220px; height: 220px; background: #1e1b4b; border-radius: 50%; border: 4px solid #312e81; box-shadow: 0 4px 12px rgba(0,0,0,0.3); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.spin-wheel-svg { width: 100%; height: 100%; transform: rotate(0deg); transition: transform 3s cubic-bezier(0.15, 0.85, 0.25, 1); }
+.spin-peg { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 14px solid #f59e0b; z-index: 20; }
+.spin-center-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; background: #ffffff; border: 3px solid #1e1b4b; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; color: #1e1b4b; cursor: pointer; z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.scratch-container { position: relative; width: 260px; height: 150px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; background: #000000; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.4); }
+.scratch-canvas { position: absolute; inset: 0; cursor: crosshair; z-index: 10; touch-action: none; }
+.scratch-prize { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #ffffff; font-family: monospace; z-index: 1; }
+.success-coupon-box { display: flex; align-items: center; justify-content: center; gap: 8px; border: 2px dashed ${design.accentColor}; border-radius: 8px; padding: 12px; background: rgba(99, 102, 241, 0.05); font-size: 18px; font-weight: 800; font-family: monospace; letter-spacing: 2px; text-align: center; cursor: pointer; transition: background 0.2s; }
+.success-coupon-box:hover { background: rgba(99, 102, 241, 0.1); }
+.success-icon { width: 44px; height: 44px; background: #d1fae5; color: #065f46; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px auto; font-size: 20px; }
+.email-suggest { font-size: 11px; color: ${design.accentColor}; background: rgba(99, 102, 241, 0.08); padding: 6px 12px; border-radius: 6px; margin-top: -4px; margin-bottom: 4px; cursor: pointer; display: none; align-items: center; gap: 4px; font-weight: 600; }
+.email-suggest:hover { background: rgba(99, 102, 241, 0.15); }
+`);
 
   // Persistent Teaser Badge Styles
   const isTeaserLeft = design.position === 'bottom-left' || design.position === 'top';
-  htmlChunks.push('.teaser-badge { position: fixed; z-index: 2147483647; ');
-  htmlChunks.push(isTeaserLeft ? 'left: 20px;' : 'right: 20px;');
-  htmlChunks.push(' bottom: 20px; background: ');
-  htmlChunks.push(design.accentColor);
-  htmlChunks.push('; color: #ffffff; padding: 10px 18px; border-radius: 9999px; font-weight: 700; font-size: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); cursor: pointer; display: none; align-items: center; gap: 6px; transition: transform 0.2s, opacity 0.2s; }');
-  htmlChunks.push('.teaser-badge:hover { transform: scale(1.05); }');
-
-  htmlChunks.push('@keyframes sp-fade-in { from { opacity: 0 } to { opacity: 1 } }');
-  htmlChunks.push('@keyframes sp-slide-up { from { opacity: 0; transform: translateY(40px) } to { opacity: 1; transform: translateY(0) } }');
-  htmlChunks.push('@keyframes sp-slide-down { from { opacity: 0; transform: translateY(-40px) } to { opacity: 1; transform: translateY(0) } }');
-  htmlChunks.push('@keyframes sp-zoom { from { opacity: 0; transform: scale(0.9) } to { opacity: 1; transform: scale(1) } }');
-  htmlChunks.push('@keyframes sp-bounce { 0% { opacity:0; transform:translateY(-60px) scale(0.95) } 55% { opacity:1; transform:translateY(12px) scale(1.02) } 75% { transform:translateY(-6px) scale(0.99) } 90% { transform:translateY(3px) scale(1.005) } 100% { opacity:1; transform:translateY(0) scale(1) } }');
-  htmlChunks.push('@keyframes sp-elastic { 0% { opacity:0; transform:scale(0.4) } 55% { opacity:1; transform:scale(1.08) } 75% { transform:scale(0.96) } 90% { transform:scale(1.02) } 100% { opacity:1; transform:scale(1) } }');
-  htmlChunks.push('@keyframes sp-flip-in { 0% { opacity:0; transform:perspective(600px) rotateX(-90deg) translateY(-40px) } 60% { opacity:1; transform:perspective(600px) rotateX(8deg) } 80% { transform:perspective(600px) rotateX(-4deg) } 100% { opacity:1; transform:perspective(600px) rotateX(0deg) translateY(0) } }');
-  htmlChunks.push('</style>');
+  htmlChunks.push(`
+.teaser-badge { position: fixed; z-index: 2147483647; ${isTeaserLeft ? 'left: 20px;' : 'right: 20px;'} bottom: 20px; background: ${design.accentColor}; color: #ffffff; padding: 10px 18px; border-radius: 9999px; font-weight: 700; font-size: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); cursor: pointer; display: none; align-items: center; gap: 6px; transition: transform 0.2s, opacity 0.2s; }
+.teaser-badge:hover { transform: scale(1.05); }
+@keyframes sp-fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes sp-slide-up { from { opacity: 0; transform: translateY(40px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes sp-slide-down { from { opacity: 0; transform: translateY(-40px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes sp-zoom { from { opacity: 0; transform: scale(0.9) } to { opacity: 1; transform: scale(1) } }
+@keyframes sp-bounce { 0% { opacity:0; transform:translateY(-60px) scale(0.95) } 55% { opacity:1; transform:translateY(12px) scale(1.02) } 75% { transform:translateY(-6px) scale(0.99) } 90% { transform:translateY(3px) scale(1.005) } 100% { opacity:1; transform:translateY(0) scale(1) } }
+@keyframes sp-elastic { 0% { opacity:0; transform:scale(0.4) } 55% { opacity:1; transform:scale(1.08) } 75% { transform:scale(0.96) } 90% { transform:scale(1.02) } 100% { opacity:1; transform:scale(1) } }
+@keyframes sp-flip-in { 0% { opacity:0; transform:perspective(600px) rotateX(-90deg) translateY(-40px) } 60% { opacity:1; transform:perspective(600px) rotateX(8deg) } 80% { transform:perspective(600px) rotateX(-4deg) } 100% { opacity:1; transform:perspective(600px) rotateX(0deg) translateY(0) } }
+</style>
+  `);
 
   // Overlay
   if (design.overlayEnabled) {
@@ -868,7 +817,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   } // end non-element (flat-field) layout
   htmlChunks.push('</div>'); // End popup
 
-  const teaserStep = Array.isArray((design as any).steps) ? (design as any).steps.find((s: any) => s.id === 'teaser') : (design as any).steps?.teaser;
+  const teaserStep = getStep('teaser');
   if (teaserStep?.enabled !== false) {
     // Minimizable Teaser Badge
     htmlChunks.push('<div class="teaser-badge" id="teaser-badge">');
@@ -911,7 +860,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
     }
     beaconEvent(campaign, 'conversion', slot?.id, { email });
 
-    const successStep = Array.isArray((design as any).steps) ? (design as any).steps.find((s: any) => s.id === 'success') : (design as any).steps?.success;
+    const successStep = getStep('success');
     if (successStep?.enabled === false) {
       // If success screen is disabled, just dismiss the modal immediately
       dismiss(true);
@@ -1130,25 +1079,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   // Attach auto email correction logic inside shadow DOM / document form elements
   try {
     if (emailInput) {
-      const suggestDiv = document.createElement('div');
-      suggestDiv.className = 'email-suggest';
-      emailInput.parentNode?.insertBefore(suggestDiv, emailInput.nextSibling);
-
-      emailInput.addEventListener('input', (e) => {
-        const val = (e.target as HTMLInputElement).value;
-        const correction = suggestCorrectEmail(val);
-        if (correction) {
-          suggestDiv.innerHTML = `Did you mean <strong style="text-decoration: underline;">${escapeHtml(correction)}</strong>?`;
-          suggestDiv.style.display = 'flex';
-          suggestDiv.onclick = () => {
-            emailInput.value = correction;
-            suggestDiv.style.display = 'none';
-            emailInput.dispatchEvent(new Event('input', { bubbles: true }));
-          };
-        } else {
-          suggestDiv.style.display = 'none';
-        }
-      });
+      // Logic removed for bundle size
     }
   } catch (err) { /* ignore safety bounds */ }
 
@@ -1285,75 +1216,29 @@ function escapeHtml(str: string | undefined | null): string {
     .replace(/'/g, '&#039;');
 }
 
-function suggestCorrectEmail(email: string): string | null {
-  if (!email || !email.includes('@')) return null;
-  const parts = email.split('@');
-  if (parts.length !== 2) return null;
-  const local = parts[0];
-  const domain = parts[1]?.toLowerCase().trim();
-  if (!local || !domain) return null;
-
-  let correctedDomain = '';
-  switch (domain) {
-    case 'gamil.com':
-    case 'gmial.com':
-    case 'gmal.com':
-    case 'gamil.co':
-      correctedDomain = 'gmail.com';
-      break;
-    case 'yaho.com':
-      correctedDomain = 'yahoo.com';
-      break;
-    case 'hotmial.com':
-      correctedDomain = 'hotmail.com';
-      break;
-    case 'msn.con':
-      correctedDomain = 'msn.com';
-      break;
-    case 'outlook.con':
-      correctedDomain = 'outlook.com';
-      break;
-  }
-
-  if (correctedDomain) {
-    return `${local}@${correctedDomain}`;
-  }
-  return null;
-}
-
+// Removed suggestCorrectEmail
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 function extractPublicKey(): string | null {
-  const stub = (window as Window & { __sp?: { q?: unknown[][]; publicKey?: string } }).__sp;
-  if (stub?.publicKey) return stub.publicKey;
-  if (stub?.q) {
-    for (const call of stub.q) {
-      if (call[0] === 'init' && typeof call[1] === 'string') {
-        return call[1];
-      }
-    }
-  }
+  const s = window as any;
+  if (s.__sp?.publicKey) return s.__sp.publicKey;
+  const init = s.__sp?.q?.find((c: any) => c[0] === 'init' && typeof c[1] === 'string');
+  if (init) return init[1];
 
-  const currentScript = document.currentScript as HTMLScriptElement;
-  if (currentScript?.src) {
-    const match = currentScript.src.match(/\/v1\/([^\/]+)\/p\.js/);
-    if (match && match[1]) {
-      return match[1];
-    }
+  const currentSrc = (document.currentScript as HTMLScriptElement)?.src;
+  if (currentSrc) {
+    const m = currentSrc.match(/\/v1\/([^\/]+)\/p\.js/);
+    if (m && m[1]) return m[1];
   }
 
   const scripts = document.getElementsByTagName('script');
   for (let i = 0; i < scripts.length; i++) {
-    const script = scripts.item(i);
-    const src = script?.src;
+    const src = scripts.item(i)?.src;
     if (src) {
       const match = src.match(/\/v1\/([^\/]+)\/p\.js/);
-      if (match && match[1]) {
-        return match[1];
-      }
+      if (match && match[1]) return match[1];
     }
   }
-
   return null;
 }
 

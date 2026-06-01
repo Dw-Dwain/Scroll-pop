@@ -340,7 +340,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                 }}
               >
                 {/* Popup preview thumbnail */}
-                <PopupPreview kind={c.kind ?? 'modal'} status={c.status ?? 'draft'} />
+                <CampaignThumbnail config={c.design} status={c.status ?? 'draft'} kind={c.kind ?? 'modal'} />
 
                 {/* Card body */}
                 <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
