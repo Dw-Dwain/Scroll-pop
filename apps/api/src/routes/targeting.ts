@@ -70,6 +70,33 @@ export const targetingRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(201).send({ data: rule });
   });
 
+  // PUT /api/v1/campaigns/:id/targeting
+  fastify.put<{ Params: { id: string } }>('/campaigns/:id/targeting', async (request, reply) => {
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, request.params.id), eq(campaigns.tenantId, request.tenantId), isNull(campaigns.deletedAt)),
+    });
+
+    if (!campaign) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    const body = z.array(CreateTargetingBody).parse(request.body);
+
+    await db.delete(targetingRules).where(and(eq(targetingRules.campaignId, request.params.id), eq(targetingRules.tenantId, request.tenantId)));
+
+    let newRules: any[] = [];
+    if (body.length > 0) {
+      newRules = await db.insert(targetingRules).values(body.map(t => ({
+        campaignId: request.params.id,
+        tenantId: request.tenantId,
+        kind: t.kind,
+        operator: t.operator,
+        value: t.value,
+      }))).returning();
+    }
+    return reply.send({ data: newRules });
+  });
+
   // PATCH /api/v1/targeting/:id
   fastify.patch<{ Params: { id: string } }>('/targeting/:id', async (request, reply) => {
     const body = UpdateTargetingBody.parse(request.body);

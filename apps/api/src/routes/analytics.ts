@@ -97,10 +97,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const rows = await db
       .select({
         campaignId: events.campaignId,
-        impressions: sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        views: sql<number>`count(*) filter (where ${events.eventType} = 'view')::int`,
-        clicks: sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
-        conversions: sql<number>`count(*) filter (where ${events.eventType} = 'conversion')::int`,
+        impressions: sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        views: sql<number>`count(*) filter (where ${events.eventType}::text = 'view')::int`,
+        clicks: sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        conversions: sql<number>`count(*) filter (where ${events.eventType}::text = 'conversion')::int`,
       })
       .from(events)
       .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since)))
@@ -127,8 +127,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       const rows = await db
         .select({
           campaignId: events.campaignId,
-          impressions: sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-          clicks: sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
+          impressions: sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+          clicks: sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
         })
         .from(events)
         .where(
@@ -139,7 +139,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
           )
         )
         .groupBy(events.campaignId)
-        .orderBy(sql`count(*) filter (where ${events.eventType} = 'click') desc`);
+        .orderBy(sql`count(*) filter (where ${events.eventType}::text = 'click') desc`);
 
       const withCtr = rows.map((r) => ({
         campaignId: r.campaignId,
@@ -273,12 +273,12 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const rows = await db
       .select({
         campaignId:     events.campaignId,
-        impressions:    sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        clicks:         sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
-        emailCaptures:  sql<number>`count(*) filter (where ${events.eventType} = 'email_capture')::int`,
-        checkouts:      sql<number>`count(*) filter (where ${events.eventType} = 'checkout_started')::int`,
-        purchases:      sql<number>`count(*) filter (where ${events.eventType} = 'purchase_completed')::int`,
-        revenueCents:   sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0)::int`,
+        impressions:    sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        clicks:         sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        emailCaptures:  sql<number>`count(*) filter (where ${events.eventType}::text = 'email_capture')::int`,
+        checkouts:      sql<number>`count(*) filter (where ${events.eventType}::text = 'checkout_started')::int`,
+        purchases:      sql<number>`count(*) filter (where ${events.eventType}::text = 'purchase_completed')::int`,
+        revenueCents:   sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
       })
       .from(events)
       .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since)))
@@ -344,17 +344,17 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const [row] = await db
       .select({
-        triggered:    sql<number>`count(*) filter (where ${events.eventType} = 'trigger_fired')::int`,
-        impressions:  sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        views:        sql<number>`count(*) filter (where ${events.eventType} = 'view')::int`,
-        clicks:       sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
-        submits:      sql<number>`count(*) filter (where ${events.eventType} = 'popup_submit')::int`,
-        emailCapture: sql<number>`count(*) filter (where ${events.eventType} = 'email_capture')::int`,
-        checkouts:    sql<number>`count(*) filter (where ${events.eventType} = 'checkout_started')::int`,
-        purchases:    sql<number>`count(*) filter (where ${events.eventType} = 'purchase_completed')::int`,
-        closes:       sql<number>`count(*) filter (where ${events.eventType} = 'popup_close')::int`,
-        dismissals:   sql<number>`count(*) filter (where ${events.eventType} = 'dismiss')::int`,
-        revenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0)::int`,
+        triggered:    sql<number>`count(*) filter (where ${events.eventType}::text = 'trigger_fired')::int`,
+        impressions:  sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        views:        sql<number>`count(*) filter (where ${events.eventType}::text = 'view')::int`,
+        clicks:       sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        submits:      sql<number>`count(*) filter (where ${events.eventType}::text = 'popup_submit')::int`,
+        emailCapture: sql<number>`count(*) filter (where ${events.eventType}::text = 'email_capture')::int`,
+        checkouts:    sql<number>`count(*) filter (where ${events.eventType}::text = 'checkout_started')::int`,
+        purchases:    sql<number>`count(*) filter (where ${events.eventType}::text = 'purchase_completed')::int`,
+        closes:       sql<number>`count(*) filter (where ${events.eventType}::text = 'popup_close')::int`,
+        dismissals:   sql<number>`count(*) filter (where ${events.eventType}::text = 'dismiss')::int`,
+        revenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
       })
       .from(events)
       .where(baseWhere);
@@ -398,15 +398,15 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       // Best traffic source by CTR
       db.select({
         trafficSource: events.trafficSource,
-        impressions:   sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        clicks:        sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
-        purchases:     sql<number>`count(*) filter (where ${events.eventType} = 'purchase_completed')::int`,
-        revenueCents:  sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0)::int`,
+        impressions:   sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        clicks:        sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        purchases:     sql<number>`count(*) filter (where ${events.eventType}::text = 'purchase_completed')::int`,
+        revenueCents:  sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
       })
         .from(events)
         .where(where)
         .groupBy(events.trafficSource)
-        .orderBy(sql`count(*) filter (where ${events.eventType} = 'click') desc`)
+        .orderBy(sql`count(*) filter (where ${events.eventType}::text = 'click') desc`)
         .limit(10),
 
       // Best trigger type by conversion rate (from metadata)
@@ -416,7 +416,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         scrollPct:    sql<number>`round(avg(${events.scrollDepthPct}))::int`,
       })
         .from(events)
-        .where(and(where, sql`${events.eventType} = 'impression'`))
+        .where(and(where, sql`${events.eventType}::text = 'impression'`))
         .groupBy(sql`metadata->>'triggerType'`)
         .orderBy(sql`count(*) desc`)
         .limit(5),
@@ -424,22 +424,22 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       // Best device by revenue
       db.select({
         device:       events.device,
-        impressions:  sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        clicks:       sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
-        revenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0)::int`,
+        impressions:  sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        clicks:       sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        revenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
       })
         .from(events)
         .where(where)
         .groupBy(events.device)
-        .orderBy(sql`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0) desc`)
+        .orderBy(sql`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0) desc`)
         .limit(5),
 
       // Total revenue + overall conversion rate
       db.select({
-        totalRevenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0)::int`,
-        totalImpressions:  sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        totalPurchases:    sql<number>`count(*) filter (where ${events.eventType} = 'purchase_completed')::int`,
-        totalEmails:       sql<number>`count(*) filter (where ${events.eventType} = 'email_capture')::int`,
+        totalRevenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
+        totalImpressions:  sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        totalPurchases:    sql<number>`count(*) filter (where ${events.eventType}::text = 'purchase_completed')::int`,
+        totalEmails:       sql<number>`count(*) filter (where ${events.eventType}::text = 'email_capture')::int`,
       })
         .from(events)
         .where(where),
@@ -447,15 +447,15 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       // Best campaign by revenue
       db.select({
         campaignId:   events.campaignId,
-        revenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0)::int`,
-        purchases:    sql<number>`count(*) filter (where ${events.eventType} = 'purchase_completed')::int`,
-        impressions:  sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        clicks:       sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
+        revenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
+        purchases:    sql<number>`count(*) filter (where ${events.eventType}::text = 'purchase_completed')::int`,
+        impressions:  sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        clicks:       sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
       })
         .from(events)
         .where(where)
         .groupBy(events.campaignId)
-        .orderBy(sql`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType} = 'purchase_completed'), 0) desc`)
+        .orderBy(sql`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0) desc`)
         .limit(1),
     ]);
 

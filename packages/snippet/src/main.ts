@@ -91,8 +91,8 @@ function getEdgeUrl(): string {
   const w = window as any;
   if (typeof window !== 'undefined' && w.__SP_EDGE_URL) return w.__SP_EDGE_URL;
   try {
-    const cur = document?.currentScript as HTMLScriptElement | null;
-    if (cur?.src && !cur.src.includes('cdn.scrollpop.online')) {
+    const cur = document?.currentScript as any;
+    if (cur?.src && typeof cur.src === 'string' && !cur.src.includes('cdn.scrollpop.online')) {
       return new URL(cur.src).origin;
     }
     const scripts = document.getElementsByTagName('script');

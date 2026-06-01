@@ -74,6 +74,30 @@ export const triggerRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(201).send({ data: trigger });
   });
 
+  // PUT /api/v1/campaigns/:id/triggers
+  fastify.put<{ Params: { id: string } }>('/campaigns/:id/triggers', async (request, reply) => {
+    const ok = await assertCampaignOwnership(request.params.id, request.tenantId, reply);
+    if (!ok) return;
+
+    const body = z.array(CreateTriggerBody).parse(request.body);
+    for (const item of body) {
+      TriggerParamsSchema.parse({ type: item.type, ...item.params });
+    }
+
+    await db.delete(triggers).where(and(eq(triggers.campaignId, request.params.id), eq(triggers.tenantId, request.tenantId)));
+
+    let newTriggers: any[] = [];
+    if (body.length > 0) {
+      newTriggers = await db.insert(triggers).values(body.map(t => ({
+        campaignId: request.params.id,
+        tenantId: request.tenantId,
+        type: t.type,
+        params: t.params,
+      }))).returning();
+    }
+    return reply.send({ data: newTriggers });
+  });
+
   // PATCH /api/v1/triggers/:id
   fastify.patch<{ Params: { id: string } }>('/triggers/:id', async (request, reply) => {
     const body = UpdateTriggerBody.parse(request.body);

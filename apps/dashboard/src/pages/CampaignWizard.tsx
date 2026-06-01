@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Sparkles, Laptop, Tablet, Smartphone, Undo2, Redo2, Play } from 'lucide-react';
-import { useCreate, useList } from '@refinedev/core';
+import { useCreate, useList, useCustomMutation, useApiUrl } from '@refinedev/core';
 import { TemplateSelector } from '../components/campaign-wizard/TemplateSelector';
 import { DesignControls } from '../components/campaign-wizard/DesignControls';
 import { TemplatePreset, FormDataShape } from '../types/campaign';
@@ -296,9 +296,8 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
   const { data: sitesData } = useList({ resource: 'sites' });
   const { mutateAsync: createCampaign } = useCreate();
   const { mutateAsync: createDesign } = useCreate();
-  const { mutateAsync: createTrigger } = useCreate();
-  const { mutateAsync: createTargeting } = useCreate();
-  const { mutateAsync: createFrequency } = useCreate();
+  const { mutateAsync: customMutate } = useCustomMutation();
+  const apiUrl = useApiUrl();
   const { mutateAsync: activateCampaign } = useCreate();
 
   const [step, setStep] = React.useState(1);
@@ -723,13 +722,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
 
       // Triggers, frequency and targeting now come from step 2's Triggers tab.
       const { triggers, frequency, targeting } = buildRuleSpecs();
-      for (const spec of triggers) {
-        await createTrigger({ resource: `campaigns/${campaignId}/triggers`, values: spec });
-      }
-      await createFrequency({ resource: `campaigns/${campaignId}/frequency`, values: { frequency } });
-      for (const spec of targeting) {
-        await createTargeting({ resource: `campaigns/${campaignId}/targeting`, values: spec });
-      }
+      await customMutate({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'put', values: triggers });
+      await customMutate({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency } });
+      await customMutate({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'put', values: targeting });
 
       // Launch = go live. Activate so the campaign is served by the edge (was left as draft).
       await activateCampaign({ resource: `campaigns/${campaignId}/activate`, values: {} });

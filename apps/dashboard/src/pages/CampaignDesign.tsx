@@ -318,7 +318,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     url: `${apiUrl}/campaigns/${campaignId}/design`,
     method: 'get',
   });
-  const { mutate } = useCustomMutation();
+  const { mutate, mutateAsync } = useCustomMutation();
 
   const [campaign, setCampaign] = React.useState<Campaign | null>(null);
   const [activeStep, setActiveStep] = React.useState<CampaignStep>('main');
@@ -581,10 +581,37 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     // Preserve existing affiliate slots — mapCampaignToDesign always returns [] because
     // affiliate slots live on the design record, not on the Campaign canvas object.
     designPayload.affiliateSlots = (designData?.data as any)?.affiliateSlots ?? [];
+
+    const t = campaign.triggers;
+    const triggersList: Array<{ type: string; params: Record<string, number> }> = [];
+    if (t) {
+      if (t.scrollPercent > 0) triggersList.push({ type: 'scroll_pct', params: { pct: t.scrollPercent } });
+      if (t.timeDelaySeconds > 0) triggersList.push({ type: 'dwell_time', params: { seconds: t.timeDelaySeconds } });
+      if (t.inactivitySeconds > 0) triggersList.push({ type: 'inactivity', params: { seconds: Math.max(5, t.inactivitySeconds) } });
+      if (t.exitIntent) triggersList.push({ type: 'exit_intent_mouse', params: { sensitivity: 20 } });
+    }
+    const frequency = t?.frequencyCapDays ? 'once_per_session' : 'always'; // rough mapping, adjust as needed
+
+    const targetingList: Array<{ kind: string; operator: string; value: Record<string, unknown> }> = [];
+    if (t) {
+      if (t.deviceTargeting && t.deviceTargeting !== 'all') targetingList.push({ kind: 'device', operator: 'include', value: { device: t.deviceTargeting } });
+      if (t.newVisitorOnly) targetingList.push({ kind: 'returning_visitor', operator: 'include', value: { returning: false } });
+      if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') targetingList.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
+    }
+
+    // Save design
     mutate(
       { url: `${apiUrl}/campaigns/${campaignId}/design`, method: 'put', values: designPayload },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
+          // After design succeeds, save triggers
+          try {
+            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'put', values: triggersList });
+            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency: t?.frequency ?? 'once_per_session' } });
+            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'put', values: targetingList });
+          } catch (err) {
+            console.error('Failed to save triggers/targeting:', err);
+          }
           setIsSaving(false);
           toastMessage('💾 Campaign Published & Live Successfully!');
           // Return to the campaigns list after a brief moment so the toast is seen.
