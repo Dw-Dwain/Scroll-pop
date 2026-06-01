@@ -115,9 +115,17 @@ async function handleConfig(
   }
 
   if (!originResponse.ok) {
-    const status = originResponse.status === 404 ? 404 : 502;
-    return new Response(JSON.stringify({ error: 'Site not found' }), {
-      status,
+    const upstream = originResponse.status;
+    // Surface the REAL upstream cause instead of a misleading generic "Site not found":
+    //   401 → INTERNAL_SECRET mismatch between this Worker and the API
+    //   404 → site/public key genuinely not found
+    //   502/503/5xx → origin (Render) down, redeploying, or erroring
+    let reason = 'Config temporarily unavailable';
+    if (upstream === 404) reason = 'Site not found';
+    else if (upstream === 401) reason = 'Worker/API INTERNAL_SECRET mismatch';
+    console.error(`[config] origin ${upstream} for ${publicKey}: ${reason}`);
+    return new Response(JSON.stringify({ error: reason, upstreamStatus: upstream }), {
+      status: upstream === 404 ? 404 : 502,
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
   }
