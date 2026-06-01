@@ -73,7 +73,7 @@ PR merge on `Dw-Dwain`, you must push main to `dwain-coder` so the API gets the 
 ```bash
 git checkout main
 git pull origin main
-git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" main
+pnpm run deploy
 ```
 
 `allow_force_pushes` is enabled on `dwain-coder/Scroll-pop` at the repo level, so
@@ -122,8 +122,7 @@ git push --force-with-lease origin main
 Both repos have identical code. Every push goes to both:
 
 ```bash
-git push                                                                  # → Dw-Dwain (origin)
-git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" HEAD   # → dwain-coder
+pnpm run deploy   # Pushes to Dw-Dwain (origin) AND dwain-coder (Render)
 ```
 
 ---
