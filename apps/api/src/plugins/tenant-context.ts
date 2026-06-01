@@ -5,6 +5,31 @@ import { tenants, users, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAuth, clerkClient } from '@clerk/fastify';
 
+// ─── Unlimited-access rule ────────────────────────────────────────────────────
+// These users always get agency-level access regardless of their Stripe plan.
+// Checked on every authenticated request so it self-heals if the DB row changes.
+const ADMIN_EMAIL     = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
+const UNLIMITED_DOMAINS = ['novatise.com'];
+
+function isUnlimitedUser(email: string): boolean {
+  const e = email.toLowerCase();
+  return e === ADMIN_EMAIL || UNLIMITED_DOMAINS.some((d) => e.endsWith(`@${d}`));
+}
+
+async function ensureUnlimitedTenant(tenantId: string): Promise<void> {
+  // Set to agency plan + 2M monthly view limit if not already there.
+  // This is idempotent — safe to call on every request for these users.
+  const t = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: { plan: true, monthlyViewLimit: true },
+  });
+  if (t && (t.plan !== 'agency' || t.monthlyViewLimit < 2_000_000)) {
+    await db.update(tenants)
+      .set({ plan: 'agency', monthlyViewLimit: 2_000_000, updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId));
+  }
+}
+
 // Extend FastifyRequest with tenant context
 declare module 'fastify' {
   interface FastifyRequest {
@@ -164,6 +189,9 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
           error: { code: 'NOT_A_MEMBER', message: 'Not a member of this organization' },
         });
       }
+      // Auto-upgrade novatise.com / admin users to unlimited
+      if (isUnlimitedUser(user.email)) await ensureUnlimitedTenant(tenant.id);
+
       request.tenantId = tenant.id;
       request.userId = user.id;
       request.memberRole = membership.role;
@@ -243,6 +271,9 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
           ),
         }));
     }
+
+    // Auto-upgrade novatise.com / admin users to unlimited
+    if (isUnlimitedUser(user.email)) await ensureUnlimitedTenant(tenant.id);
 
     request.tenantId = tenant.id;
     request.userId = user.id;

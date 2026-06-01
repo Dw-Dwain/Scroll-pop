@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScrollPop — In-Page Popup Ad Templates</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #111;
+    color: #fff;
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 60px;
+  }
+  .stage {
+    max-width: 620px;
+    margin: 0 auto 80px;
+    position: relative;
+  }
+  .label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #444;
+    margin-bottom: 16px;
+  }
+  /* Fake page behind popup */
+  .page-bg {
+    width: 100%;
+    height: 260px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px;
+    overflow: hidden;
+    filter: blur(1px) brightness(0.5);
+    pointer-events: none;
+    user-select: none;
+  }
+  .page-bg-bar { height: 12px; background: #2a2a2a; border-radius: 4px; }
+  .page-bg-bar.w60 { width: 60%; }
+  .page-bg-bar.w40 { width: 40%; }
+  .page-bg-bar.w80 { width: 80%; }
+  .page-bg-bar.w30 { width: 30%; }
+  .page-bg-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .page-bg-card { height: 80px; background: #222; border-radius: 6px; }
+
+  /* Overlay */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ─── POPUP 1: Amazon Affiliate Deal ─────────────────────────────────────── */
+  .popup-1 {
+    background: #fff;
+    border-radius: 16px;
+    width: 480px;
+    max-width: 92vw;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+    display: flex;
+    position: relative;
+  }
+  .p1-img {
+    width: 42%;
+    background: #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 14px;
+    flex-shrink: 0;
+  }
+  .p1-img img { width: 100%; border-radius: 10px; object-fit: cover; }
+  .p1-badge {
+    margin-top: 10px;
+    background: #00A8E0;
+    color: #fff;
+    font-size: 8px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .p1-content {
+    padding: 20px 18px 20px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    color: #111;
+  }
+  .p1-tag {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #FF9900;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .p1-title {
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #111;
+  }
+  .p1-rating {
+    font-size: 11px;
+    color: #FF9900;
+  }
+  .p1-price { display: flex; align-items: baseline; gap: 8px; }
+  .p1-price-now { font-size: 24px; font-weight: 900; color: #B12704; }
+  .p1-price-was { font-size: 13px; color: #999; text-decoration: line-through; }
+  .p1-save { font-size: 11px; font-weight: 700; color: #067D62; }
+  .p1-cta {
+    background: #FF9900;
+    color: #111;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    width: 100%;
+    letter-spacing: 0.3px;
+  }
+  .p1-cta:hover { background: #e68900; }
+  .p1-note { font-size: 9px; color: #aaa; text-align: center; }
+  .p1-close {
+    position: absolute;
+    top: 10px; right: 12px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.08);
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    color: #555;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ─── POPUP 2: Email Capture + Coupon ───────────────────────────────────── */
+  .popup-2 {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #1e1b4b 100%);
+    border-radius: 20px;
+    width: 440px;
+    max-width: 92vw;
+    padding: 36px 32px 28px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+    position: relative;
+    text-align: center;
+  }
+  .p2-close {
+    position: absolute;
+    top: 14px; right: 16px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #a5b4fc;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .p2-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(250,204,21,0.15);
+    border: 1px solid rgba(250,204,21,0.35);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #fbbf24;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .p2-offer {
+    font-size: 52px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+  .p2-offer span { color: #fbbf24; }
+  .p2-subtitle {
+    font-size: 13px;
+    color: #a5b4fc;
+    margin: 8px 0 24px;
+    line-height: 1.5;
+  }
+  .p2-coupon {
+    background: rgba(250,204,21,0.1);
+    border: 1.5px dashed rgba(250,204,21,0.5);
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-family: monospace;
+    font-size: 18px;
+    font-weight: 900;
+    color: #fbbf24;
+    letter-spacing: 4px;
+    margin-bottom: 16px;
+  }
+  .p2-timer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .p2-timer-seg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .p2-timer-num {
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 900; color: #fff;
+    font-family: monospace;
+  }
+  .p2-timer-lbl { font-size: 8px; color: #6366f1; font-weight: 700; margin-top: 3px; letter-spacing: 1px; }
+  .p2-timer-colon { font-size: 22px; font-weight: 900; color: #4f46e5; margin-bottom: 12px; }
+  .p2-form { display: flex; gap: 8px; }
+  .p2-input {
+    flex: 1;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 12px;
+    color: #fff;
+    outline: none;
+  }
+  .p2-input::placeholder { color: rgba(255,255,255,0.35); }
+  .p2-btn {
+    background: #fbbf24;
+    color: #1e1b4b;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+  .p2-dismiss { font-size: 10px; color: rgba(255,255,255,0.25); margin-top: 14px; cursor: pointer; }
+  .p2-dismiss:hover { color: rgba(255,255,255,0.5); }
+
+  /* ─── POPUP 3: Exit Intent / Last Chance ─────────────────────────────────── */
+  .popup-3 {
+    background: #fff;
+    border-radius: 16px;
+    width: 500px;
+    max-width: 92vw;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .p3-left {
+    background: #7f1d1d;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .p3-left::before {
+    content: '';
+    position: absolute;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+    top: -60px; right: -60px;
+  }
+  .p3-urgency {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #fca5a5;
+    margin-bottom: 8px;
+  }
+  .p3-pct {
+    font-size: 72px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 0.85;
+    letter-spacing: -4px;
+  }
+  .p3-off {
+    font-size: 22px;
+    font-weight: 900;
+    color: #fca5a5;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .p3-sub {
+    font-size: 11px;
+    color: #fecaca;
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+  .p3-right {
+    padding: 28px 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 14px;
+    background: #fff;
+    color: #111;
+  }
+  .p3-close {
+    position: absolute;
+    top: 12px; right: 14px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.06);
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #888;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .p3-heading {
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #111;
+  }
+  .p3-body { font-size: 12px; color: #6b7280; line-height: 1.5; }
+  .p3-code {
+    background: #fef2f2;
+    border: 1.5px dashed #fca5a5;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 800;
+    color: #dc2626;
+    letter-spacing: 3px;
+    text-align: center;
+  }
+  .p3-timer-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #dc2626;
+    font-weight: 700;
+  }
+  .p3-timer-val {
+    background: #dc2626;
+    color: #fff;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-weight: 900;
+    font-size: 12px;
+  }
+  .p3-cta {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    width: 100%;
+    letter-spacing: 0.3px;
+  }
+  .p3-cta:hover { background: #b91c1c; }
+  .p3-no { font-size: 10px; color: #d1d5db; text-align: center; cursor: pointer; }
+  .p3-no:hover { color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<h1>ScrollPop — In-Page Popup Ad Templates</h1>
+
+<!-- ══ POPUP 1: Amazon Affiliate Deal ══════════════════════════════════════ -->
+<div class="stage">
+  <div class="label">Template 01 — Affiliate Product Deal (Amazon-style split)</div>
+  <div class="page-bg">
+    <div class="page-bg-bar w80"></div>
+    <div class="page-bg-bar w60"></div>
+    <div class="page-bg-bar w40"></div>
+    <div class="page-bg-grid">
+      <div class="page-bg-card"></div>
+      <div class="page-bg-card"></div>
+      <div class="page-bg-card"></div>
+    </div>
+  </div>
+  <div class="overlay">
+    <div class="popup-1">
+      <button class="p1-close">✕</button>
+      <div class="p1-img">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%23e5e7eb'/%3E%3Ccircle cx='90' cy='90' r='55' fill='%23d1d5db'/%3E%3Ccircle cx='90' cy='90' r='40' fill='%23f3f4f6'/%3E%3Ccircle cx='90' cy='90' r='28' fill='%239ca3af' opacity='0.5'/%3E%3Crect x='78' y='40' width='4' height='20' rx='2' fill='%236b7280'/%3E%3C/svg%3E" alt="Watch">
+        <div class="p1-badge">✓ Prime Eligible · Free 1-Day</div>
+      </div>
+      <div class="p1-content">
+        <div>
+          <div class="p1-tag">⭐ DEAL OF THE DAY</div>
+          <div class="p1-title">Premium Minimalist Watch — Stainless Steel</div>
+          <div class="p1-rating">★★★★★ <span style="color:#555;font-size:10px;">4.8 (2,341 ratings)</span></div>
+        </div>
+        <div>
+          <div class="p1-price">
+            <span class="p1-price-now">$47.99</span>
+            <span class="p1-price-was">$79.99</span>
+          </div>
+          <div class="p1-save">Save 40% — Limited Time</div>
+        </div>
+        <div>
+          <button class="p1-cta">View on Amazon →</button>
+          <div class="p1-note" style="margin-top:8px;">As an Amazon Associate we earn from qualifying purchases.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ POPUP 2: Email Capture + Discount ══════════════════════════════════ -->
+<div class="stage">
+  <div class="label">Template 02 — Email Capture + Discount Coupon (Dark luxury)</div>
+  <div class="page-bg">
+    <div class="page-bg-bar w60"></div>
+    <div class="page-bg-bar w80"></div>
+    <div class="page-bg-bar w30"></div>
+    <div class="page-bg-grid">
+      <div class="page-bg-card"></div>
+      <div class="page-bg-card"></div>
+      <div class="page-bg-card"></div>
+    </div>
+  </div>
+  <div class="overlay">
+    <div class="popup-2">
+      <button class="p2-close">✕</button>
+      <div class="p2-pill">⚡ Flash Offer</div>
+      <div class="p2-offer"><span>30%</span> OFF</div>
+      <div class="p2-subtitle">Your first order. Enter your email below to unlock the coupon instantly.</div>
+      <div class="p2-coupon">WELCOME30</div>
+      <div class="p2-timer">
+        <div class="p2-timer-seg">
+          <div class="p2-timer-num">14</div>
+          <div class="p2-timer-lbl">MIN</div>
+        </div>
+        <div class="p2-timer-colon">:</div>
+        <div class="p2-timer-seg">
+          <div class="p2-timer-num">59</div>
+          <div class="p2-timer-lbl">SEC</div>
+        </div>
+      </div>
+      <div class="p2-form">
+        <input class="p2-input" type="email" placeholder="your@email.com">
+        <button class="p2-btn">Claim 30% Off</button>
+      </div>
+      <div class="p2-dismiss">No thanks, I'll pay full price</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ POPUP 3: Exit Intent — Last Chance ══════════════════════════════════ -->
+<div class="stage">
+  <div class="label">Template 03 — Exit Intent / Last Chance (High contrast split)</div>
+  <div class="page-bg">
+    <div class="page-bg-bar w40"></div>
+    <div class="page-bg-bar w80"></div>
+    <div class="page-bg-bar w60"></div>
+    <div class="page-bg-grid">
+      <div class="page-bg-card"></div>
+      <div class="page-bg-card"></div>
+      <div class="page-bg-card"></div>
+    </div>
+  </div>
+  <div class="overlay">
+    <div class="popup-3">
+      <button class="p3-close">✕</button>
+      <div class="p3-left">
+        <div class="p3-urgency">⏳ Last Chance</div>
+        <div class="p3-pct">25</div>
+        <div class="p3-off">% OFF</div>
+        <div class="p3-sub">Exclusively for visitors leaving without purchasing today.</div>
+      </div>
+      <div class="p3-right">
+        <div class="p3-heading">Wait! Don't leave empty&#8209;handed.</div>
+        <div class="p3-body">We've saved a special discount just for you. Use the code below at checkout before it expires.</div>
+        <div class="p3-code">LASTCHANCE25</div>
+        <div class="p3-timer-row">
+          ⏱ Expires in:
+          <span class="p3-timer-val">14</span> :
+          <span class="p3-timer-val">59</span>
+        </div>
+        <button class="p3-cta">Claim 25% Off Now →</button>
+        <div class="p3-no">No thanks, I don't want a discount</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
