@@ -61,5 +61,4 @@ pnpm --filter dashboard dev
 **API port conflict:** `taskkill //PID <pid> //F` if port 3001 is taken
 
 ## Git Workflow
-Dev version: `C:\Users\dwain\Downloads\scrollpop-scaffold\New folder\scrollpop-dev`
-Live version: `C:\Users\dwain\OneDrive\Documents\scrollpop-scaffold` (do NOT push until user approves)
+Changes should be pushed to the active `main` branch. The repository has two remotes configured (`origin` and `dwain-coder`), and changes must be pushed to both to keep them in sync.
