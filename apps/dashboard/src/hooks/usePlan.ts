@@ -5,6 +5,13 @@ import { getApiBase } from '../providers/dataProvider';
 export const ADMIN_EMAIL       = 'dwain3991@gmail.com';
 export const UNLIMITED_DOMAINS = ['novatise.com'];
 
+// Platform super-admin: only the exact ADMIN_EMAIL gets admin console access.
+export function isSuperAdminEmail(email: string): boolean {
+  return email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+}
+
+// Unlimited plan: super-admin + Novatise agency members.
+// These users get agency-level limits but NOT admin console access (except ADMIN_EMAIL).
 export function isUnlimitedEmail(email: string): boolean {
   const e = email.toLowerCase();
   return e === ADMIN_EMAIL.toLowerCase() ||
@@ -164,9 +171,11 @@ export function usePlan() {
     ? (apiPlan as PlanId)
     : detectPlanLocal();
 
-  // isAdmin (unlimited) is true for ADMIN_EMAIL or any @novatise.com address.
-  // Source of truth is the API email (from Clerk JWT → DB) — cannot be faked.
-  const isAdmin: boolean = (apiEmail ? isUnlimitedEmail(apiEmail) : false) || detectAdminLocal();
+  // isAdmin = platform super-admin only (exact ADMIN_EMAIL match).
+  // isUnlimited = super-admin OR any @novatise.com member (agency plan, no console access).
+  // Source of truth is the API email (Clerk JWT → DB) — cannot be faked client-side.
+  const isAdmin: boolean = (apiEmail ? isSuperAdminEmail(apiEmail) : false) || detectAdminLocal();
+  const isUnlimited: boolean = (apiEmail ? isUnlimitedEmail(apiEmail) : false) || detectAdminLocal();
 
   const [, rerender] = React.useState(0);
   React.useEffect(() => {
@@ -175,16 +184,16 @@ export function usePlan() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const limits: PlanLimits = isAdmin ? UNLIMITED : PLAN_LIMITS[plan];
+  const limits: PlanLimits = isUnlimited ? UNLIMITED : PLAN_LIMITS[plan];
 
   const hasFeature = (key: keyof Omit<PlanLimits, 'maxSites' | 'maxCampaigns' | 'maxViews'>): boolean =>
-    isAdmin || limits[key];
+    isUnlimited || limits[key];
 
   const withinLimit = (type: 'maxSites' | 'maxCampaigns', current: number): boolean =>
-    isAdmin || current < limits[type];
+    isUnlimited || current < limits[type];
 
   const planRank = (p: PlanId) => PLAN_ORDER.indexOf(p);
-  const meetsMinPlan = (required: PlanId): boolean => isAdmin || planRank(plan) >= planRank(required);
+  const meetsMinPlan = (required: PlanId): boolean => isUnlimited || planRank(plan) >= planRank(required);
 
-  return { plan, isAdmin, limits, hasFeature, withinLimit, meetsMinPlan };
+  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan };
 }

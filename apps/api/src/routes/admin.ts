@@ -15,12 +15,13 @@ import { db } from '../db/client.js';
 import { users, tenants, tenantMembers, sites, campaigns } from '../db/schema.js';
 import { eq, sql, isNull } from 'drizzle-orm';
 
-const ADMIN_EMAIL       = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
-const UNLIMITED_DOMAINS = ['novatise.com'];
+const ADMIN_EMAIL = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
 
+// Only the exact platform-owner email gets super-admin access.
+// novatise.com users are a client agency — they get unlimited plan limits,
+// but they do NOT have access to the admin console.
 function isAdminUser(email: string): boolean {
-  const e = email.toLowerCase();
-  return e === ADMIN_EMAIL || UNLIMITED_DOMAINS.some((d) => e.endsWith(`@${d}`));
+  return email.toLowerCase() === ADMIN_EMAIL;
 }
 
 /** Rejects the request if the calling user is not the super admin. */
