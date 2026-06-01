@@ -983,6 +983,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
             <SidebarRightDesigner
               stepConfig={campaign.steps[activeStep]}
               selectedElementId={selectedElementId}
+              activeStep={activeStep}
               onUpdateStepConfig={handleUpdateStepConfig}
               onUpdateElement={handleUpdateElement}
               onDeleteElement={handleRemoveElement}

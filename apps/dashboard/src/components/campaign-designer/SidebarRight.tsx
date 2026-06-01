@@ -52,6 +52,7 @@ function NumInput({
 interface SidebarRightProps {
   stepConfig: CampaignStepConfig;
   selectedElementId: string | null;
+  activeStep?: 'teaser' | 'main' | 'success';
   onUpdateStepConfig: (key: string, value: any) => void;
   onUpdateElement: (id: string, keyOrObj: string | Record<string, any>, value?: any) => void;
   onDeleteElement: (id: string) => void;
@@ -67,6 +68,7 @@ const PRESET_FONTS = [
 export default function SidebarRight({
   stepConfig,
   selectedElementId,
+  activeStep,
   onUpdateStepConfig,
   onUpdateElement,
   onDeleteElement,
@@ -555,9 +557,24 @@ export default function SidebarRight({
       ) : (
         // ----------------- GLOBAL CANVAS SPECIFICATION PANEL -----------------
         <div className="space-y-5">
-          <div className="pb-3 border-b border-zinc-200 flex items-center gap-1.5">
-            <Layout className="h-3.5 w-3.5 text-zinc-900" />
-            <span className="text-[10px] font-semibold uppercase text-zinc-500 tracking-wider font-mono">Canvas Layout Settings</span>
+          <div className="pb-3 border-b border-zinc-200 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Layout className="h-3.5 w-3.5 text-zinc-900" />
+              <span className="text-[10px] font-semibold uppercase text-zinc-500 tracking-wider font-mono">Canvas Layout Settings</span>
+            </div>
+            {activeStep && activeStep !== 'main' && (
+              <button
+                type="button"
+                onClick={() => onUpdateStepConfig('enabled', stepConfig.enabled === false ? true : false)}
+                className={`text-[9px] font-bold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                  stepConfig.enabled !== false
+                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
+                }`}
+              >
+                {stepConfig.enabled !== false ? 'Enabled ✓' : 'Disabled ✕'}
+              </button>
+            )}
           </div>
 
           {/* Layout coordinates type */}

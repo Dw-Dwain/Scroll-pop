@@ -15,7 +15,7 @@ publishers displaying product ads that users can choose to engage with.
 
 ### What ships in MVP
 - [x] Tenant onboarding (Clerk auth, personal-account model — no org creation required)
-- [x] Site registration + public_key issuance + install verification (WP bypass in dev/staging)
+- [x] Site registration + public_key issuance + install verification (WP bypass in dev)
 - [x] Campaign CRUD (create / read / update / archive) — 3-step wizard (Details → Design → Launch)
 - [x] Design editor — full visual canvas builder (drag-and-drop, 38+ templates across 14 categories)
 - [x] Triggers: scroll_pct, dwell_time, inactivity, exit_intent_mouse (NO back-button, ever)
@@ -34,7 +34,6 @@ publishers displaying product ads that users can choose to engage with.
 - [x] Edge enforcement: monthly view limit checked before returning campaign config
 - [x] Admin dashboard — super-admin panel (email-gated: `dwain3991@gmail.com` only)
 - [x] Cloudflare Worker: snippet CDN + config endpoint + event ingest endpoint (custom domains live)
-- [x] Staging environment: `staging.scrollpop.online` → `scroll-pop-staging.onrender.com` → Neon dev branch
 
 ### What does NOT ship in MVP (v2 targets)
 - A/B testing
@@ -44,7 +43,7 @@ publishers displaying product ads that users can choose to engage with.
 - Shopify App Store listing
 - Scale/Agency tier Stripe price IDs (need configuring)
 - Compliance Center dashboard
-- Teaser + success step WYSIWYG (snippet uses built-in layout for those two steps)
+- Teaser + success step WYSIWYG (snippet uses built-in layout for those two steps, though they can now be optionally disabled)
 - Neon partition auto-creation (manual monthly task until cron is built)
 
 ---

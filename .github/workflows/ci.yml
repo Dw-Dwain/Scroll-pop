@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -126,20 +126,6 @@ jobs:
             echo "⚠️ RENDER_DEPLOY_HOOK_URL not set — Render auto-deploys on push"
           fi
 
-  deploy-staging:
-    name: Deploy API → Render (staging)
-    runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
-    if: github.ref == 'refs/heads/dev'
-    steps:
-      - name: Trigger Render staging deploy hook
-        run: |
-          if [ -n "${{ secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}" ]; then
-            curl -s -X POST "${{ secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}"
-            echo "✅ Render staging deploy triggered (scroll-pop-staging)"
-          else
-            echo "⚠️ RENDER_STAGING_DEPLOY_HOOK_URL not set — Render auto-deploys on push to dev branch"
-          fi
 
   deploy-worker:
     name: Deploy Worker → Cloudflare
@@ -215,40 +201,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  deploy-dashboard-staging:
-    name: Deploy Dashboard → Cloudflare Pages (staging — locked to dwain3991@gmail.com)
-    runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
-    if: github.ref == 'refs/heads/dev'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '${{ env.NODE_VERSION }}'
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build dashboard (staging — access restricted)
-        working-directory: apps/dashboard
-        run: pnpm build
-        env:
-          VITE_API_URL: 'https://scroll-pop-staging.onrender.com'
-          VITE_CLERK_PUBLISHABLE_KEY: 'pk_live_Y2xlcmsuc2Nyb2xscG9wLm9ubGluZSQ'
-          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
-          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
-          VITE_STAGING_MODE: 'true'
-      - name: Deploy to Cloudflare Pages (staging)
-        working-directory: apps/dashboard
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "⏭️  CLOUDFLARE_API_TOKEN not set — skipping dashboard staging deploy."
-            exit 0
-          fi
-          npx wrangler pages deploy dist \
-            --project-name=scrollpop-dashboard \
-            --branch=dev \
-            --commit-dirty=true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+

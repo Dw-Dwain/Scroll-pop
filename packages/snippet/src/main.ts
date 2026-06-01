@@ -142,16 +142,15 @@ function shouldSkipTracking(): boolean {
     return true;
   }
 
-  // 2. Localhost / dev / staging domains — never pollute production analytics
+  // 2. Localhost / dev domains — never pollute production analytics
   const host = window.location.hostname;
   if (
     host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
     host.endsWith('.local') || host.endsWith('.test') ||
-    host.includes('staging.scrollpop.online') ||
     host.includes('scrollpop-dashboard.pages.dev') ||
     host.includes('scroll-pop.pages.dev')
   ) {
-    console.log('[ScrollPop] Dev/staging host — skipping tracking:', host);
+    console.log('[ScrollPop] Dev host — skipping tracking:', host);
     return true;
   }
 
@@ -879,11 +878,14 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   } // end non-element (flat-field) layout
   htmlChunks.push('</div>'); // End popup
 
-  // Minimizable Teaser Badge
-  htmlChunks.push('<div class="teaser-badge" id="teaser-badge">');
-  htmlChunks.push('⚡ ');
-  htmlChunks.push(escapeHtml(design.subheadline || 'Special Offer'));
-  htmlChunks.push('</div>');
+  const teaserStep = (design as any).steps?.teaser;
+  if (teaserStep?.enabled !== false) {
+    // Minimizable Teaser Badge
+    htmlChunks.push('<div class="teaser-badge" id="teaser-badge">');
+    htmlChunks.push('⚡ ');
+    htmlChunks.push(escapeHtml(design.subheadline || 'Special Offer'));
+    htmlChunks.push('</div>');
+  }
 
   shadow.innerHTML = htmlChunks.join('');
 
@@ -918,6 +920,13 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
       beaconEvent(campaign, 'email_capture', slot?.id, { hasEmail: true });
     }
     beaconEvent(campaign, 'conversion', slot?.id, { email });
+
+    const successStep = (design as any).steps?.success;
+    if (successStep?.enabled === false) {
+      // If success screen is disabled, just dismiss the modal immediately
+      dismiss(true);
+      return;
+    }
 
     const couponTxt = slot?.coupon || 'WELCOME50';
     const trackerUrl = slot?.click_tracker_url || slot?.product_url || '#';

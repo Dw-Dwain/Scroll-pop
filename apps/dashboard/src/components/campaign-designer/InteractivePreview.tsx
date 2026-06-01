@@ -385,14 +385,23 @@ export default function InteractivePreview({
         showToast(`🎉 Congrats! You won: ${resolvedPrize}!`);
         // Move to success congratulations screen
         setTimeout(() => {
-          setCampaignStep('success');
+          if (campaign.steps.success.enabled !== false) {
+            setCampaignStep('success');
+          } else {
+            setShowMainCampaign(false);
+          }
         }, 1200);
       }, 3200);
 
     } else {
       // Direct success screen transition
-      setCampaignStep('success');
-      showToast('💌 Subscription Confirmed! Discount Code Activated.');
+      if (campaign.steps.success.enabled !== false) {
+        setCampaignStep('success');
+        showToast('💌 Subscription Confirmed! Discount Code Activated.');
+      } else {
+        setShowMainCampaign(false);
+        showToast('💌 Subscription Confirmed!');
+      }
     }
   };
 
@@ -698,7 +707,7 @@ export default function InteractivePreview({
           )}
 
           {/* 3. SIMULATED ACTIVE CAMPAED FLOATS (Stickybar / Teasers) */}
-          {showTeaser && campaign.steps.teaser.elements.length > 0 && (
+          {showTeaser && campaign.steps.teaser.enabled !== false && campaign.steps.teaser.elements.length > 0 && (
             <div 
               onClick={() => triggerMainPopup('Teaser Click')}
               className="fixed bottom-6 right-6 transition-all border shadow-2xl overflow-hidden hover:scale-105 active:scale-95 cursor-pointer z-[400] flex flex-col justify-between"

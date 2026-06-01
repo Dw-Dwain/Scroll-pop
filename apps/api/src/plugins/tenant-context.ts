@@ -10,30 +10,9 @@ import { getAuth, clerkClient } from '@clerk/fastify';
 //                 Gets unlimited plan + admin console access.
 // novatise.com  = Novatise agency. All @novatise.com emails share ONE org tenant
 //                 (org_novatise) and get unlimited agency plan, but no admin console.
-// STAGING_ALLOWLIST = comma-separated emails allowed on staging. Set ONLY on the
-//                 staging Render service — production leaves this var unset.
 const ADMIN_EMAIL       = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
 const NOVATISE_ORG_KEY  = 'org_novatise';
 const NOVATISE_ORG_NAME = 'Novatise';
-
-// Set STAGING_ALLOWLIST=dwain3991@gmail.com on the staging Render service only.
-// Any authenticated user whose email is NOT in the list gets a 403 immediately.
-// Leave unset in production — has zero effect when not configured.
-const STAGING_ALLOWLIST: string[] | null = process.env['STAGING_ALLOWLIST']
-  ? process.env['STAGING_ALLOWLIST'].split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
-  : null;
-
-async function assertStagingAllowed(email: string, reply: FastifyReply): Promise<boolean> {
-  if (!STAGING_ALLOWLIST) return true;
-  if (STAGING_ALLOWLIST.includes(email.toLowerCase())) return true;
-  await reply.code(403).send({
-    error: {
-      code: 'STAGING_RESTRICTED',
-      message: 'This staging environment is restricted to authorised accounts only.',
-    },
-  });
-  return false;
-}
 
 function isUnlimitedUser(email: string): boolean {
   const e = email.toLowerCase();
@@ -217,8 +196,6 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
           error: { code: 'NOT_A_MEMBER', message: 'Not a member of this organization' },
         });
       }
-      // Staging allowlist gate
-      if (!await assertStagingAllowed(user.email, reply)) return;
 
       // Auto-upgrade novatise.com / admin users to unlimited
       if (isUnlimitedUser(user.email)) await ensureUnlimitedTenant(tenant.id);
@@ -265,8 +242,6 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
 
     const userEmail = resolvedEmail ?? user.email;
 
-    // Staging allowlist gate (checked once, before any tenant provisioning)
-    if (!await assertStagingAllowed(userEmail, reply)) return;
 
     // ─── @novatise.com → shared Novatise org tenant ───────────────────────────
     // All Novatise emails share a single org rather than getting personal tenants.

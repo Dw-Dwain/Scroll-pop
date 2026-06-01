@@ -687,6 +687,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
         <SidebarRight
           stepConfig={campaign.steps[activeStep]}
           selectedElementId={selectedElementId}
+          activeStep={activeStep}
           onUpdateStepConfig={handleUpdateStepConfig}
           onUpdateElement={handleUpdateElement}
           onDeleteElement={handleRemoveElement}

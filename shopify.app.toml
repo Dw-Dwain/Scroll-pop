@@ -7,7 +7,6 @@ embedded        = false
 [auth]
 redirect_urls = [
   "https://scroll-pop.onrender.com/api/v1/shopify/callback",
-  "https://scroll-pop-staging.onrender.com/api/v1/shopify/callback",
 ]
 
 [webhooks]

@@ -75,6 +75,7 @@ export interface CampaignElement {
 export type CampaignStep = 'teaser' | 'main' | 'success';
 
 export interface CampaignStepConfig {
+  enabled?: boolean;
   elements: CampaignElement[];
   backgroundColor: string;
   borderRadius: number;

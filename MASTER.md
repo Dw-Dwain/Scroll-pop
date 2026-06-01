@@ -249,17 +249,6 @@ scrollpop/
 | Clerk Auth | https://clerk.scrollpop.online | Clerk (production instance) |
 | Clerk Accounts Portal | https://accounts.scrollpop.online | Clerk |
 
-### Staging URLs (dev branch — isolated from production)
-| Service | URL | Host |
-|---|---|---|
-| Staging API | https://scroll-pop-staging.onrender.com | Render.com Free |
-| Staging Dashboard | https://staging.scrollpop.online | Cloudflare Pages (`scrollpop-staging` project) |
-| Staging DB | Neon `dev` branch (`br-flat-leaf-ao5st8va`) | Neon — schema-only fork of production |
-
-**Staging deploy flow:** push to `dev` → CI checks pass → `deploy-staging` job triggers
-`RENDER_STAGING_DEPLOY_HOOK_URL` secret → staging API rebuilds from `dev` branch.
-Both point at the Neon dev branch — **zero risk to production data**.
-
 ### Marketing site
 Source: `site-plan/` directory in the repo.
 Content files: `site-plan/src/components/` — one file per page.
@@ -742,14 +731,6 @@ When a user is deleted in the Clerk dashboard, the `user.deleted` webhook fires 
 - Soft-deletes orphaned `personal_*` novatise.com tenants (pre-shared-org)
 - Called by the "Sync & Refresh" button in the admin panel; staleTime = 0 so data is always fresh
 
-### Staging lock
-`staging.scrollpop.online` enforces a hostname-based gate at runtime:
-```typescript
-const STAGING_MODE = window.location.hostname === 'staging.scrollpop.online';
-```
-Only `dwain3991@gmail.com` can sign in. Anyone else is auto-signed-out immediately.
-Sign-up is hidden. This is enforced in-browser — no build config or env var needed.
-
 ### Dev Bypass (non-production only)
 If `NODE_ENV !== 'production'` and no Clerk auth is present, the preHandler creates/reuses a demo tenant (`org_demo_12345`) and sets tenant context automatically. This lets you test locally without a Clerk account.
 
@@ -818,13 +799,6 @@ All registered automatically during OAuth. All respond 200 immediately and perfo
 **Requires:** GitHub PAT with `workflow` scope (push blocked without it — push manually when token is updated)
 
 ### Pipeline Steps
-```
-push to dev
-  ├── Lint + Typecheck + Unit Tests
-  ├── Snippet size check (≤10 KB gzipped)
-  ├── No history.*/popstate check
-  ├── Deploy API → Render staging (RENDER_STAGING_DEPLOY_HOOK_URL)
-  └── Deploy Dashboard → Cloudflare Pages (branch=dev → staging.scrollpop.online)
 
 push / PR merge to main
   ├── Lint + Typecheck + Unit Tests
@@ -839,11 +813,9 @@ push / PR merge to main
 ### Environment Secrets (GitHub Actions — Dw-Dwain/Scroll-pop)
 ```
 RENDER_DEPLOY_HOOK_URL            Render production deploy hook
-RENDER_STAGING_DEPLOY_HOOK_URL    Render staging deploy hook
 CLOUDFLARE_API_TOKEN              Worker deploy + KV purge
 CLOUDFLARE_ACCOUNT_ID
 VITE_API_URL                      Production API URL (baked into dashboard build)
-VITE_API_URL_STAGING              Staging API URL (baked into staging dashboard build)
 VITE_CLERK_PUBLISHABLE_KEY        Same key for both envs
 VITE_POSTHOG_KEY
 VITE_STRIPE_PUBLISHABLE_KEY

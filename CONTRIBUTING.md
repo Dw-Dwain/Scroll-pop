@@ -9,8 +9,7 @@
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | **Production.** Protected — never commit directly. Deploys automatically to Render (API), Cloudflare (Worker + Pages) and `scrollpop-staging` CF Pages on merge. |
-| `dev` | **Default working branch.** All day-to-day changes go here. Deploys automatically to staging on every push. |
+| `main` | **Production.** Protected — never commit directly. Create feature branches and PR to main. Deploys automatically on merge. |
 
 ---
 
@@ -19,25 +18,25 @@
 | Environment | Dashboard | API | Database |
 |-------------|-----------|-----|----------|
 | **Production** | dashboard.scrollpop.online | scroll-pop.onrender.com | Neon `main` branch |
-| **Staging** | staging.scrollpop.online | scroll-pop-staging.onrender.com | Neon `dev` branch |
 
 ---
 
 ## Day-to-day workflow
 
-### 1. Make sure you're on `dev`
+### 1. Create a feature branch
 
 ```bash
-git branch --show-current   # should print: dev
-git pull                    # get latest from origin/dev
+git checkout main
+git pull
+git checkout -b feature/my-new-feature
 ```
 
-### 2. Code, commit, push to `dev`
+### 2. Code, commit, push
 
 ```bash
 git add apps/dashboard/src/pages/SomePage.tsx
-git commit -m "fix: describe what changed and why"
-git push                    # → CI checks run, staging auto-deploys
+git commit -m "feat: describe what changed and why"
+git push -u origin HEAD     # → push your branch
 ```
 
 Check CI at: **https://github.com/Dw-Dwain/Scroll-pop/actions**
@@ -48,45 +47,25 @@ All 4 required checks must be green:
 - ✅ Unit Tests
 - ✅ No history.* / popstate in snippet
 
-### 3. Test on staging
+### 3. Test Locally
 
-Open **https://staging.scrollpop.online** — fully authenticated, hits staging API,
-isolated Neon dev database. Safe to create/delete anything.
-
-> ℹ️ WordPress verification is **bypassed** on staging (`NODE_ENV=development`).
-> Clicking "Verify" auto-succeeds without needing the WP plugin installed.
-
-> 🔒 **Staging is locked to `dwain3991@gmail.com` only.** Anyone else who signs in is
-> auto-signed-out and shown a "Staging — Restricted Access" screen. This is enforced
-> at runtime by a hostname check (`window.location.hostname === 'staging.scrollpop.online'`)
-> — no env var or build config needed. It cannot be bypassed by Cloudflare Pages
-> auto-deploy overwriting a CI build.
+Ensure all functionality is tested locally (`pnpm dev`) before opening a PR.
 
 ### 4. Ship to production — open a PR
 
-When staging looks good:
+When testing is complete:
 
-1. Go to **https://github.com/Dw-Dwain/Scroll-pop/compare/main...dev**
-2. Click **Create pull request**
-3. CI re-runs — all 4 checks must be green
-4. Once green → **Merge pull request**
+1. Open a Pull Request against `main`.
+2. CI runs — all 4 checks must be green
+3. Once green → **Merge pull request**
 
 **What deploys after merge:**
 - `dashboard.scrollpop.online` — Cloudflare Pages (`scrollpop-dashboard` project)
 - `scrollpop.online` — Cloudflare Pages (`scrollpop-site` project, marketing site)
 - Worker (snippet + edge) — GitHub Actions from `Dw-Dwain/Scroll-pop`
-- **Render API does NOT auto-deploy** — you must manually sync `dwain-coder` (step 5b)
+- **Render API does NOT auto-deploy** — you must manually sync `dwain-coder` (step 5)
 
-### 5. After merging — sync dev + dwain-coder
-
-```bash
-# Sync dev with the new main
-git checkout dev
-git pull origin main        # bring dev in sync with new main
-git push                    # update origin/dev + triggers fresh staging build
-```
-
-### 5b. Sync dwain-coder (Render's source repo)
+### 5. Sync dwain-coder (Render's source repo)
 
 **⚠️ Critical** — Render deploys from `dwain-coder/Scroll-pop`, not `Dw-Dwain`. After every
 PR merge on `Dw-Dwain`, you must push main to `dwain-coder` so the API gets the new code:
@@ -144,7 +123,7 @@ Both repos have identical code. Every push goes to both:
 
 ```bash
 git push                                                                  # → Dw-Dwain (origin)
-git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" dev   # → dwain-coder
+git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" HEAD   # → dwain-coder
 ```
 
 ---
@@ -181,7 +160,7 @@ pnpm --filter react-example dev
 ### Deploy a content change
 
 ```bash
-git checkout dev
+git checkout -b feature/update-hero
 # edit site-plan/src/components/HomeView.tsx (or any file)
 git add site-plan/
 git commit -m "content: update hero headline"
@@ -238,7 +217,7 @@ The `events` table is partitioned by calendar month (`events_YYYY_MM`). PostgreS
 (no error thrown, but the row is dropped). This killed analytics for all of 2026 until
 partitions were created manually.
 
-**Before each new month**, run this in the Neon SQL Editor (production AND dev branches):
+**Before each new month**, run this in the Neon SQL Editor (production branch):
 
 ```sql
 -- Replace YYYY and MM with the next month
@@ -319,11 +298,11 @@ comments — always use environment variables.
 ## Useful commands
 
 ```bash
-# Confirm you're on dev
+# Confirm your current branch
 git branch --show-current
 
 # See what's going into the next PR
-git log main..dev --oneline
+git log main..HEAD --oneline
 
 # Run all checks locally
 pnpm run lint && pnpm run typecheck && pnpm run test
