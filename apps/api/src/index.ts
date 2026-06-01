@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { db } from './db/client.js';
+import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from './db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
@@ -59,6 +60,7 @@ async function bootstrap() {
     process.env['DASHBOARD_URL'],
     'https://dashboard.scrollpop.online',
     'https://scrollpop-dashboard.pages.dev',
+    ...(isDev ? ['http://localhost:5173', 'http://localhost:3000'] : []),
   ].filter((o): o is string => Boolean(o));
   // Allows Cloudflare Pages preview deployments: <hash>.scrollpop-dashboard.pages.dev
   const pagesPreviewPattern = /^https:\/\/[a-z0-9-]+\.scrollpop-dashboard\.pages\.dev$/;
@@ -347,7 +349,18 @@ async function bootstrap() {
             }
           }
         } catch (err) {
-          request.log.error(err, 'Failed to insert analytic event');
+          const msg = err instanceof Error ? err.message : String(err);
+          // A missing monthly partition makes Postgres reject the row with
+          // "no partition of relation \"events\" found". Surface it loudly — this is
+          // the classic cause of analytics going silently empty at month rollover.
+          if (msg.includes('no partition of relation')) {
+            request.log.error(
+              { err, eventType, campaignId },
+              '[analytics] EVENT DROPPED — missing events partition for this month. Run ensureEventPartitions / create events_YYYY_MM in Neon.',
+            );
+          } else {
+            request.log.error(err, 'Failed to insert analytic event');
+          }
         }
       }
     }
@@ -365,6 +378,11 @@ async function bootstrap() {
 
   // Health check
   app.get('/health', async () => ({ ok: true, ts: Date.now() }));
+
+  // Ensure this month's (and next month's) events partition exists before serving.
+  // Prevents the recurring "analytics silently dies at month rollover" outage on Neon,
+  // where inserts for a missing partition are dropped with no error. Safe no-op locally.
+  await ensureEventPartitions(app.log);
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });

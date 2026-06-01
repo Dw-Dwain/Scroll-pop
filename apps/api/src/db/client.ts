@@ -15,4 +15,8 @@ const client = postgres(process.env['DATABASE_URL'], {
 
 export const db = drizzle(client, { schema });
 
+// Raw postgres-js client — exposed for maintenance DDL that Drizzle's query
+// builder can't express (e.g. CREATE TABLE ... PARTITION OF for the events table).
+export const sqlClient = client;
+
 export type Database = typeof db;

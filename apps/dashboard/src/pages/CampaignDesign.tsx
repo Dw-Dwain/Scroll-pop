@@ -78,7 +78,34 @@ function bootstrapCampaign(
     abTestPercent = config.steps?.main?.triggers?.abTestPercent ?? 100;
   }
 
-  const frequencyCapDays = frequencyData?.frequency ? (frequencyData.frequency === 'always' ? 0 : (frequencyData.intervalDays || 7)) : (config.steps?.main?.triggers?.frequencyCapDays ?? 7);
+  const frequencyCapDays = frequencyData?.intervalDays || (frequencyData?.frequency ? (frequencyData.frequency === 'always' ? 0 : 7) : (config.steps?.main?.triggers?.frequencyCapDays ?? 7));
+
+  // Build the canonical sidebar trigger state. Start from the values derived from the
+  // normalized triggers/targeting tables, restore the Display Frequency dropdown from the
+  // frequency rule, then overlay the full saved UI snapshot (config.uiTriggers) so every
+  // sidebar control — including ones the normalized tables don't store (page-targeting
+  // rule builder, Smart Product Match) — comes back exactly as the user left it.
+  let triggers: Campaign['triggers'] = {
+    exitIntent,
+    scrollPercent,
+    inactivitySeconds,
+    timeDelaySeconds,
+    pageTargeting,
+    deviceTargeting: deviceTargeting as 'all' | 'desktop' | 'mobile' | 'tablet',
+    geoTargeting,
+    frequencyCapDays,
+    newVisitorOnly,
+    sessionPageCount,
+    utmSource,
+    abTestPercent,
+    frequency: (frequencyData?.frequency as Campaign['triggers']['frequency']) ?? 'once_per_session',
+  };
+  if (config.uiTriggers && typeof config.uiTriggers === 'object') {
+    triggers = { ...triggers, ...config.uiTriggers };
+    // The frequency rule table stays authoritative for these two (also written on save).
+    if (frequencyData?.frequency) triggers.frequency = frequencyData.frequency;
+    if (frequencyData?.intervalDays) triggers.frequencyCapDays = frequencyData.intervalDays;
+  }
 
   if (config.steps) {
     return {
@@ -87,20 +114,7 @@ function bootstrapCampaign(
       category: 'Countdown Campaigns',
       isActive: true,
       steps: config.steps,
-      triggers: {
-        exitIntent,
-        scrollPercent,
-        inactivitySeconds,
-        timeDelaySeconds,
-        pageTargeting,
-        deviceTargeting: deviceTargeting as 'all' | 'desktop' | 'mobile' | 'tablet',
-        geoTargeting,
-        frequencyCapDays,
-        newVisitorOnly,
-        sessionPageCount,
-        utmSource,
-        abTestPercent,
-      },
+      triggers,
       conversions: 0,
       views: 0,
       createdAt: new Date().toISOString(),
@@ -309,20 +323,7 @@ function bootstrapCampaign(
       main: mainStep,
       success: successStep,
     },
-    triggers: {
-      exitIntent: true,
-      scrollPercent: 30,
-      inactivitySeconds: 20,
-      timeDelaySeconds: 5,
-      pageTargeting: '*',
-      deviceTargeting: 'all' as const,
-      geoTargeting: 'All Countries',
-      frequencyCapDays: 7,
-      newVisitorOnly: false,
-      sessionPageCount: 0,
-      utmSource: '',
-      abTestPercent: 100,
-    },
+    triggers,
     conversions: 0,
     views: 0,
     createdAt: new Date().toISOString(),
@@ -345,6 +346,10 @@ function mapCampaignToDesign(campaign: Campaign) {
 
   const config = {
     steps: campaign.steps,
+    // Full sidebar trigger/targeting snapshot — authoritative source for restoring the
+    // editor exactly as the user left it (incl. Display Frequency, page-targeting rules,
+    // and Smart Product Match, which the normalized trigger/targeting tables don't capture).
+    uiTriggers: campaign.triggers,
     backgroundColor: mainStep.backgroundColor,
     borderRadius: mainStep.borderRadius,
     borderColor: mainStep.borderColor,
@@ -528,9 +533,10 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
   };
 
   const handleUpdateTriggers = (key: string, value: any) => {
-    if (!campaign) return;
-    const updatedTriggers = { ...campaign.triggers, [key]: value };
-    setCampaign({ ...campaign, triggers: updatedTriggers });
+    // Functional update — reading `campaign` from the closure would clobber rapid
+    // successive trigger changes (each handler would start from the same stale state,
+    // so only the last write survived). This keeps every sidebar change.
+    setCampaign((prev) => (prev ? { ...prev, triggers: { ...prev.triggers, [key]: value } } : prev));
   };
 
   const handleAddElement = (type: ElementType) => {
@@ -665,8 +671,6 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       if (t.inactivitySeconds > 0) triggersList.push({ type: 'inactivity', params: { seconds: Math.max(5, t.inactivitySeconds) } });
       if (t.exitIntent) triggersList.push({ type: 'exit_intent_mouse', params: { sensitivity: 20 } });
     }
-    const frequency = t?.frequencyCapDays ? 'once_per_session' : 'always'; // rough mapping, adjust as needed
-
     const targetingList: Array<{ kind: string; operator: string; value: Record<string, unknown> }> = [];
     if (t) {
       if (t.deviceTargeting && t.deviceTargeting !== 'all') targetingList.push({ kind: 'device', operator: 'include', value: { device: t.deviceTargeting } });
@@ -678,12 +682,10 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       if (t.abTestPercent < 100) targetingList.push({ kind: 'ab_test', operator: 'include', value: { percent: t.abTestPercent } });
     }
 
-    let freqMode = 'always';
-    let freqInterval = 0;
-    if (t?.frequencyCapDays && t.frequencyCapDays > 0) {
-      freqMode = 'once_per_day'; // You could also use once_per_visitor with an interval
-      freqInterval = t.frequencyCapDays;
-    }
+    // Persist the Display Frequency dropdown exactly as chosen (was previously derived from
+    // frequencyCapDays, so the dropdown selection was silently lost on save).
+    const freqMode = t?.frequency ?? 'once_per_session';
+    const freqInterval = t?.frequencyCapDays && t.frequencyCapDays > 0 ? t.frequencyCapDays : undefined;
 
     // Save design
     mutate(
