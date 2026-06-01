@@ -139,6 +139,7 @@ export type TargetingKind = z.infer<typeof TargetingKind>;
 // Site config payload sent by the edge Worker to the snippet
 export interface SiteConfigPayload {
   siteId: string;
+  plan: 'free' | 'starter' | 'growth' | 'scale' | 'agency';
   campaigns: Array<{
     id: string;
     design: DesignConfig;

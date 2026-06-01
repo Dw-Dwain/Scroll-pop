@@ -170,6 +170,7 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
 
       const payload: SiteConfigPayload = {
         siteId: site.id,
+        plan: (tenant?.plan ?? 'free') as SiteConfigPayload['plan'],
         campaigns: validCampaigns as SiteConfigPayload['campaigns'],
         version,
       };

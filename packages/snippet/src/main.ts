@@ -82,6 +82,7 @@ interface CampaignConfig {
 
 interface SiteConfig {
   siteId: string;
+  plan: string;
   campaigns: CampaignConfig[];
   version: string;
 }
@@ -125,6 +126,7 @@ function getEdgeUrl(): string {
 const EDGE_URL = getEdgeUrl();
 
 let activeSiteId = '';
+let adTriggerEnabled = false; // growth+ plans only
 
 // Track when the snippet loaded so we can report time-on-page at trigger
 const _pageLoadTime = Date.now();
@@ -222,6 +224,7 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
 
     const config: SiteConfig = await res.json() as SiteConfig;
     activeSiteId = config.siteId;
+    adTriggerEnabled = 'growthscaleagency'.includes(config.plan || '');
     console.log('[ScrollPop] Config loaded successfully:', config);
 
     if (!config.campaigns || config.campaigns.length === 0) {
@@ -949,14 +952,16 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
     });
   };
 
-  // Close (X) button — two-step flow when an affiliate/ad URL is configured:
-  //   1st click → open the ad in a new tab, popup stays visible.
-  //   User closes the new tab and returns to the page — popup is still there.
-  //   2nd click → popup dismisses and frequency cap resets (triggers can re-fire).
+  // Close (X) button behavior depends on plan tier:
   //
-  // When no URL is configured, the first click dismisses immediately (simple mode).
+  // growth | scale | agency — two-step ad-trigger flow:
+  //   1st click → opens the affiliate ad in a new tab, popup stays visible.
+  //   User closes the new tab and returns — popup is still there.
+  //   2nd click → dismisses popup and resets frequency cap.
+  //
+  // free | starter — standard instant dismiss (no ad-trigger on X).
   const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
-  const closeUrl = closeEl?.href || slot?.click_tracker_url || slot?.product_url || null;
+  const closeUrl = adTriggerEnabled ? (closeEl?.href || slot?.click_tracker_url || slot?.product_url || null) : null;
   let adOpened = false;
   shadow.getElementById('close-btn')?.addEventListener('click', () => {
     if (closeUrl && !adOpened) {
@@ -964,9 +969,8 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
       adOpened = true;
       window.open(closeUrl, '_blank', 'noopener');
       beaconEvent(campaign, 'click', slot?.id, { destinationUrl: closeUrl, displayDuration: getDisplayDuration() });
-      // No dismiss yet — user sees popup again when they return
     } else {
-      // Second click (or first click with no URL): close (intentional X press)
+      // Second click, or free/starter plan — instant close
       dismiss(true);
       sessionStorage.removeItem(`_sp_session_${campaign.id}`);
       try { localStorage.removeItem(`_sp_fr_${campaign.id}`); } catch {}
@@ -1201,11 +1205,8 @@ type BeaconEventType =
   | 'email_capture' | 'sms_capture' | 'discount_redeemed'
   | 'checkout_started' | 'purchase_completed' | 'trigger_fired';
 
-function getScrollDepthPct(): number {
-  const scrolled = window.scrollY;
-  const total = Math.max(document.body.scrollHeight - window.innerHeight, 1);
-  return Math.min(100, Math.round((scrolled / total) * 100));
-}
+const getScrollDepthPct = () =>
+  Math.round(scrollY / Math.max(document.body.scrollHeight - innerHeight, 1) * 100);
 
 function beaconEvent(
   campaign: CampaignConfig,
