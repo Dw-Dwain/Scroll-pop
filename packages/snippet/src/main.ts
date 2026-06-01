@@ -130,19 +130,15 @@ let adTriggerEnabled = false; // growth+ plans only
 
 // Track when the snippet loaded so we can report time-on-page at trigger
 const _pageLoadTime = Date.now();
+let _skipTracking = false;
 
 // ─── Exclusion Guards ─────────────────────────────────────────────────────────
-// Called once before any trigger is registered. Returns true if tracking should
-// be SKIPPED entirely for this page load.
-
-function shouldSkipTracking(): boolean {
-  // 1. Do Not Track header — respect browser/OS preference
+// Evaluates if we should skip analytics tracking (but still show popups)
+function evaluateSkipTracking(): void {
   if (navigator.doNotTrack === '1' || (window as any).doNotTrack === '1') {
     console.log('[ScrollPop] DNT header set — skipping tracking.');
-    return true;
+    _skipTracking = true;
   }
-
-  // 2. Localhost / dev domains — never pollute production analytics
   const host = window.location.hostname;
   if (
     host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
@@ -151,28 +147,22 @@ function shouldSkipTracking(): boolean {
     host.includes('scroll-pop.pages.dev')
   ) {
     console.log('[ScrollPop] Dev host — skipping tracking:', host);
-    return true;
+    _skipTracking = true;
   }
+  if (localStorage.getItem('__sp_admin') === '1') {
+    console.log('[ScrollPop] Admin visit — skipping tracking.');
+    _skipTracking = true;
+  }
+}
 
-  // 3. Bot / crawler detection
+// Returns true if the snippet should abort entirely (e.g. bots)
+function shouldAbortBoot(): boolean {
   const ua = navigator.userAgent;
   const botPattern = /bot|crawler|spider|crawling|Googlebot|Bingbot|Slurp|DuckDuck|Baidu|YandexBot|Sogou|facebookexternalhit|Twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|developers\.google|headlesschrome/i;
   if (botPattern.test(ua) || navigator.webdriver) {
-    console.log('[ScrollPop] Bot/crawler detected — skipping tracking.');
+    console.log('[ScrollPop] Bot/crawler detected — aborting boot.');
     return true;
   }
-
-  // 4. Admin / site-owner exclusion — dashboard sets __sp_admin in localStorage
-  //    when the owner is logged in to their ScrollPop account
-  if (localStorage.getItem('__sp_admin') === '1') {
-    console.log('[ScrollPop] Admin visit — skipping tracking.');
-    return true;
-  }
-
-  // 5. Minimum time on page — skip tracking until visitor has been here ≥ 2s
-  //    (filters out instant bounces that never see the popup)
-  //    We don't skip trigger registration, but we gate the fire() call below.
-
   return false;
 }
 
@@ -205,8 +195,8 @@ function init(publicKey: string): void {
 }
 
 async function fetchConfigAndBoot(publicKey: string): Promise<void> {
-  // Run exclusion checks before doing anything else
-  if (shouldSkipTracking()) return;
+  evaluateSkipTracking();
+  if (shouldAbortBoot()) return;
 
   try {
     const url = `${EDGE_URL}/c/${publicKey}`;
@@ -569,7 +559,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
 
   // Visual-builder element mode: render the main step's positioned elements
   // (matches the dashboard canvas) instead of the fixed flat-field layout.
-  const mainStep = (design as any).steps?.main;
+  const mainStep = Array.isArray((design as any).steps) ? (design as any).steps.find((s: any) => s.id === 'main') : (design as any).steps?.main;
   const elementMode = !isSpinWheel && !isScratchCard && Array.isArray(mainStep?.elements) && mainStep.elements.length > 0;
   const hasCloseEl = elementMode && mainStep.elements.some((e: any) => e.type === 'close');
 
@@ -878,7 +868,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   } // end non-element (flat-field) layout
   htmlChunks.push('</div>'); // End popup
 
-  const teaserStep = (design as any).steps?.teaser;
+  const teaserStep = Array.isArray((design as any).steps) ? (design as any).steps.find((s: any) => s.id === 'teaser') : (design as any).steps?.teaser;
   if (teaserStep?.enabled !== false) {
     // Minimizable Teaser Badge
     htmlChunks.push('<div class="teaser-badge" id="teaser-badge">');
@@ -921,7 +911,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
     }
     beaconEvent(campaign, 'conversion', slot?.id, { email });
 
-    const successStep = (design as any).steps?.success;
+    const successStep = Array.isArray((design as any).steps) ? (design as any).steps.find((s: any) => s.id === 'success') : (design as any).steps?.success;
     if (successStep?.enabled === false) {
       // If success screen is disabled, just dismiss the modal immediately
       dismiss(true);
@@ -1223,6 +1213,8 @@ function beaconEvent(
   affiliateSlotId?: string,
   extraMeta?: Record<string, unknown>
 ): void {
+  if (_skipTracking) return;
+
   const payload = {
     events: [{
       campaignId:     campaign.id,
@@ -1283,8 +1275,9 @@ function getDevice(): 'mobile' | 'desktop' | 'tablet' {
   return 'desktop';
 }
 
-function escapeHtml(str: string): string {
-  return str
+function escapeHtml(str: string | undefined | null): string {
+  if (str == null) return '';
+  return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
