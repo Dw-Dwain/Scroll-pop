@@ -1,5 +1,14 @@
 lockfileVersion: '9.0'
 
+onlyBuiltDependencies:
+  - '@clerk/shared'
+  - core-js
+  - esbuild
+  - electron
+  - protobufjs
+  - sharp
+  - workerd
+
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
