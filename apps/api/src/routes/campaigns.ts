@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { campaigns, sites } from '../db/schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { campaigns, sites, designs } from '../db/schema.js';
+import { eq, and, isNull, desc } from 'drizzle-orm';
 
 const CreateCampaignBody = z.object({
   siteId: z.string().uuid(),
@@ -24,15 +24,32 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { siteId, status } = request.query;
 
-      const rows = await db.query.campaigns.findMany({
-        where: and(
-          eq(campaigns.tenantId, request.tenantId),
-          isNull(campaigns.deletedAt),
-          siteId ? eq(campaigns.siteId, siteId) : undefined,
-          status ? eq(campaigns.status, status as typeof campaigns.status._.data) : undefined
-        ),
-        orderBy: (c, { desc }) => [desc(c.createdAt)],
-      });
+      const rows = await db
+        .select({
+          id: campaigns.id,
+          tenantId: campaigns.tenantId,
+          siteId: campaigns.siteId,
+          name: campaigns.name,
+          status: campaigns.status,
+          startsAt: campaigns.startsAt,
+          endsAt: campaigns.endsAt,
+          createdAt: campaigns.createdAt,
+          updatedAt: campaigns.updatedAt,
+          deletedAt: campaigns.deletedAt,
+          design: designs.config,
+          kind: designs.kind,
+        })
+        .from(campaigns)
+        .leftJoin(designs, eq(designs.campaignId, campaigns.id))
+        .where(
+          and(
+            eq(campaigns.tenantId, request.tenantId),
+            isNull(campaigns.deletedAt),
+            siteId ? eq(campaigns.siteId, siteId) : undefined,
+            status ? eq(campaigns.status, status as typeof campaigns.status._.data) : undefined
+          )
+        )
+        .orderBy(desc(campaigns.createdAt));
 
       return reply.send({ data: rows });
     }
