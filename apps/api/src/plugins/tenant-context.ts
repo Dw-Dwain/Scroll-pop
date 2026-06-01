@@ -10,14 +10,15 @@ import { getAuth, clerkClient } from '@clerk/fastify';
 //                 Gets unlimited plan + admin console access.
 // novatise.com  = Novatise agency. All @novatise.com emails share ONE org tenant
 //                 (org_novatise) and get unlimited agency plan, but no admin console.
+// STAGING_ALLOWLIST = comma-separated emails allowed on staging. Set ONLY on the
+//                 staging Render service — production leaves this var unset.
 const ADMIN_EMAIL       = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
 const NOVATISE_ORG_KEY  = 'org_novatise';
 const NOVATISE_ORG_NAME = 'Novatise';
 
-// ─── Staging allowlist ────────────────────────────────────────────────────────
-// Set STAGING_ALLOWLIST=dwain3991@gmail.com on the staging Render service.
+// Set STAGING_ALLOWLIST=dwain3991@gmail.com on the staging Render service only.
 // Any authenticated user whose email is NOT in the list gets a 403 immediately.
-// Leave unset (or empty) in production — has zero effect when not configured.
+// Leave unset in production — has zero effect when not configured.
 const STAGING_ALLOWLIST: string[] | null = process.env['STAGING_ALLOWLIST']
   ? process.env['STAGING_ALLOWLIST'].split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
   : null;
