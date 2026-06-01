@@ -1,0 +1,6 @@
+{
+  "name": "ScrollPop",
+  "description": "A premium marketing website for ScrollPop, a high-converting customizable popup tool compatible with WordPress & Shopify.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
