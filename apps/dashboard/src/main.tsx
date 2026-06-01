@@ -28,10 +28,12 @@ import { LicensePage } from './pages/LicensePage';
 const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
 
 // ─── Staging gate ─────────────────────────────────────────────────────────────
-// Set VITE_STAGING_MODE=true in the staging Cloudflare Pages build env.
-// Only dwain3991@gmail.com can sign in; sign-up is hidden; anyone else is
-// auto-signed-out and shown a locked screen.
-const STAGING_MODE = (import.meta as any).env.VITE_STAGING_MODE === 'true';
+// Hostname-based: active whenever the app runs on staging.scrollpop.online.
+// No env var needed — can't be bypassed by Cloudflare Pages auto-deploy
+// overwriting a CI build that forgot to set VITE_STAGING_MODE.
+const STAGING_MODE =
+  typeof window !== 'undefined' &&
+  window.location.hostname === 'staging.scrollpop.online';
 const STAGING_ALLOWED_EMAIL = 'dwain3991@gmail.com';
 
 const StagingGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {

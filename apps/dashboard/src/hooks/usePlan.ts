@@ -171,10 +171,13 @@ export function usePlan() {
     ? (apiPlan as PlanId)
     : detectPlanLocal();
 
-  // isAdmin = platform super-admin only (exact ADMIN_EMAIL match).
-  // isUnlimited = super-admin OR any @novatise.com member (agency plan, no console access).
-  // Source of truth is the API email (Clerk JWT → DB) — cannot be faked client-side.
-  const isAdmin: boolean = (apiEmail ? isSuperAdminEmail(apiEmail) : false) || detectAdminLocal();
+  // isAdmin = platform super-admin ONLY (exact ADMIN_EMAIL match from API).
+  // NO localStorage fallback — admin panel access must be confirmed by the API.
+  // If /me hasn't loaded yet, isAdmin is false (never speculatively true).
+  const isAdmin: boolean = apiEmail ? isSuperAdminEmail(apiEmail) : false;
+
+  // isUnlimited = super-admin OR @novatise.com (agency plan limits, no admin console).
+  // Falls back to detectAdminLocal() only for the desktop Electron app.
   const isUnlimited: boolean = (apiEmail ? isUnlimitedEmail(apiEmail) : false) || detectAdminLocal();
 
   const [, rerender] = React.useState(0);
