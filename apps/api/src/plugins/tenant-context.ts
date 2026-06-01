@@ -5,15 +5,22 @@ import { tenants, users, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAuth, clerkClient } from '@clerk/fastify';
 
-// ─── Unlimited-access rule ────────────────────────────────────────────────────
-// These users always get agency-level access regardless of their Stripe plan.
-// Checked on every authenticated request so it self-heals if the DB row changes.
-const ADMIN_EMAIL     = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
-const UNLIMITED_DOMAINS = ['novatise.com'];
+// ─── Access tiers ─────────────────────────────────────────────────────────────
+// ADMIN_EMAIL   = platform super-admin (dwain3991@gmail.com). One account only.
+//                 Gets unlimited plan + admin console access.
+// novatise.com  = Novatise agency. All @novatise.com emails share ONE org tenant
+//                 (org_novatise) and get unlimited agency plan, but no admin console.
+const ADMIN_EMAIL       = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
+const NOVATISE_ORG_KEY  = 'org_novatise';
+const NOVATISE_ORG_NAME = 'Novatise';
 
 function isUnlimitedUser(email: string): boolean {
   const e = email.toLowerCase();
-  return e === ADMIN_EMAIL || UNLIMITED_DOMAINS.some((d) => e.endsWith(`@${d}`));
+  return e === ADMIN_EMAIL || e.endsWith('@novatise.com');
+}
+
+function isNovatiseDomain(email: string): boolean {
+  return email.toLowerCase().endsWith('@novatise.com');
 }
 
 async function ensureUnlimitedTenant(tenantId: string): Promise<void> {
@@ -199,62 +206,101 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     }
 
     // ─── Personal-account path (no Clerk org) ─────────────────────────────────
-    // Each Clerk user gets their own auto-provisioned tenant keyed by user id.
     const personalOrgKey = `personal_${clerkUserId}`;
 
     let user = await db.query.users.findFirst({
       where: eq(users.clerkUserId, clerkUserId),
     });
-    let tenant = await db.query.tenants.findFirst({
-      where: eq(tenants.clerkOrgId, personalOrgKey),
-    });
 
-    if (!user || !tenant) {
-      // First request for this user — fetch identity from Clerk to seed rows.
+    // Resolve email early so we can route @novatise.com users to their shared org.
+    let resolvedEmail: string | null = null;
+    let resolvedName: string | null = null;
+
+    if (!user) {
       const clerkUser = await clerkClient.users.getUser(clerkUserId);
-      const email =
+      resolvedEmail =
         clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
           ?.emailAddress ??
         clerkUser.emailAddresses[0]?.emailAddress ??
         `${clerkUserId}@users.scrollpop.local`;
-      const name =
+      resolvedName =
         [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null;
 
-      if (!user) {
-        const inserted = await db
-          .insert(users)
-          .values({ clerkUserId, email, name })
-          .onConflictDoUpdate({
-            target: users.clerkUserId,
-            set: { email, name, updatedAt: new Date() },
-          })
-          .returning();
-        user = inserted[0];
-      }
+      const inserted = await db
+        .insert(users)
+        .values({ clerkUserId, email: resolvedEmail, name: resolvedName })
+        .onConflictDoUpdate({
+          target: users.clerkUserId,
+          set: { email: resolvedEmail, name: resolvedName, updatedAt: new Date() },
+        })
+        .returning();
+      user = inserted[0];
+    }
 
-      if (!tenant) {
+    if (!user) throw new Error('Failed to provision user');
+
+    const userEmail = resolvedEmail ?? user.email;
+
+    // ─── @novatise.com → shared Novatise org tenant ───────────────────────────
+    // All Novatise emails share a single org rather than getting personal tenants.
+    if (isNovatiseDomain(userEmail)) {
+      let novaTenant = await db.query.tenants.findFirst({
+        where: eq(tenants.clerkOrgId, NOVATISE_ORG_KEY),
+      });
+      if (!novaTenant) {
         const inserted = await db
           .insert(tenants)
-          .values({ clerkOrgId: personalOrgKey, name: name ?? email, plan: 'free', monthlyViewLimit: 1000 })
+          .values({ clerkOrgId: NOVATISE_ORG_KEY, name: NOVATISE_ORG_NAME, plan: 'agency', monthlyViewLimit: 2_000_000 })
           .onConflictDoNothing()
           .returning();
-        tenant =
+        novaTenant =
           inserted[0] ??
-          (await db.query.tenants.findFirst({
-            where: eq(tenants.clerkOrgId, personalOrgKey),
+          (await db.query.tenants.findFirst({ where: eq(tenants.clerkOrgId, NOVATISE_ORG_KEY) }));
+      }
+      if (!novaTenant) throw new Error('Failed to provision Novatise tenant');
+
+      let novaMembership = await db.query.tenantMembers.findFirst({
+        where: and(eq(tenantMembers.tenantId, novaTenant.id), eq(tenantMembers.userId, user.id)),
+      });
+      if (!novaMembership) {
+        const inserted = await db
+          .insert(tenantMembers)
+          .values({ tenantId: novaTenant.id, userId: user.id, role: 'owner' })
+          .onConflictDoNothing()
+          .returning();
+        novaMembership =
+          inserted[0] ??
+          (await db.query.tenantMembers.findFirst({
+            where: and(eq(tenantMembers.tenantId, novaTenant.id), eq(tenantMembers.userId, user.id)),
           }));
       }
+
+      request.tenantId = novaTenant.id;
+      request.userId = user.id;
+      request.memberRole = novaMembership?.role ?? 'owner';
+      return;
     }
 
-    if (!user || !tenant) {
-      throw new Error('Failed to provision personal tenant');
+    // ─── Regular personal tenant ──────────────────────────────────────────────
+    let tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.clerkOrgId, personalOrgKey),
+    });
+
+    if (!tenant) {
+      const inserted = await db
+        .insert(tenants)
+        .values({ clerkOrgId: personalOrgKey, name: resolvedName ?? userEmail, plan: 'free', monthlyViewLimit: 1000 })
+        .onConflictDoNothing()
+        .returning();
+      tenant =
+        inserted[0] ??
+        (await db.query.tenants.findFirst({ where: eq(tenants.clerkOrgId, personalOrgKey) }));
     }
+
+    if (!tenant) throw new Error('Failed to provision personal tenant');
 
     let membership = await db.query.tenantMembers.findFirst({
-      where: and(
-        eq(tenantMembers.tenantId, tenant.id),
-        eq(tenantMembers.userId, user.id)
-      ),
+      where: and(eq(tenantMembers.tenantId, tenant.id), eq(tenantMembers.userId, user.id)),
     });
     if (!membership) {
       const inserted = await db
@@ -265,15 +311,12 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
       membership =
         inserted[0] ??
         (await db.query.tenantMembers.findFirst({
-          where: and(
-            eq(tenantMembers.tenantId, tenant.id),
-            eq(tenantMembers.userId, user.id)
-          ),
+          where: and(eq(tenantMembers.tenantId, tenant.id), eq(tenantMembers.userId, user.id)),
         }));
     }
 
-    // Auto-upgrade novatise.com / admin users to unlimited
-    if (isUnlimitedUser(user.email)) await ensureUnlimitedTenant(tenant.id);
+    // Auto-upgrade admin account to unlimited
+    if (isUnlimitedUser(userEmail)) await ensureUnlimitedTenant(tenant.id);
 
     request.tenantId = tenant.id;
     request.userId = user.id;

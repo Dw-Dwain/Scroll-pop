@@ -125,10 +125,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     (u.orgName ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
+  // Exclude the super-admin's own tenant from revenue metrics.
+  const billableUsers = users.filter((u) => u.email !== ADMIN_EMAIL);
   const stats = {
     total: users.length,
-    paid: users.filter((u) => u.plan && u.plan !== 'free').length,
-    mrr: users.reduce((sum, u) => {
+    paid: billableUsers.filter((u) => u.plan && u.plan !== 'free').length,
+    mrr: billableUsers.reduce((sum, u) => {
       const price = u.plan ? parseFloat(PLAN_PRICES[u.plan]?.replace('$', '') ?? '0') : 0;
       return sum + price;
     }, 0),
@@ -242,7 +244,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                       </td>
                     </tr>
                   ) : filtered.map((u) => {
-                    const planKey = u.role === 'admin' ? 'admin' : (u.plan ?? 'free');
+                    const isSuperAdminRow = u.email === ADMIN_EMAIL;
+                    const planKey = isSuperAdminRow ? 'admin' : (u.plan ?? 'free');
                     const planStyle = PLAN_COLORS[planKey] ?? PLAN_COLORS['free']!;
                     return (
                       <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)', height: 52 }}>
@@ -258,7 +261,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {u.name}
-                                {u.role === 'admin' && <Shield size={11} style={{ color: '#fbbf24' }} />}
+                                {isSuperAdminRow && <Shield size={11} style={{ color: '#fbbf24' }} />}
                               </div>
                               <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                                 <Mail size={10} /> {u.email}
@@ -275,7 +278,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
                             background: planStyle.bg, color: planStyle.color,
                             textTransform: 'uppercase', letterSpacing: '0.05em',
                           }}>
-                            {u.role === 'admin' ? 'Admin' : (u.plan ?? 'free')}
+                            {isSuperAdminRow ? 'Super Admin' : (u.plan ?? 'free')}
                           </span>
                         </td>
                         <td style={{ padding: '0 16px', fontSize: 12, color: 'var(--text-muted)' }}>

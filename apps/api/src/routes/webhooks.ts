@@ -132,6 +132,30 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
           break;
         }
 
+        case 'user.deleted': {
+          const data = (evt as ClerkUserEvent).data;
+
+          const user = await db.query.users.findFirst({
+            where: eq(users.clerkUserId, data.id),
+          });
+          if (!user) break; // never provisioned or already cleaned up
+
+          // Soft-delete their personal tenant so it disappears from the admin panel.
+          await db.update(tenants)
+            .set({ deletedAt: new Date(), updatedAt: new Date() })
+            .where(eq(tenants.clerkOrgId, `personal_${data.id}`));
+
+          // Remove all org memberships (junction rows — not business data).
+          await db.delete(tenantMembers).where(eq(tenantMembers.userId, user.id));
+
+          // Hard-delete the user row (users table has no deletedAt).
+          // tenantMembers cascade-deletes automatically via FK, but we already cleared above.
+          await db.delete(users).where(eq(users.id, user.id));
+
+          fastify.log.info({ clerkUserId: data.id }, 'User deleted from Clerk — DB cleaned up');
+          break;
+        }
+
         case 'organizationMembership.created': {
           const data = (evt as ClerkMembershipEvent).data;
 
