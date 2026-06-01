@@ -132,25 +132,7 @@ export default function App() {
               />
             )}
             {activePage === 'templates' && (
-              <TemplatesView 
-                onSelectTemplateAsDemo={(temp) => {
-                  setSelectedTemplateSettings({
-                    popupType: temp.category === 'floating-bar' ? 'newsletter' : temp.category,
-                    themeStyle: temp.themeStyle,
-                    textColor: temp.themeStyle === 'tech-mono' ? '#F8FAFC' : temp.themeStyle === 'luxury-bold' ? '#F5F5F5' : '#1A1A1A',
-                    bgColor: temp.themeStyle === 'tech-mono' ? '#0F172A' : temp.themeStyle === 'luxury-bold' ? '#111111' : '#FAF9F5',
-                    accentColor: temp.themeStyle === 'tech-mono' ? '#38BDF8' : temp.themeStyle === 'luxury-bold' ? '#D4AF37' : '#C05621',
-                    roundness: temp.themeStyle === 'minimalist' || temp.themeStyle === 'tech-mono' ? 'none' : 'md',
-                  });
-                  setActivePage('home');
-                  // Align search query block down to simulated container anchor top
-                  setTimeout(() => {
-                    const el = document.getElementById('scrollpop-simulator-anchor');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }, 400);
-                }} 
-                onTriggerDemoPopup={handleTriggerGlobalOverlay}
-              />
+              <TemplatesView />
             )}
             {activePage === 'pricing' && (
               <PricingView />
