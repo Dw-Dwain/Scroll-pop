@@ -88,38 +88,20 @@ interface SiteConfig {
 }
 
 function getEdgeUrl(): string {
-  if (typeof window !== 'undefined' && (window as any).__SP_EDGE_URL) {
-    return (window as any).__SP_EDGE_URL;
-  }
-
-  // Fallback 1: Extract origin from document.currentScript src
-  if (typeof document !== 'undefined') {
-    const currentScript = document.currentScript as HTMLScriptElement;
-    if (currentScript?.src) {
-      try {
-        const urlObj = new URL(currentScript.src);
-        if (!urlObj.hostname.includes('cdn.scrollpop.online')) {
-          return urlObj.origin;
-        }
-      } catch {}
+  const w = window as any;
+  if (typeof window !== 'undefined' && w.__SP_EDGE_URL) return w.__SP_EDGE_URL;
+  try {
+    if (document?.currentScript?.src && !(document.currentScript as HTMLScriptElement).src.includes('cdn.scrollpop.online')) {
+      return new URL((document.currentScript as HTMLScriptElement).src).origin;
     }
-
-    // Fallback 2: Find script tags containing '/p.js'
     const scripts = document.getElementsByTagName('script');
     for (let i = 0; i < scripts.length; i++) {
-      const script = scripts.item(i);
-      const src = script?.src;
-      if (src && src.includes('/p.js')) {
-        try {
-          const urlObj = new URL(src);
-          if (!urlObj.hostname.includes('cdn.scrollpop.online')) {
-            return urlObj.origin;
-          }
-        } catch {}
+      const src = scripts[i]?.src;
+      if (src?.includes('/p.js') && !src.includes('cdn.scrollpop.online')) {
+        return new URL(src).origin;
       }
     }
-  }
-
+  } catch {}
   return 'https://edge.scrollpop.online';
 }
 
@@ -135,22 +117,10 @@ let _skipTracking = false;
 // ─── Exclusion Guards ─────────────────────────────────────────────────────────
 // Evaluates if we should skip analytics tracking (but still show popups)
 function evaluateSkipTracking(): void {
-  if (navigator.doNotTrack === '1' || (window as any).doNotTrack === '1') {
-    console.log('[ScrollPop] DNT header set — skipping tracking.');
+  if (navigator.doNotTrack === '1' || (window as any).doNotTrack === '1' || localStorage.getItem('__sp_admin') === '1') {
     _skipTracking = true;
   }
-  const host = window.location.hostname;
-  if (
-    host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
-    host.endsWith('.local') || host.endsWith('.test') ||
-    host.includes('scrollpop-dashboard.pages.dev') ||
-    host.includes('scroll-pop.pages.dev')
-  ) {
-    console.log('[ScrollPop] Dev host — skipping tracking:', host);
-    _skipTracking = true;
-  }
-  if (localStorage.getItem('__sp_admin') === '1') {
-    console.log('[ScrollPop] Admin visit — skipping tracking.');
+  if (/localhost|127\.0\.0\.1|0\.0\.0\.0|\.local$|\.test$|scrollpop/.test(window.location.hostname)) {
     _skipTracking = true;
   }
 }
