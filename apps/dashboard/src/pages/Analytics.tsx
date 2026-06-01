@@ -152,40 +152,45 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
 
   const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
 
+  // Real-time auto-refresh: poll every 20s so new events surface without a manual
+  // reload. Pauses while the tab is hidden; refreshes on window focus.
+  const LIVE_MS = 20000;
+
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: overviewResult, isLoading: overviewLoading } = useCustom({
     url: `${apiUrl}/analytics/overview?days=${days}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/overview', days] },
+    queryOptions: { queryKey: ['analytics/overview', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: statsResult, isLoading: statsLoading } = useCustom({
     url: `${apiUrl}/analytics/campaigns?days=${days}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/campaigns', days] },
+    queryOptions: { queryKey: ['analytics/campaigns', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: dailyResult, isLoading: dailyLoading } = useCustom({
     url: `${apiUrl}/analytics/daily`,
     method: 'get',
+    queryOptions: { queryKey: ['analytics/daily'], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: breakdownResult } = useCustom({
     url: `${apiUrl}/analytics/breakdown?days=${days}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/breakdown', days] },
+    queryOptions: { queryKey: ['analytics/breakdown', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: revenueResult, isLoading: revenueLoading } = useCustom({
     url: `${apiUrl}/analytics/revenue?days=${days}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/revenue', days] },
+    queryOptions: { queryKey: ['analytics/revenue', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: funnelResult, isLoading: funnelLoading } = useCustom({
     url: `${apiUrl}/analytics/funnel?days=${days}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/funnel', days] },
+    queryOptions: { queryKey: ['analytics/funnel', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: intelligenceResult } = useCustom({
     url: `${apiUrl}/analytics/intelligence?days=${days}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/intelligence', days] },
+    queryOptions: { queryKey: ['analytics/intelligence', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
 
   // ── Data extraction ────────────────────────────────────────────────────────
@@ -278,8 +283,12 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
           <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
             Analytics
           </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 8 }}>
             Revenue attribution, funnel analysis, and conversion intelligence.
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
+              <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-success)' }} />
+              Live
+            </span>
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

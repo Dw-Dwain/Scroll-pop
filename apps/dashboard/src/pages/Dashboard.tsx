@@ -126,21 +126,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { data: campaignsData } = useList({ resource: 'campaigns' });
   const apiUrl = useApiUrl();
 
+  // Real-time auto-refresh: poll analytics every 15s so new events surface without a
+  // manual reload. Polling pauses automatically while the tab is hidden (default
+  // refetchIntervalInBackground: false) and refreshes immediately on window focus.
+  const LIVE_MS = 15000;
+  const liveOpts = { refetchInterval: LIVE_MS, refetchOnWindowFocus: true } as const;
+
   const { data: overviewResult, isLoading } = useCustom({
     url: `${apiUrl}/analytics/overview`,
     method: 'get',
+    queryOptions: liveOpts,
   });
   const { data: statsResult } = useCustom({
     url: `${apiUrl}/analytics/campaigns`,
     method: 'get',
+    queryOptions: liveOpts,
   });
   const { data: recentEventsResult } = useCustom({
     url: `${apiUrl}/analytics/recent`,
     method: 'get',
+    queryOptions: liveOpts,
   });
   const { data: dailyResult } = useCustom({
     url: `${apiUrl}/analytics/daily`,
     method: 'get',
+    queryOptions: liveOpts,
   });
 
   const overview = (overviewResult as any)?.data ?? null;
@@ -255,8 +265,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
             Dashboard
           </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 8 }}>
             Portfolio performance — last 30 days
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
+              <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-success)' }} />
+              Live
+            </span>
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
