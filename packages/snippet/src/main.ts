@@ -480,12 +480,59 @@ function getShadowCSS(shadow: string | undefined): string {
   }
 }
 
+// ─── Dynamic Affiliate & Macros ───────────────────────────────────────────────────
+function injectMacros(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+    key = key.trim().toLowerCase();
+    if (key === 'page_title') return document.title;
+    if (key.startsWith('meta:')) {
+      const el = document.querySelector(`meta[name="${key.substring(5)}"]`);
+      return el ? (el.getAttribute('content') || match) : match;
+    }
+    if (key.startsWith('og:')) {
+      const el = document.querySelector(`meta[property="${key}"]`);
+      return el ? (el.getAttribute('content') || match) : match;
+    }
+    return match;
+  });
+}
+
+export function detectSmartProduct() {
+  const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (let i = 0; i < scripts.length; i++) {
+    try {
+      const script = scripts[i];
+      if (!script || !script.textContent) continue;
+      const data = JSON.parse(script.textContent);
+      const items = Array.isArray(data) ? data : [data];
+      for (const item of items) {
+        if (item['@type'] === 'Product' && item.name) {
+          let image = item.image;
+          if (Array.isArray(image)) image = image[0];
+          if (typeof image === 'object' && image.url) image = image.url;
+          return { title: item.name, image: typeof image === 'string' ? image : undefined };
+        }
+      }
+    } catch (e) {}
+  }
+  
+  const ogType = document.querySelector('meta[property="og:type"]')?.getAttribute('content');
+  if (ogType === 'product' || ogType === 'product.item') {
+    return {
+      title: document.querySelector('meta[property="og:title"]')?.getAttribute('content'),
+      image: document.querySelector('meta[property="og:image"]')?.getAttribute('content'),
+    };
+  }
+  return null;
+}
+
 // ─── Visual-builder element renderer ──────────────────────────────────────────
 // Renders a step's positioned elements (matching the dashboard canvas: elements
 // are absolutely positioned with x/y/w/h as percentages of a width×height box).
 // IDs are reused (email-input / cta-submit-btn / cta-link / close-btn) so the
 // existing interaction wiring applies without change.
-function buildElementsHTML(step: any, design: any, slot: any): string {
+function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any): string {
   const els = [...(step.elements || [])].sort((a: any, b: any) => (a.zIndex || 0) - (b.zIndex || 0));
   const hasInput = els.some((e: any) => e.type === 'input' || e.type === 'phoneinput');
   let usedEmailId = false;
@@ -494,22 +541,30 @@ function buildElementsHTML(step: any, design: any, slot: any): string {
   for (const el of els) {
     const ff = el.fontFamily || 'inherit';
     const pos = `position:absolute;left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;z-index:${el.zIndex || 1};opacity:${el.opacity ?? 1};box-sizing:border-box;overflow:hidden;`;
+    
+    // Support Option A: inject macros into raw text fields
+    const content = el.content ? injectMacros(el.content) : '';
+
     switch (el.type) {
       case 'heading':
-        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:${el.align || 'center'};color:${el.color || '#111827'};font-size:${el.fontSize || 24}px;font-weight:${el.fontWeight || '700'};font-family:${ff};line-height:1.2;">${escapeHtml(el.content || '')}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:${el.align || 'center'};color:${el.color || '#111827'};font-size:${el.fontSize || 24}px;font-weight:${el.fontWeight || '700'};font-family:${ff};line-height:1.2;">${escapeHtml(content)}</div>`);
         break;
       case 'text':
-        out.push(`<div style="${pos}display:flex;align-items:center;text-align:${el.align || 'left'};color:${el.color || '#4B5563'};font-size:${el.fontSize || 13}px;font-weight:${el.fontWeight || '400'};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${el.backgroundColor};` : ''}${el.borderRadius ? `border-radius:${el.borderRadius}px;` : ''}${el.padding ? `padding:${el.padding}px;` : ''}">${escapeHtml(el.content || '')}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;text-align:${el.align || 'left'};color:${el.color || '#4B5563'};font-size:${el.fontSize || 13}px;font-weight:${el.fontWeight || '400'};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${el.backgroundColor};` : ''}${el.borderRadius ? `border-radius:${el.borderRadius}px;` : ''}${el.padding ? `padding:${el.padding}px;` : ''}">${escapeHtml(content)}</div>`);
         break;
       case 'button': {
         const isSubmit = hasInput && !usedCtaId;
         usedCtaId = true;
         const style = `${pos}display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;background:${el.backgroundColor || design.accentColor || '#6366f1'};color:${el.color || '#fff'};border-radius:${el.borderRadius ?? 8}px;font-size:${el.fontSize || 14}px;font-weight:700;font-family:${ff};border:${el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || 'transparent'}` : 'none'};`;
         if (isSubmit) {
-          out.push(`<button type="button" id="cta-submit-btn" style="${style}">${escapeHtml(el.content || 'Submit')}</button>`);
+          out.push(`<button type="button" id="cta-submit-btn" style="${style}">${escapeHtml(content || 'Submit')}</button>`);
         } else {
-          const href = el.href || slot?.click_tracker_url || slot?.product_url || '#';
-          out.push(`<a id="cta-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" style="${style}">${escapeHtml(el.content || 'Continue')}</a>`);
+          let rawHref = el.href || slot?.click_tracker_url || slot?.product_url || '#';
+          if (smartProduct && smartProduct.title) {
+             rawHref += (rawHref.includes('?') ? '&' : '?') + `keyword=${encodeURIComponent(smartProduct.title)}`;
+          }
+          const href = injectMacros(rawHref);
+          out.push(`<a id="cta-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" style="${style}">${escapeHtml(content || 'Continue')}</a>`);
         }
         break;
       }
@@ -517,14 +572,17 @@ function buildElementsHTML(step: any, design: any, slot: any): string {
       case 'phoneinput': {
         const idAttr = !usedEmailId ? ' id="email-input"' : '';
         usedEmailId = true;
-        out.push(`<input${idAttr} type="email" placeholder="${escapeHtml(el.extraProps?.placeholder || el.content || 'Your email address…')}" required style="${pos}padding:0 12px;font-size:13px;color:#1f2937;background:#fff;border:${el.borderWidth ?? 1}px solid ${el.borderColor || '#E4E4E7'};border-radius:${el.borderRadius ?? 8}px;outline:none;">`);
+        const ph = el.extraProps?.placeholder || el.content || 'Your email address…';
+        out.push(`<input${idAttr} type="email" placeholder="${escapeHtml(injectMacros(ph))}" required style="${pos}padding:0 12px;font-size:13px;color:#1f2937;background:#fff;border:${el.borderWidth ?? 1}px solid ${el.borderColor || '#E4E4E7'};border-radius:${el.borderRadius ?? 8}px;outline:none;">`);
         break;
       }
-      case 'image':
-        out.push(`<img src="${escapeHtml(el.content || '')}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${el.borderRadius ?? 8}px;">`);
+      case 'image': {
+        const imgSrc = (smartProduct && smartProduct.image) ? smartProduct.image : content;
+        out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${el.borderRadius ?? 8}px;">`);
         break;
+      }
       case 'close':
-        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:${el.color || design.textColor || '#374151'};font-size:${el.fontSize || 16}px;">${escapeHtml(el.content || '✕')}</button>`);
+        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:${el.color || design.textColor || '#374151'};font-size:${el.fontSize || 16}px;">${escapeHtml(content || '✕')}</button>`);
         break;
       case 'shape':
         out.push(`<div style="${pos}background:${el.backgroundColor || '#000'};border-radius:${el.content === 'circle' ? '9999px' : `${el.borderRadius ?? 0}px`};border:${el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || 'transparent'}` : 'none'};"></div>`);
@@ -533,10 +591,11 @@ function buildElementsHTML(step: any, design: any, slot: any): string {
         out.push(`<div style="${pos}display:flex;align-items:center;"><div style="width:100%;border-top:${el.borderWidth ?? 1}px solid ${el.borderColor || el.color || '#e5e7eb'};"></div></div>`);
         break;
       case 'badge':
-        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;background:${el.backgroundColor || design.accentColor || '#6366f1'};color:${el.color || '#fff'};border-radius:9999px;font-size:${el.fontSize || 11}px;font-weight:700;font-family:${ff};padding:0 8px;">${escapeHtml(el.content || '')}</div>`);
+      case 'urgency':
+        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;background:${el.backgroundColor || design.accentColor || '#6366f1'};color:${el.color || '#fff'};border-radius:9999px;font-size:${el.fontSize || 11}px;font-weight:700;font-family:${ff};padding:0 8px;">${escapeHtml(content)}</div>`);
         break;
       default:
-        if (el.content) out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:center;color:${el.color || design.textColor || '#111'};font-size:${el.fontSize || 13}px;font-family:${ff};">${escapeHtml(el.content)}</div>`);
+        if (content) out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:center;color:${el.color || design.textColor || '#111'};font-size:${el.fontSize || 13}px;font-family:${ff};">${escapeHtml(content)}</div>`);
     }
   }
   return out.join('');
@@ -550,7 +609,18 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   const getDisplayDuration = () => Math.round(Date.now() - _impressionTs);
 
   // Pick weighted affiliate slot
-  const slot = pickWeightedSlot(affiliateSlots);
+  let slot = pickWeightedSlot(affiliateSlots);
+  if (slot) slot = { ...slot };
+
+  // Detect Smart Product
+  const smartProduct = (campaign.triggers as any)?.enableSmartAffiliate ? detectSmartProduct() : null;
+  if (smartProduct && slot) {
+    if (smartProduct.image) slot.image_url = smartProduct.image;
+    if (smartProduct.title) {
+      if (slot.product_url) slot.product_url += (slot.product_url.includes('?') ? '&' : '?') + `keyword=${encodeURIComponent(smartProduct.title)}`;
+      if (slot.click_tracker_url) slot.click_tracker_url += (slot.click_tracker_url.includes('?') ? '&' : '?') + `keyword=${encodeURIComponent(smartProduct.title)}`;
+    }
+  }
 
   // Check popup kinds
   const popupType = (design as any).steps?.main?.popupType || design.kind || 'modal';
@@ -668,7 +738,7 @@ margin: ${design.margin ?? '0px'}; width: ${width}; max-width: calc(100vw - 32px
   // ─── Element mode: render the builder's positioned elements ─────────────────
   if (elementMode) {
     htmlChunks.push(`<div class="popup-inner" id="popup-view-main" style="padding:0;position:relative;height:${mainStep.height || 520}px;display:block;">`);
-    htmlChunks.push(buildElementsHTML(mainStep, design, slot));
+    htmlChunks.push(buildElementsHTML(mainStep, design, slot, smartProduct));
     htmlChunks.push('</div>');
   } else {
 
@@ -682,18 +752,18 @@ margin: ${design.margin ?? '0px'}; width: ${width}; max-width: calc(100vw - 32px
   }
 
   htmlChunks.push('<h2 class="headline">');
-  htmlChunks.push(escapeHtml(design.headline));
+  htmlChunks.push(escapeHtml(injectMacros(design.headline || '')));
   htmlChunks.push('</h2>');
 
   if (design.subheadline) {
     htmlChunks.push('<p class="subheadline">');
-    htmlChunks.push(escapeHtml(design.subheadline));
+    htmlChunks.push(escapeHtml(injectMacros(design.subheadline)));
     htmlChunks.push('</p>');
   }
 
   if (design.bodyText) {
     htmlChunks.push('<p class="body-text">');
-    htmlChunks.push(escapeHtml(design.bodyText));
+    htmlChunks.push(escapeHtml(injectMacros(design.bodyText)));
     htmlChunks.push('</p>');
   }
 
@@ -745,7 +815,7 @@ margin: ${design.margin ?? '0px'}; width: ${width}; max-width: calc(100vw - 32px
 
   if (design.showDismissText && design.dismissText) {
     htmlChunks.push('<p class="dismiss-text" id="dismiss-text">');
-    htmlChunks.push(escapeHtml(design.dismissText));
+    htmlChunks.push(escapeHtml(injectMacros(design.dismissText)));
     htmlChunks.push('</p>');
   }
 

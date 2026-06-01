@@ -29,9 +29,10 @@ ALTER TABLE events
 -- ─── Indexes for new query patterns ──────────────────────────────────────────
 
 -- Revenue queries: filter purchase_completed events fast
-CREATE INDEX IF NOT EXISTS events_purchase_idx
-  ON events (tenant_id, ts DESC)
-  WHERE event_type = 'purchase_completed';
+-- (Moved to a separate migration or manual run due to Postgres enum rules)
+-- CREATE INDEX IF NOT EXISTS events_purchase_idx
+--   ON events (tenant_id, ts DESC)
+--   WHERE event_type = 'purchase_completed';
 
 -- Traffic source breakdown queries
 CREATE INDEX IF NOT EXISTS events_traffic_source_idx

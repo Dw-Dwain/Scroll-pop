@@ -22,6 +22,13 @@
       "when": 1748908800000,
       "tag": "0003_analytics_expansion",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1748908800001,
+      "tag": "0004_analytics_index",
+      "breakpoints": true
     }
   ]
 }

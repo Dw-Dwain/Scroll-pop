@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Campaign, CampaignElement, ElementType, PopupType, BrandStyle, CampaignTriggers } from './types';
 import { PREBUILT_TEMPLATES } from './data/templates';
+import { TargetingRuleBuilder } from './TargetingRuleBuilder';
 
 interface SidebarLeftProps {
   campaign: Campaign;
@@ -1627,6 +1628,43 @@ export default function SidebarLeft({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* 7.5. Page Targeting Rules */}
+              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="h-4 w-4 text-zinc-400" />
+                  <span className="text-xs font-semibold text-zinc-100">Page Targeting Rules</span>
+                </div>
+                <div className="bg-white rounded-lg p-2">
+                  <TargetingRuleBuilder
+                    rules={(campaign.triggers as any).pageTargetingRules || []}
+                    onChange={(rules) => onUpdateTriggers('pageTargetingRules', rules)}
+                  />
+                </div>
+              </div>
+
+              {/* 7.6. Smart Affiliate Detection */}
+              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-zinc-400" />
+                    <span className="text-xs font-semibold text-zinc-100">Smart Product Match</span>
+                  </div>
+                  <button
+                    onClick={() => onUpdateTriggers('enableSmartAffiliate', !(campaign.triggers as any).enableSmartAffiliate)}
+                    className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
+                      (campaign.triggers as any).enableSmartAffiliate ? 'bg-indigo-600' : 'bg-zinc-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                        (campaign.triggers as any).enableSmartAffiliate ? 'translate-x-4' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <p className="text-[10.5px] text-zinc-600 leading-normal">Automatically scrape the current page for product details and override the popup's static image and CTA link with the page's actual product.</p>
               </div>
 
               {/* 8. Session Page Count */}

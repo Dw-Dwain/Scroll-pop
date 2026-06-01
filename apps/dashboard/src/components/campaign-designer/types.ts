@@ -95,7 +95,12 @@ export interface CampaignTriggers {
   scrollPercent: number; // 0 to 100, 0 is disabled
   inactivitySeconds: number; // 0 is disabled
   timeDelaySeconds: number; // 0 is disabled
-  pageTargeting: string; // e.g. "/products/*" or "*"
+  pageTargeting: string; // DEPRECATED: e.g. "/products/*" or "*"
+  pageTargetingRules?: Array<{
+    operator: 'include' | 'exclude';
+    matchType: 'contains' | 'exact' | 'regex';
+    value: string;
+  }>;
   deviceTargeting: 'all' | 'desktop' | 'mobile' | 'tablet';
   geoTargeting: string; // country code/name
   frequencyCapDays: number;
@@ -104,6 +109,7 @@ export interface CampaignTriggers {
   sessionPageCount: number; // fire after visiting N pages (0 = disabled)
   utmSource: string; // show only when utm_source matches (empty = all)
   abTestPercent: number; // 0-100, percentage of visitors to show to
+  enableSmartAffiliate?: boolean; // scrape page to inject dynamic product details
   // How often the popup may show to the same visitor (persisted as the campaign frequency rule)
   frequency?: 'always' | 'once_per_session' | 'once_per_day' | 'once_per_visitor';
 }
