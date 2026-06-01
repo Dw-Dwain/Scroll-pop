@@ -1,7 +1,8 @@
 import React from 'react';
 import { Shield, Users, Mail, CreditCard, Globe, Megaphone, Activity, RefreshCw, Lock } from 'lucide-react';
 import { usePlan, ADMIN_EMAIL, PLAN_PRICES } from '../hooks/usePlan';
-import { useCustom, useCustomMutation } from '@refinedev/core';
+import { useCustom } from '@refinedev/core';
+import { useAuth } from '@clerk/clerk-react';
 import { getApiBase } from '../providers/dataProvider';
 import type { PlanId } from '../hooks/usePlan';
 
@@ -33,6 +34,7 @@ const PLAN_COLORS: Record<string, { bg: string; color: string }> = {
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const { isAdmin } = usePlan();
+  const { getToken } = useAuth();
 
   // Hard gate — render nothing useful until the API confirms admin status.
   // isAdmin is only true when the verified API email === ADMIN_EMAIL.
@@ -71,16 +73,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const [search, setSearch] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<'tenants' | 'system'>('tenants');
 
-  // Fetch all tenants + platform stats from the real admin API (Clerk-authenticated).
+  const [syncing, setSyncing] = React.useState(false);
+  const [syncMsg, setSyncMsg] = React.useState<string | null>(null);
+
+  // staleTime: 0 so every refetch hits the server — admin data must always be fresh
   const { data: tenantsData, isLoading: loading, isError, refetch } = useCustom({
     url: `${getApiBase()}/admin/tenants`,
     method: 'get',
-    queryOptions: { staleTime: 30_000 },
+    queryOptions: { staleTime: 0 },
   });
-  const { data: statsData } = useCustom({
+  const { data: statsData, refetch: refetchStats } = useCustom({
     url: `${getApiBase()}/admin/stats`,
     method: 'get',
-    queryOptions: { staleTime: 30_000 },
+    queryOptions: { staleTime: 0 },
   });
 
   const users: AdminUser[] = ((tenantsData?.data as any) ?? []).map((t: any) => ({
@@ -96,7 +101,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   }));
 
   const error = isError ? 'Failed to load tenant list. Check API logs.' : '';
-  const fetchUsers = () => { refetch(); };
+
+  // Sync with Clerk then refresh both tables
+  const fetchUsers = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${getApiBase()}/admin/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        const body = await res.json() as { data?: { message?: string } };
+        if (body.data?.message) setSyncMsg(body.data.message);
+      }
+    } catch { /* non-fatal — still refetch */ }
+    await Promise.all([refetch(), refetchStats()]);
+    setSyncing(false);
+  };
 
   if (!isAdmin) {
     return (
@@ -154,14 +180,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
         </div>
         <button
           onClick={fetchUsers}
-          disabled={loading}
+          disabled={loading || syncing}
           className="btn btn-secondary btn-sm"
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          Refresh
+          <RefreshCw size={13} style={{ animation: (loading || syncing) ? 'spin 1s linear infinite' : 'none' }} />
+          {syncing ? 'Syncing…' : 'Sync & Refresh'}
         </button>
       </div>
+
+      {syncMsg && (
+        <div style={{
+          marginBottom: 16, padding: '8px 14px', borderRadius: 6, fontSize: 12,
+          background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
+          color: 'var(--status-success)',
+        }}>
+          ✓ {syncMsg}
+        </div>
+      )}
 
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>

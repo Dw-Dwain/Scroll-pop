@@ -13,7 +13,8 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
 import { users, tenants, tenantMembers, sites, campaigns } from '../db/schema.js';
-import { eq, sql, isNull } from 'drizzle-orm';
+import { eq, sql, isNull, and, like } from 'drizzle-orm';
+import { clerkClient } from '@clerk/fastify';
 
 const ADMIN_EMAIL = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
 
@@ -123,6 +124,92 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Tenant not found' } });
     }
     return reply.send({ data: updated });
+  });
+
+  /**
+   * DELETE /api/v1/admin/tenants/:id
+   * Manually soft-delete a tenant (e.g. stale demo/orphaned row).
+   * Super-admin only.
+   */
+  fastify.delete<{ Params: { id: string } }>('/admin/tenants/:id', async (request, reply) => {
+    if (!await assertSuperAdmin(request, reply)) return;
+
+    const [updated] = await db
+      .update(tenants)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(tenants.id, request.params.id), isNull(tenants.deletedAt)))
+      .returning({ id: tenants.id });
+
+    if (!updated) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Tenant not found or already deleted' } });
+    }
+    return reply.code(204).send();
+  });
+
+  /**
+   * POST /api/v1/admin/sync
+   * Reconciles the DB with the live Clerk user list.
+   * - Deletes user rows (+ their personal tenants) for Clerk-deleted users
+   * - Soft-deletes orphaned personal tenants for @novatise.com users
+   *   (they now share the org_novatise tenant instead)
+   * Super-admin only.
+   */
+  fastify.post('/admin/sync', async (request, reply) => {
+    if (!await assertSuperAdmin(request, reply)) return;
+
+    // Fetch all active users from Clerk (up to 500 — enough for any early-stage app)
+    const clerkResponse = await clerkClient.users.getUserList({ limit: 500 });
+    const activeClerkIds = new Set(clerkResponse.data.map((u) => u.id));
+
+    const allDbUsers = await db.query.users.findMany({ columns: { id: true, clerkUserId: true, email: true } });
+
+    let deletedUsers = 0;
+    let deletedTenants = 0;
+
+    for (const dbUser of allDbUsers) {
+      if (activeClerkIds.has(dbUser.clerkUserId)) continue;
+
+      // User was deleted from Clerk — clean up DB
+      await db.update(tenants)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(and(
+          eq(tenants.clerkOrgId, `personal_${dbUser.clerkUserId}`),
+          isNull(tenants.deletedAt)
+        ));
+
+      await db.delete(tenantMembers).where(eq(tenantMembers.userId, dbUser.id));
+      await db.delete(users).where(eq(users.id, dbUser.id));
+      deletedUsers++;
+      deletedTenants++;
+    }
+
+    // Soft-delete any leftover personal tenants owned by @novatise.com users.
+    // These were created before the shared org_novatise tenant existed.
+    const personalTenants = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(and(isNull(tenants.deletedAt), like(tenants.clerkOrgId, 'personal_%')));
+
+    for (const t of personalTenants) {
+      const member = await db.query.tenantMembers.findFirst({
+        where: eq(tenantMembers.tenantId, t.id),
+        columns: { userId: true },
+      });
+      if (!member) continue;
+      const owner = await db.query.users.findFirst({
+        where: eq(users.id, member.userId),
+        columns: { email: true },
+      });
+      if (owner?.email.toLowerCase().endsWith('@novatise.com')) {
+        await db.update(tenants)
+          .set({ deletedAt: new Date(), updatedAt: new Date() })
+          .where(eq(tenants.id, t.id));
+        deletedTenants++;
+      }
+    }
+
+    fastify.log.info({ deletedUsers, deletedTenants }, 'Admin Clerk sync completed');
+    return reply.send({ data: { deletedUsers, deletedTenants, message: `Removed ${deletedUsers} stale users and ${deletedTenants} orphaned tenants` } });
   });
 
   /**
