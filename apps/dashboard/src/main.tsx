@@ -92,6 +92,7 @@ import { MessagesPage } from './pages/MessagesPage';
 import { FormsPage } from './pages/FormsPage';
 import { TablesPage } from './pages/TablesPage';
 
+import posthog from 'posthog-js';
 import { createDataProvider } from './providers/dataProvider';
 import { isFeatureEnabled } from './lib/flags';
 import './index.css';
@@ -104,6 +105,22 @@ const IS_DEMO_MODE =
   CLERK_PUBLISHABLE_KEY === 'pk_test_c2F2ZWQtbWFzdG9kb24tMjcuY2xlcmsuYWNjb3VudHMuZGV2JA' ||
   !CLERK_PUBLISHABLE_KEY ||
   ((import.meta as any).env.VITE_DEMO_MODE === 'true');
+
+// PostHog — platform-level product analytics (MIT licensed, posthog.com).
+// Tracks dashboard user behaviour: page views, feature usage, funnel drop-off.
+// Distinct from the merchant-facing popup event analytics stored in TimescaleDB.
+// Free tier: 1M events/month on cloud. Self-hostable with no event limits.
+const POSTHOG_KEY = (import.meta as any).env.VITE_POSTHOG_KEY as string | undefined;
+if (POSTHOG_KEY && !IS_DEMO_MODE) {
+  posthog.init(POSTHOG_KEY, {
+    api_host: 'https://us.i.posthog.com',
+    person_profiles: 'identified_only',
+    capture_pageview: true,
+    capture_pageleave: true,
+    session_recording: { maskAllInputs: true },
+    autocapture: false,
+  });
+}
 const OPS_CENTER_ENABLED = isFeatureEnabled('ff_realtime_ops_dashboard');
 const JOURNEYS_ENABLED = isFeatureEnabled('ff_journeys_ui');
 const EXPERIMENTS_ENABLED = isFeatureEnabled('ff_experiments_v1');

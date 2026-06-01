@@ -296,7 +296,11 @@ async function bootstrap() {
     const payload = request.body;
     if (payload && Array.isArray(payload.events)) {
       for (const rawEvt of payload.events) {
-        const { campaignId, eventType, affiliateSlotId, visitorId, sessionId, device, pageUrl, referrer } = rawEvt;
+        const {
+          campaignId, eventType, affiliateSlotId, visitorId, sessionId,
+          device, pageUrl, referrer, country, metadata, meta,
+          scrollDepthPct, trafficSource, abVariantId, shopifyOrderId, revenueCents,
+        } = rawEvt;
         if (!campaignId || !eventType) continue;
 
         try {
@@ -316,6 +320,13 @@ async function bootstrap() {
               device: device || null,
               pageUrl: pageUrl || null,
               referrer: referrer || null,
+              country: country || null,
+              metadata: metadata ?? meta ?? {},
+              scrollDepthPct: scrollDepthPct != null ? Number(scrollDepthPct) : null,
+              trafficSource: trafficSource || null,
+              abVariantId: abVariantId || null,
+              shopifyOrderId: shopifyOrderId || null,
+              revenueCents: revenueCents != null ? Number(revenueCents) : null,
             });
 
             // Increment monthly view counter in Redis for edge enforcement.

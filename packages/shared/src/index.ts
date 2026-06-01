@@ -7,7 +7,12 @@ export const MemberRole = z.enum(['owner', 'admin', 'editor', 'viewer']);
 export const Platform = z.enum(['wordpress', 'shopify', 'html', 'donorbox', 'gofundme', 'other']);
 export const CampaignStatus = z.enum(['draft', 'active', 'paused', 'archived']);
 export const DesignKind = z.enum(['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'floating_bubble', 'notification_toast', 'corner_popup', 'gamified_overlay', 'inline_form']);
-export const EventType = z.enum(['impression', 'view', 'click', 'dismiss', 'conversion']);
+export const EventType = z.enum([
+  'impression', 'view', 'click', 'dismiss', 'conversion',
+  'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
+  'email_capture', 'sms_capture', 'discount_redeemed',
+  'checkout_started', 'purchase_completed', 'trigger_fired',
+]);
 export const FrequencyType = z.enum(['once_per_session', 'once_per_day', 'once_per_visitor', 'always']);
 
 // NOTE: back_button_capture is intentionally absent from TriggerType.

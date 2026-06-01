@@ -5,6 +5,7 @@ import {
   timestamp,
   jsonb,
   integer,
+  smallint,
   uniqueIndex,
   primaryKey,
   pgEnum,
@@ -51,6 +52,9 @@ export const frequencyEnum = pgEnum('frequency', [
 
 export const eventTypeEnum = pgEnum('event_type', [
   'impression', 'view', 'click', 'dismiss', 'conversion',
+  'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
+  'email_capture', 'sms_capture', 'discount_redeemed',
+  'checkout_started', 'purchase_completed', 'trigger_fired',
 ]);
 
 // ─── Tenants ──────────────────────────────────────────────────────────────────
@@ -273,17 +277,23 @@ export const frequencyRules = pgTable('frequency_rules', {
 // ─── Events (TimescaleDB hypertable — created via migration) ──────────────────
 
 export const events = pgTable('events', {
-  ts: timestamp('ts', { withTimezone: true }).notNull().default(sql`NOW()`),
-  tenantId: uuid('tenant_id').notNull(),
-  siteId: uuid('site_id').notNull(),
-  campaignId: uuid('campaign_id').notNull(),
-  eventType: eventTypeEnum('event_type').notNull(),
+  ts:             timestamp('ts', { withTimezone: true }).notNull().default(sql`NOW()`),
+  tenantId:       uuid('tenant_id').notNull(),
+  siteId:         uuid('site_id').notNull(),
+  campaignId:     uuid('campaign_id').notNull(),
+  eventType:      eventTypeEnum('event_type').notNull(),
   affiliateSlotId: text('affiliate_slot_id'),
-  visitorId: text('visitor_id'),
-  sessionId: text('session_id'),
-  country: text('country'),
-  device: text('device'),
-  pageUrl: text('page_url'),
-  referrer: text('referrer'),
-  metadata: jsonb('metadata').notNull().default({}),
+  visitorId:      text('visitor_id'),
+  sessionId:      text('session_id'),
+  country:        text('country'),
+  device:         text('device'),
+  pageUrl:        text('page_url'),
+  referrer:       text('referrer'),
+  metadata:       jsonb('metadata').notNull().default({}),
+  // Added in migration 0003 — analytics expansion
+  scrollDepthPct: smallint('scroll_depth_pct'),
+  trafficSource:  text('traffic_source'),
+  abVariantId:    text('ab_variant_id'),
+  shopifyOrderId: text('shopify_order_id'),
+  revenueCents:   integer('revenue_cents'),
 });
