@@ -71,7 +71,7 @@ html {
 
 .hero-glow-left {
   position: absolute;
-  bottom: -10%;
+  bottom: 0;
   left: -10%;
   width: 500px;
   height: 500px;

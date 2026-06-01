@@ -37,7 +37,7 @@ export default function WordPressShopifyGuide() {
           Connect your site, then manage all your campaigns from the dashboard. No code editing required.
         </p>
         <a
-          href={`${DASHBOARD_URL}/sign-up`}
+          href={DASHBOARD_URL}
           className="inline-flex items-center gap-2 mt-8 h-12 px-8 bg-neutral-950 text-white rounded-full text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-xl"
         >
           Get Your Public Key (Free) →
@@ -306,7 +306,7 @@ export default function WordPressShopifyGuide() {
       <div className="mt-20 text-center">
         <p className="text-neutral-600 text-sm font-light mb-6">Need help? The setup wizard inside the dashboard walks you through every step.</p>
         <a
-          href={`${DASHBOARD_URL}/sign-up`}
+          href={DASHBOARD_URL}
           className="inline-flex items-center gap-2 h-12 px-8 bg-neutral-950 text-white rounded-full text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-xl"
         >
           Open the Dashboard →

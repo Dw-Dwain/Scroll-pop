@@ -7,6 +7,7 @@ import TemplatesView from './components/TemplatesView';
 import PricingView from './components/PricingView';
 import WordPressShopifyGuide from './components/WordPressShopifyGuide';
 import ContactView from './components/ContactView';
+import LegalView from './components/LegalView';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, X, Check, Mail, ShoppingBag } from 'lucide-react';
 
@@ -101,7 +102,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F5] text-[#111111] selection:bg-black selection:text-white flex flex-col justify-between overflow-x-hidden antialiased relative">
+    <div className="min-h-screen bg-[#FAF9F5] text-[#111111] selection:bg-black selection:text-white flex flex-col overflow-x-hidden antialiased relative">
       
       {/* Editorial Sophisticated Light ambient background glows */}
       <div className="hero-glow z-0" />
@@ -132,25 +133,7 @@ export default function App() {
               />
             )}
             {activePage === 'templates' && (
-              <TemplatesView 
-                onSelectTemplateAsDemo={(temp) => {
-                  setSelectedTemplateSettings({
-                    popupType: temp.category === 'floating-bar' ? 'newsletter' : temp.category,
-                    themeStyle: temp.themeStyle,
-                    textColor: temp.themeStyle === 'tech-mono' ? '#F8FAFC' : temp.themeStyle === 'luxury-bold' ? '#F5F5F5' : '#1A1A1A',
-                    bgColor: temp.themeStyle === 'tech-mono' ? '#0F172A' : temp.themeStyle === 'luxury-bold' ? '#111111' : '#FAF9F5',
-                    accentColor: temp.themeStyle === 'tech-mono' ? '#38BDF8' : temp.themeStyle === 'luxury-bold' ? '#D4AF37' : '#C05621',
-                    roundness: temp.themeStyle === 'minimalist' || temp.themeStyle === 'tech-mono' ? 'none' : 'md',
-                  });
-                  setActivePage('home');
-                  // Align search query block down to simulated container anchor top
-                  setTimeout(() => {
-                    const el = document.getElementById('scrollpop-simulator-anchor');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }, 400);
-                }} 
-                onTriggerDemoPopup={handleTriggerGlobalOverlay}
-              />
+              <TemplatesView />
             )}
             {activePage === 'pricing' && (
               <PricingView />
@@ -160,6 +143,15 @@ export default function App() {
             )}
             {activePage === 'contact' && (
               <ContactView />
+            )}
+            {activePage === 'privacy-policy' && (
+              <LegalView page="privacy-policy" onPageChange={setActivePage} />
+            )}
+            {activePage === 'terms' && (
+              <LegalView page="terms" onPageChange={setActivePage} />
+            )}
+            {activePage === 'security' && (
+              <LegalView page="security" onPageChange={setActivePage} />
             )}
           </motion.div>
         </AnimatePresence>

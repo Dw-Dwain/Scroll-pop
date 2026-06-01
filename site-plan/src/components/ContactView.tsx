@@ -36,61 +36,20 @@ export default function ContactView() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-16 font-sans text-neutral-850">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
-        
-        {/* LEFT: Contact Narrative & Core Details */}
-        <div className="lg:col-span-5 flex flex-col justify-between">
-          <div className="flex flex-col gap-6">
-            <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block">GET IN TOUCH</span>
-            <h1 className="font-serif text-4xl md:text-5xl font-normal tracking-tight leading-none text-gradient">
-              Let’s build premium conversions.
-            </h1>
-            <p className="font-light text-neutral-600 leading-relaxed text-sm md:text-base">
-              Have a highly customized headless checkout or a custom storefront theme you need audit-reviewed? Contact our core studio for direct configuration advisory, bespoke Shopify liquid structures or custom WP patterns.
-            </p>
+    <div className="max-w-3xl mx-auto px-6 py-16 font-sans text-neutral-850">
+      {/* Header */}
+      <div className="text-center mb-12">
+        <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block mb-3">GET IN TOUCH</span>
+        <h1 className="font-serif text-4xl md:text-5xl font-normal tracking-tight leading-none text-gradient">
+          Questions? We’re here to help.
+        </h1>
+        <p className="font-light text-neutral-600 leading-relaxed text-sm md:text-base mt-4 max-w-xl mx-auto">
+          Whether you’re evaluating ScrollPop, need install help, or want to discuss a custom plan — fill in the form and we’ll get back to you within one business day.
+        </p>
+      </div>
 
-            <div className="flex flex-col gap-5 mt-4 text-sm">
-              <div className="flex items-center gap-3.5 text-neutral-700">
-                <Mail className="h-5 w-5 text-neutral-600 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-xs font-mono uppercase tracking-wider text-neutral-500">EMAIL ENQUIRIES</p>
-                  <p className="text-sm font-medium text-neutral-900 mt-0.5">design-studio@scrollpop.co</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3.5 text-neutral-700">
-                <Phone className="h-5 w-5 text-neutral-600 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-xs font-mono uppercase tracking-wider text-neutral-500">TELEPHONE CONSULTATIONS</p>
-                  <p className="text-sm font-medium text-neutral-900 mt-0.5">1-800-SCRL-POP (Mon-Fri 9AM - 5PM EST)</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3.5 text-neutral-700">
-                <MapPin className="h-5 w-5 text-neutral-600 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-xs font-mono uppercase tracking-wider text-neutral-500">STUDIO HEADQUARTERS</p>
-                  <p className="text-sm font-medium text-neutral-900 mt-0.5">Rue de la Paix, 75002 Paris, France</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Secure details card */}
-          <div className="p-5 border border-neutral-200 rounded-xl bg-neutral-100/50 mt-10 md:mt-0 flex gap-4 backdrop-blur-md">
-            <ShieldAlert className="h-5 w-5 text-[#C05621] flex-shrink-0 mt-0.5" />
-            <div className="text-xs">
-              <p className="font-semibold text-neutral-900">Guaranteed Privacy Lock</p>
-              <p className="text-neutral-600 font-light mt-0.5 leading-relaxed">
-                We never share your storefront information, acquisition metrics, or custom liquid scripts with competitors. All technical briefs are signed with reciprocal NDA templates automatically.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT: Inquiry form or Simulated Booking Widget */}
-        <div className="lg:col-span-7 glass rounded-2xl overflow-hidden p-8 md:p-10 flex flex-col gap-8">
+      {/* Form only — full width */}
+      <div className="glass rounded-2xl overflow-hidden p-8 md:p-10 flex flex-col gap-8">
           
           <AnimatePresence mode="wait">
             {!formSubmitted ? (
@@ -285,8 +244,6 @@ export default function ContactView() {
               </motion.div>
             )}
           </AnimatePresence>
-
-        </div>
 
       </div>
     </div>

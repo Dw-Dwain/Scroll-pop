@@ -66,9 +66,10 @@ When staging looks good:
 4. Once green → **Merge pull request**
 
 **What deploys after merge:**
-- Cloudflare Pages redeploys `dashboard.scrollpop.online`
-- GitHub Actions deploys Worker (snippet + edge) from `Dw-Dwain/Scroll-pop`
-- **Render does NOT auto-deploy** — you must manually sync `dwain-coder` (step 5b)
+- `dashboard.scrollpop.online` — Cloudflare Pages (`scrollpop-dashboard` project)
+- `scrollpop.online` — Cloudflare Pages (`scrollpop-site` project, marketing site)
+- Worker (snippet + edge) — GitHub Actions from `Dw-Dwain/Scroll-pop`
+- **Render API does NOT auto-deploy** — you must manually sync `dwain-coder` (step 5b)
 
 ### 5. After merging — sync dev + dwain-coder
 
@@ -141,6 +142,57 @@ Both repos have identical code. Every push goes to both:
 git push                                                                  # → Dw-Dwain (origin)
 git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" dev   # → dwain-coder
 ```
+
+---
+
+## Marketing site (scrollpop.online)
+
+Source lives in `site-plan/` — a standalone Vite + React + Tailwind app.
+Deploys automatically to `scrollpop.online` via the `scrollpop-site` Cloudflare Pages project
+whenever `main` is updated. No separate deploy step needed.
+
+### Edit content
+
+All content is in `site-plan/src/components/`:
+
+| File | Page |
+|---|---|
+| `HomeView.tsx` | Homepage — hero, features, how-it-works, testimonials, FAQ, CTA |
+| `PricingView.tsx` | Pricing — 5 tiers, monthly/annual toggle, feature comparison |
+| `WordPressShopifyGuide.tsx` | Install guide — WordPress / Shopify / HTML tabs |
+| `TemplatesView.tsx` | Template gallery |
+| `ContactView.tsx` | Contact form |
+| `Header.tsx` | Nav bar + announcement strip |
+| `Footer.tsx` | Footer columns + copyright |
+
+### Preview locally
+
+```bash
+# Start the marketing site dev server (live reload)
+# Via /run → "ScrollPop Marketing Site" → http://localhost:3000
+# Or directly:
+pnpm --filter react-example dev
+```
+
+### Deploy a content change
+
+```bash
+git checkout dev
+# edit site-plan/src/components/HomeView.tsx (or any file)
+git add site-plan/
+git commit -m "content: update hero headline"
+git push
+# → CI runs → on merge to main → scrollpop.online updates in ~2 min
+```
+
+### Neon partition reminder ⚠️
+
+Before the 1st of each month, run this in the Neon SQL Editor (production branch):
+```sql
+CREATE TABLE IF NOT EXISTS events_YYYY_MM PARTITION OF events
+  FOR VALUES FROM ('YYYY-MM-01') TO ('YYYY-next-01');
+```
+(replace YYYY/MM with the upcoming month — e.g. July 2026 = `events_2026_07`)
 
 ---
 

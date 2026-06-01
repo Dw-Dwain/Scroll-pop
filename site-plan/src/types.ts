@@ -1,9 +1,12 @@
-export type ActivePage = 
-  | 'home' 
-  | 'templates' 
-  | 'pricing' 
-  | 'integration-guide' 
-  | 'contact';
+export type ActivePage =
+  | 'home'
+  | 'templates'
+  | 'pricing'
+  | 'integration-guide'
+  | 'contact'
+  | 'privacy-policy'
+  | 'terms'
+  | 'security';
 
 export interface PopupTemplate {
   id: string;

@@ -117,7 +117,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10 font-sans">
             <a
-              href={`${DASHBOARD_URL}/sign-up`}
+              href={DASHBOARD_URL}
               className="w-full sm:w-auto h-12 md:h-14 px-10 bg-neutral-950 text-white rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl hover:bg-neutral-800 transition-all flex items-center justify-center gap-2"
             >
               <span>Start Free — No Card Needed</span> <ArrowRight className="h-4 w-4" />
@@ -131,7 +131,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
           </div>
 
           <div className="mt-20">
-            <ScrollPopDemo customSetup={selectedTemplateSettings} />
+            <ScrollPopDemo />
           </div>
         </div>
       </section>
@@ -450,37 +450,6 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
         </div>
       </section>
 
-      {/* 9. TESTIMONIALS */}
-      <section className="py-24 max-w-7xl mx-auto px-6">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="text-xs uppercase font-mono tracking-widest text-[#C05621] font-semibold block mb-3">MERCHANT RESULTS</span>
-          <h2 className="font-serif text-3xl md:text-5xl font-normal text-gradient">From the community</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {testimonials.map((test) => (
-            <div key={test.id} className="glass rounded-2xl p-8 flex flex-col justify-between relative hover:border-neutral-300 transition-all duration-300">
-              <div className="flex flex-col gap-6">
-                <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
-                  <div>
-                    <h4 className="font-serif font-normal text-neutral-900 text-base">{test.author}</h4>
-                    <p className="text-[10px] font-mono text-neutral-500 uppercase mt-0.5">{test.role} · {test.company}</p>
-                  </div>
-                  <span className="text-[10px] font-mono text-neutral-500 uppercase">{test.industry}</span>
-                </div>
-                <blockquote className="text-xs text-neutral-600 font-light italic leading-relaxed">"{test.quote}"</blockquote>
-              </div>
-              <div className="mt-8 pt-6 border-t border-neutral-100 flex items-center justify-between">
-                <div>
-                  <span className="text-2xl font-serif font-normal text-neutral-900">{test.metric}</span>
-                  <span className="block text-[8px] font-mono text-neutral-500 capitalize mt-1">{test.metricLabel}</span>
-                </div>
-                <span className="px-2.5 py-1 bg-neutral-950 text-white text-[8px] font-mono uppercase tracking-widest font-bold rounded-full shadow-md">VERIFIED</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* 10. FAQ */}
       <section className="py-24 bg-transparent border-y border-neutral-200/60">
         <div className="max-w-4xl mx-auto px-6">
@@ -538,7 +507,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               className="w-full h-12 border border-neutral-250 rounded-full px-5 bg-white text-neutral-800 placeholder-neutral-400 focus:outline-hidden focus:border-neutral-450 transition-colors"
             />
             <a
-              href={`${DASHBOARD_URL}/sign-up`}
+              href={DASHBOARD_URL}
               className="w-full sm:w-auto h-12 px-8 bg-neutral-950 hover:bg-neutral-800 text-white font-mono uppercase tracking-wider font-bold rounded-full whitespace-nowrap cursor-pointer transition-all shadow-xl flex items-center justify-center"
             >
               Start Free →
