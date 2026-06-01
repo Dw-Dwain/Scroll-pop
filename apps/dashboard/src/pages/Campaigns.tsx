@@ -58,6 +58,93 @@ function PopupPreview({ kind, status }: { kind: string; status: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+function CampaignThumbnail({ config, status, kind }: { config: any; status: string; kind?: string }) {
+  const mainStep = config?.steps?.find((s: any) => s.id === 'main');
+  
+  if (!mainStep) {
+    return <PopupPreview kind={kind ?? 'modal'} status={status} />;
+  }
+
+  // Calculate scale to fit inside 130px height, ~280px width
+  const containerW = 280;
+  const containerH = 130;
+  
+  // padding
+  const availW = containerW - 40;
+  const availH = containerH - 40;
+
+  const scaleX = availW / mainStep.width;
+  const scaleY = availH / mainStep.height;
+  const scale = Math.min(scaleX, scaleY, 1);
+
+  return (
+    <div style={{
+      height: 130,
+      background: '#f4f4f5',
+      borderRadius: '8px 8px 0 0',
+      position: 'relative',
+      overflow: 'hidden',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      {/* Background checkerboard pattern to look like canvas */}
+      <div style={{ position: 'absolute', inset: 0, opacity: 0.3, backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 0)', backgroundSize: '12px 12px' }} />
+      
+      <div style={{
+        width: mainStep.width,
+        height: mainStep.height,
+        backgroundColor: mainStep.backgroundColor || '#ffffff',
+        borderRadius: mainStep.borderRadius || 0,
+        position: 'relative',
+        transform: `scale(${scale})`,
+        transformOrigin: 'center center',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+        overflow: 'hidden',
+        zIndex: 1,
+      }}>
+        {mainStep.elements?.map((el: any) => (
+          <div
+            key={el.id}
+            style={{
+              position: 'absolute',
+              left: `${el.x}%`,
+              top: `${el.y}%`,
+              width: `${el.w}%`,
+              height: `${el.h}%`,
+              zIndex: el.zIndex,
+            }}
+          >
+            {el.type === 'heading' && (
+              <h2 style={{ width: '100%', height: '100%', margin: 0, color: el.color, fontSize: `${el.fontSize || 22}px`, fontFamily: el.fontFamily, textAlign: el.align || 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', wordBreak: 'break-word', fontWeight: 800 }}>
+                {el.content}
+              </h2>
+            )}
+            {el.type === 'text' && (
+              <p style={{ width: '100%', height: '100%', margin: 0, color: el.color, fontSize: `${el.fontSize || 12}px`, fontFamily: el.fontFamily, textAlign: el.align || 'left', backgroundColor: el.backgroundColor || 'transparent', borderRadius: el.borderRadius ? `${el.borderRadius}px` : undefined, borderWidth: el.borderWidth ? `${el.borderWidth}px` : undefined, borderColor: el.borderColor, padding: el.padding ? `${el.padding}px` : undefined }}>
+                {el.content}
+              </p>
+            )}
+            {el.type === 'button' && (
+              <button style={{ width: '100%', height: '100%', border: 'none', backgroundColor: el.backgroundColor || '#000000', color: el.color || '#FFFFFF', borderRadius: `${el.borderRadius ?? 8}px`, fontSize: `${el.fontSize || 11}px`, fontFamily: el.fontFamily, fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {el.content}
+              </button>
+            )}
+            {el.type === 'input' && (
+              <input readOnly placeholder={el.extraProps?.placeholder || 'Email...'} style={{ width: '100%', height: '100%', border: '1px solid #e4e4e7', backgroundColor: '#fff', borderRadius: `${el.borderRadius ?? 8}px`, fontSize: '12px', padding: '0 8px', pointerEvents: 'none' }} />
+            )}
+            {el.type === 'shape' && el.content === 'wheel' && (
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', border: '3px solid #18181b', background: 'conic-gradient(#09090b 0 51deg, #18181b 51deg 102deg, #27272a 102deg 153deg, #3f3f46 153deg 204deg, #52525b 204deg 255deg, #71717a 255deg 306deg, #e4e4e7 306deg 360deg)' }} />
+            )}
+            {el.type === 'image' && el.content && (
+              <img src={el.content} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: el.borderRadius ? `${el.borderRadius}px` : undefined }} />
+            )}
+          </div>
+        ))}
+      </div>
 
       {/* status badge */}
       <div style={{
@@ -67,6 +154,7 @@ function PopupPreview({ kind, status }: { kind: string; status: string }) {
         background: status === 'active' ? 'rgba(34,197,94,0.12)' : status === 'paused' ? 'rgba(245,158,11,0.12)' : 'rgba(113,113,122,0.1)',
         color: status === 'active' ? '#16a34a' : status === 'paused' ? '#d97706' : '#71717a',
         border: `1px solid ${status === 'active' ? 'rgba(34,197,94,0.2)' : status === 'paused' ? 'rgba(245,158,11,0.2)' : 'rgba(113,113,122,0.2)'}`,
+        zIndex: 10
       }}>
         {status ?? 'draft'}
       </div>
