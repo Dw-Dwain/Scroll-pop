@@ -91,12 +91,13 @@ function getEdgeUrl(): string {
   const w = window as any;
   if (typeof window !== 'undefined' && w.__SP_EDGE_URL) return w.__SP_EDGE_URL;
   try {
-    if (document?.currentScript?.src && !(document.currentScript as HTMLScriptElement).src.includes('cdn.scrollpop.online')) {
-      return new URL((document.currentScript as HTMLScriptElement).src).origin;
+    const cur = document?.currentScript as HTMLScriptElement | null;
+    if (cur?.src && !cur.src.includes('cdn.scrollpop.online')) {
+      return new URL(cur.src).origin;
     }
     const scripts = document.getElementsByTagName('script');
     for (let i = 0; i < scripts.length; i++) {
-      const src = scripts[i]?.src;
+      const src = (scripts[i] as HTMLScriptElement)?.src;
       if (src?.includes('/p.js') && !src.includes('cdn.scrollpop.online')) {
         return new URL(src).origin;
       }
