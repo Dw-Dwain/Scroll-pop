@@ -1033,6 +1033,11 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   monthly chore is gone; `/e` logs loudly if a partition is ever missing.
 - **Campaign designer persists the entire left sidebar** (all triggers/targeting + the
   Display Frequency dropdown) via a `uiTriggers` snapshot in `design.config`.
+- **In-app notifications** (migration 0006): tenant-scoped `notifications` table +
+  `tenants.notification_prefs`. Top-nav bell (unread badge, dropdown, mark-read), emitted
+  on real events (campaign activate/pause), gated by Settings → Notifications prefs (now
+  persisted server-side via `/api/v1/notification-prefs`). Schema auto-ensured on boot
+  (`ensure-notifications.ts`). Email delivery is the next phase (needs a provider).
 
 #### Infrastructure
 - **Render Standard** — API always warm, zero cold starts; analytics event forwarding
