@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { db } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
+import { ensureNotificationsSchema } from './db/ensure-notifications.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from './db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
@@ -385,6 +386,9 @@ async function bootstrap() {
   // Prevents the recurring "analytics silently dies at month rollover" outage on Neon,
   // where inserts for a missing partition are dropped with no error. Safe no-op locally.
   await ensureEventPartitions(app.log);
+  // Ensure notifications schema (migration 0006) so notification_prefs / notifications
+  // exist before serving — prevents tenant-lookup 500s if the migration wasn't applied.
+  await ensureNotificationsSchema(app.log);
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });
