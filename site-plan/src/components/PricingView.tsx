@@ -21,8 +21,7 @@ export default function PricingView() {
         '1 active campaign',
         'Visual drag-and-drop builder',
         '38+ popup templates',
-        'WordPress plugin',
-        'HTML snippet install',
+        'Snippet install — WordPress, Shopify & HTML',
         'Scroll / dwell / exit triggers',
         'Basic analytics (impressions, clicks, CTR)',
       ],
@@ -41,7 +40,7 @@ export default function PricingView() {
         '3 sites',
         '5 active campaigns',
         'Everything in Free',
-        'Shopify Script Tag install',
+        'Dedicated WordPress plugin',
         'No "Powered by ScrollPop" badge',
         'Priority support',
       ],
@@ -122,7 +121,7 @@ export default function PricingView() {
           Simple, honest plans
         </h1>
         <p className="text-neutral-600 font-light text-base md:text-lg mt-4 leading-relaxed">
-          Start free — no card required. Upgrade as your traffic grows. Cancel any time.
+          Start free — no card required. Paid plans are launching soon; you'll stay on Free until checkout opens.
         </p>
 
         {/* Billing toggle */}
@@ -200,17 +199,24 @@ export default function PricingView() {
                 </ul>
               </div>
 
-              <a
-                href={tier.href}
-                className={`mt-8 w-full h-11 rounded font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  tier.popular
-                    ? 'bg-neutral-950 text-white hover:bg-neutral-800 shadow-md'
-                    : 'bg-white border border-neutral-250 hover:bg-neutral-50 text-neutral-800'
-                }`}
-              >
-                <span>{tier.cta}</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </a>
+              {tier.id === 'free' ? (
+                <a
+                  href={tier.href}
+                  className="mt-8 w-full h-11 rounded font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer bg-neutral-950 text-white hover:bg-neutral-800 shadow-md"
+                >
+                  <span>Start Free</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Paid plans are launching soon"
+                  className="mt-8 w-full h-11 rounded font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 bg-neutral-100 border border-neutral-250 text-neutral-500 cursor-not-allowed"
+                >
+                  Coming Soon
+                </button>
+              )}
             </div>
           );
         })}
@@ -235,9 +241,9 @@ export default function PricingView() {
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold tracking-wide text-neutral-900">Cancel any time</h4>
+            <h4 className="text-sm font-semibold tracking-wide text-neutral-900">No lock-in</h4>
             <p className="text-xs text-neutral-600 mt-1 font-light leading-relaxed">
-              No lock-in contracts. Cancel your subscription in one click from the billing portal. Your data is always yours and can be exported at any time.
+              The Free plan is yours for as long as you like. When paid plans launch you'll be able to cancel any time — no contracts. Your data is always yours and exportable.
             </p>
           </div>
         </div>

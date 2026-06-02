@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { ActivePage, FAQItem, Testimonial } from '../types';
+import { ActivePage, FAQItem } from '../types';
 import ScrollPopDemo from './ScrollPopDemo';
 import {
   Sparkles, ArrowRight, Gauge, Layers, ShieldCheck, Zap,
@@ -21,39 +21,6 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
   const [auditInput, setAuditInput] = useState('');
   const [auditSubmitted, setAuditSubmitted] = useState(false);
 
-  const testimonials: Testimonial[] = [
-    {
-      id: 'test_1',
-      author: 'Aurelia Gainsbourg',
-      role: 'Director of Commerce',
-      company: 'Lumière Paris',
-      industry: 'Luxury Cosmetics',
-      quote: "ScrollPop fits perfectly with our minimalist aesthetic. Newsletter subscribers up 38% in the first month — and our Lighthouse score didn't move an inch.",
-      metric: '+38%',
-      metricLabel: 'Email Subscriber Growth'
-    },
-    {
-      id: 'test_2',
-      author: 'Marcus Vance',
-      role: 'Lead Theme Engineer',
-      company: 'Active Gear Co.',
-      industry: 'Shopify Plus Merchant',
-      quote: "The Shopify App Embed Block was live in 4 minutes. Zero theme code edited. The visual builder is genuinely impressive — our designer set up the first campaign without touching the dashboard docs.",
-      metric: '4 min',
-      metricLabel: 'Time to First Campaign'
-    },
-    {
-      id: 'test_3',
-      author: 'Selena Thorne',
-      role: 'Head of Affiliate',
-      company: 'Kinfolk Collective',
-      industry: 'High-Fashion Publisher',
-      quote: "We run 12 campaigns across 6 sites. The analytics breakdown by trigger type was the feature that sold us — we learned exit-intent converts 2.4× better than scroll for our audience.",
-      metric: '2.4×',
-      metricLabel: 'Exit vs Scroll CTR'
-    }
-  ];
-
   const faqs: FAQItem[] = [
     {
       id: 'faq_1',
@@ -65,13 +32,13 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
       id: 'faq_2',
       category: 'shopify',
       question: 'How do I install ScrollPop on Shopify?',
-      answer: 'Two options. The easiest: connect your store via OAuth in the dashboard — ScrollPop auto-injects a Script Tag. For Online Store 2.0 themes, use the App Embed Block instead: open Theme Customizer → App Embeds → ScrollPop → toggle on → paste your Public Key. No code editing required.'
+      answer: 'Add one small snippet to your theme: Shopify Admin → Online Store → Themes → Edit code, and paste the ScrollPop snippet (with your Public Key) just before </head>. The dashboard gives you the exact code to copy. A one-click Shopify app (OAuth auto-install + App Embed Block, no code) is coming soon.'
     },
     {
       id: 'faq_3',
       category: 'wordpress',
-      question: 'What does the WordPress plugin do?',
-      answer: 'It\'s a thin PHP plugin (~5KB zip) that injects the ScrollPop snippet into your wp_head. Download it from your dashboard, install via WP Admin → Plugins → Upload, paste your site\'s Public Key in the plugin settings. Verified in under 2 minutes. Compatible with any theme, Gutenberg, Elementor, and page builders.'
+      question: 'How do I install ScrollPop on WordPress?',
+      answer: 'On the Free plan, paste the ScrollPop snippet into your header (via your theme\'s functions.php or a "headers and footers" plugin) — the dashboard gives you the exact code. Paid plans also get the dedicated ScrollPop WordPress plugin: a thin PHP plugin you upload via WP Admin → Plugins → Upload, then paste your Public Key. Works with any theme, Gutenberg, Elementor, and WooCommerce.'
     },
     {
       id: 'faq_4',
@@ -254,7 +221,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               <div>
                 <h4 className="font-serif text-xl font-normal text-neutral-900">Sign up & connect your site</h4>
                 <p className="text-neutral-600 text-sm font-light mt-2.5 leading-relaxed">
-                  Create a free account and register your domain. Install the WordPress plugin, connect Shopify via OAuth, or paste a single script tag. Takes under 2 minutes.
+                  Create a free account and register your domain. Paste a single snippet into any site — WordPress, Shopify, or plain HTML. Paid plans also get the dedicated WordPress plugin. Takes under 2 minutes.
                 </p>
               </div>
             </div>
@@ -340,7 +307,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               <div>
                 <h3 className="font-serif text-3xl font-normal text-neutral-900">For Shopify</h3>
                 <p className="text-sm font-light text-neutral-600 leading-relaxed mt-3">
-                  Connect your store in one click via OAuth — ScrollPop injects the snippet automatically using Shopify's Script Tag API. For Online Store 2.0 themes, enable the App Embed Block in Theme Customizer without touching any code. Both methods are live in under 5 minutes.
+                  Add one snippet to your theme's <code className="font-mono text-xs">theme.liquid</code> (Online Store → Themes → Edit code) just before <code className="font-mono text-xs">&lt;/head&gt;</code>. The dashboard gives you the exact code. A one-click Shopify app — OAuth auto-install and an App Embed Block with no code — is coming soon.
                 </p>
                 <button onClick={() => onPageChange('integration-guide')} className="mt-4 text-xs font-mono uppercase text-[#C05621] hover:underline cursor-pointer">View Shopify install guide →</button>
               </div>
@@ -353,7 +320,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               <div>
                 <h3 className="font-serif text-3xl font-normal text-neutral-900">For WordPress</h3>
                 <p className="text-sm font-light text-neutral-600 leading-relaxed mt-3">
-                  Download the ScrollPop WordPress plugin from your dashboard. Install via WP Admin → Plugins → Upload → Activate. Paste your site's Public Key in the plugin settings. Works with every theme, Gutenberg, Elementor, and WooCommerce.
+                  On the Free plan, paste the ScrollPop snippet into your site header (via functions.php or a headers/footers plugin). Paid plans unlock the dedicated WordPress plugin — upload via WP Admin → Plugins → Upload → Activate, then paste your Public Key. Works with every theme, Gutenberg, Elementor, and WooCommerce.
                 </p>
                 <button onClick={() => onPageChange('integration-guide')} className="mt-4 text-xs font-mono uppercase text-[#C05621] hover:underline cursor-pointer">View WordPress install guide →</button>
               </div>
@@ -433,8 +400,8 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
                     ['Visual builder',        'Template-locked or code required', 'Full drag-and-drop canvas'],
                     ['Analytics',             'Basic clicks / opens',             'Impressions, CTR, funnel, device, country'],
                     ['Google compliance',     'Many use banned back-button tricks','Never — history.pushState banned by design'],
-                    ['WordPress install',     'Plugin (some are bloated)',         '5 KB plugin, verified in 2 min'],
-                    ['Shopify install',       'App embed or script injection',    'OAuth auto-inject + App Embed Block'],
+                    ['WordPress install',     'Plugin (some are bloated)',         'Snippet (free) · WP plugin (paid)'],
+                    ['Shopify install',       'App embed or script injection',    'theme.liquid snippet · 1-click app soon'],
                     ['Pricing',               '$29–$199/mo',                      'Free → $19–$299/mo'],
                   ].map(([feature, competitor, us]) => (
                     <tr key={feature}>
