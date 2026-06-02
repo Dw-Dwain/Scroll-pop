@@ -111,6 +111,7 @@ const EDGE_URL = getEdgeUrl();
 
 let activeSiteId = '';
 let adTriggerEnabled = false; // growth+ plans only
+let sitePlan = 'free'; // tenant plan — gates the "Powered by ScrollPop" badge
 
 // Track when the snippet loaded so we can report time-on-page at trigger
 const _pageLoadTime = Date.now();
@@ -186,6 +187,7 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     const config: SiteConfig = await res.json() as SiteConfig;
     activeSiteId = config.siteId;
     adTriggerEnabled = 'growthscaleagency'.includes(config.plan || '');
+    sitePlan = config.plan || 'free';
     console.log('[ScrollPop] Config loaded successfully:', config);
 
     if (!config.campaigns || config.campaigns.length === 0) {
@@ -817,7 +819,9 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     htmlChunks.push('</p>');
   }
 
-  if (design.showPoweredBy) {
+  // Plan-enforced: Free always shows the badge, paid plans never do (ignores the
+  // per-design flag so free users can't remove it and paid users never see it).
+  if (sitePlan === 'free') {
     htmlChunks.push('<p class="powered-by">Powered by ScrollPop</p>');
   }
 
@@ -949,7 +953,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       <a class="cta-btn" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top: 10px;">
         SHOP WITH VOUCHER CODE
       </a>
-      <p class="powered-by" style="margin-top: 6px;">Powered by ScrollPop</p>
+      ${sitePlan === 'free' ? '<p class="powered-by" style="margin-top: 6px;">Powered by ScrollPop</p>' : ''}
     `;
 
     // Wire up clipboard copy trigger

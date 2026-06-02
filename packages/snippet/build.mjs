@@ -4,8 +4,22 @@
 
 import esbuild from 'esbuild';
 import { createRequire } from 'module';
+import { copyFileSync, existsSync } from 'fs';
 
 const watch = process.argv.includes('--watch');
+
+// The Cloudflare Worker serves the snippet by importing apps/worker/src/p.txt.
+// Keep it in sync with the freshly built bundle so source changes actually reach
+// production (this was a silent staleness source before).
+const WORKER_SNIPPET = '../../apps/worker/src/p.txt';
+function syncWorkerSnippet() {
+  try {
+    copyFileSync('dist/p.js', WORKER_SNIPPET);
+    console.log('Synced → apps/worker/src/p.txt');
+  } catch (err) {
+    console.warn('Could not sync worker snippet:', err.message);
+  }
+}
 
 const ctx = await esbuild.context({
   entryPoints: ['src/main.ts'],
@@ -30,4 +44,5 @@ if (watch) {
   await ctx.rebuild();
   await ctx.dispose();
   console.log('Snippet built → dist/p.js');
+  syncWorkerSnippet();
 }

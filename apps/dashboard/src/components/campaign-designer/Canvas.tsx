@@ -590,6 +590,9 @@ export default function Canvas({
                 };
                 return map[stepConfig.animationEntrance] ?? map['scale-up'];
               })(),
+              // Clip full-bleed child panels (e.g. a colored left rail) to the popup's
+              // rounded corners — without this they show square corners over the radius.
+              overflow: 'hidden',
             }}
           >
             {/* Visual alignment snap guide indicators overlay */}
