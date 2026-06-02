@@ -361,7 +361,25 @@ async function bootstrap() {
   }
 
   // 3. Local Ingest Route (Prevents fetch errors when snippet beacons analytics)
-  app.post<{ Body: { events?: any[] } }>('/e', async (request, reply) => {
+  // Rate limit: 500 beacons/min per IP — well above any real page's traffic but blocks
+  // floods from scrapers or misconfigured snippets hitting the API directly.
+  // Keyed by IP (not tenant — the request has no auth header).
+  // The Cloudflare Worker already throttles edge traffic; this is the direct-API guard.
+  app.post<{ Body: { events?: any[] } }>('/e', {
+    config: {
+      rateLimit: {
+        max: 500,
+        timeWindow: '1 minute',
+        keyGenerator: (req) => req.ip,
+        errorResponseBuilder: (_req, context) => ({
+          error: {
+            code: 'RATE_LIMITED',
+            message: `Event ingest rate limit exceeded. Retry after ${context.after}.`,
+          },
+        }),
+      },
+    },
+  }, async (request, reply) => {
     const payload = request.body;
     if (payload && Array.isArray(payload.events)) {
       for (const rawEvt of payload.events) {
