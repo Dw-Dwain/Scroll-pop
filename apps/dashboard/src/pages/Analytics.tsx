@@ -64,8 +64,8 @@ function TrendChart({ daily }: {
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
-      {yTicks.map((t) => (
-        <g key={t.val}>
+      {yTicks.map((t, ti) => (
+        <g key={ti}>
           <line x1={pad.l} y1={t.y} x2={W - pad.r} y2={t.y} stroke="var(--border-subtle)" strokeWidth={0.5} />
           <text x={pad.l - 6} y={t.y + 3} textAnchor="end" fontSize={8} fill="var(--text-muted)">
             {t.val >= 1000 ? `${(t.val / 1000).toFixed(0)}k` : t.val}

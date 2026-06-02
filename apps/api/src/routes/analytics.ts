@@ -26,22 +26,6 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const clicks = counts['click'] ?? 0;
     const ctr = impressions > 0 ? (clicks / impressions) : 0;
 
-    // Debug: count events at multiple scopes to diagnose tenantId mismatch
-    const [forTenant] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(events)
-      .where(eq(events.tenantId, request.tenantId));
-
-    const [allEvents] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(events);
-
-    // Sample of distinct tenantIds actually in the events table
-    const tenantSample = await db
-      .selectDistinct({ tenantId: events.tenantId })
-      .from(events)
-      .limit(5);
-
     return reply.send({
       data: {
         period: `${days}d`,
@@ -51,12 +35,6 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         dismissals: counts['dismiss'] ?? 0,
         conversions: counts['conversion'] ?? 0,
         ctr: parseFloat(ctr.toFixed(4)),
-        _debug: {
-          myTenantId:            request.tenantId,
-          eventsForMyTenant:     forTenant?.count   ?? 0,
-          totalEventsInDB:       allEvents?.count   ?? 0,
-          tenantIdsInEventsTable: tenantSample.map(r => r.tenantId),
-        },
       },
     });
   });
