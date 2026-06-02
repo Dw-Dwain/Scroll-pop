@@ -28,14 +28,11 @@ custom_domain = true
 # ── KV Namespace: campaign config cache ───────────────────────────────────────
 # Edge cache for site config (60s TTL). The Worker reads/writes this in
 # handleConfig() — a cache hit avoids the Worker→API→DB round-trip entirely.
-# IMPORTANT: the `id` must belong to the SAME Cloudflare account the CI deploy
-# token authenticates to (GitHub secret CLOUDFLARE_ACCOUNT_ID), NOT a personal
-# `wrangler login` account — otherwise deploy fails with "KV namespace not found"
-# (code 10041). Create it in that account, then uncomment with its id:
-# [[kv_namespaces]]
-# binding = "SCROLLPOP_CONFIG"
-# id = "<id from the CI/deploy account>"
-# preview_id = "ffb1d5e59c1d49c6b6cb1bd92d88eeb6"
+# `id` lives in the CI/deploy account (the scrollpop-worker account), NOT a local
+# `wrangler login` account — else deploy fails with "KV namespace not found" (10041).
+[[kv_namespaces]]
+binding = "SCROLLPOP_CONFIG"
+id = "00a5652f5e9d435bbd1ada64fe089088"
 
 # ── Secrets (set via `wrangler secret put <NAME>` — never commit values) ──────
 # Required secrets:
