@@ -1,6 +1,92 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk, useUser, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
+
+// ── Mobile gate ───────────────────────────────────────────────────────────────
+// The dashboard is a desktop-only tool. Mobile visitors see a friendly
+// "open on desktop" screen. Sign-in and sign-up are still accessible so
+// users can create an account on their phone and log in later on desktop.
+const MOBILE_BREAKPOINT = 768; // px — same as Tailwind md:
+
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = React.useState(
+    () => typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT,
+  );
+  React.useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return mobile;
+}
+
+const MOBILE_ALLOWED_PATHS = ['/sign-in', '/sign-up', '/sso-callback'];
+
+const MobileGate: React.FC<{ currentPath: string; children: React.ReactNode }> = ({
+  currentPath,
+  children,
+}) => {
+  const isMobile = useIsMobile();
+  const isAllowed = MOBILE_ALLOWED_PATHS.some((p) => currentPath.startsWith(p));
+
+  if (!isMobile || isAllowed) return <>{children}</>;
+
+  return (
+    <div style={{
+      minHeight: '100dvh',
+      background: '#0a0a0b',
+      color: '#f5f5f4',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '32px 24px',
+      textAlign: 'center',
+      fontFamily: 'system-ui, sans-serif',
+    }}>
+      {/* Logo mark */}
+      <div style={{
+        width: 56, height: 56, borderRadius: '50%', background: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24,
+      }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <polygon points="12,2 20,20 12,16 4,20" fill="#0a0a0b" />
+        </svg>
+      </div>
+      <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 12px', letterSpacing: '-0.3px' }}>
+        Desktop only
+      </h1>
+      <p style={{ fontSize: 14, color: '#a3a3a3', lineHeight: 1.6, maxWidth: 280, margin: '0 0 32px' }}>
+        The ScrollPop dashboard is designed for desktop browsers.
+        Open <strong style={{ color: '#fff' }}>dashboard.scrollpop.online</strong> on
+        your computer to manage campaigns and analytics.
+      </p>
+      <a
+        href="/sign-in"
+        style={{
+          display: 'inline-block',
+          padding: '10px 24px',
+          background: '#6366f1',
+          color: '#fff',
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 600,
+          textDecoration: 'none',
+          marginBottom: 12,
+        }}
+      >
+        Sign in anyway
+      </a>
+      <a
+        href="https://scrollpop.online"
+        style={{ fontSize: 12, color: '#6b7280', textDecoration: 'none' }}
+      >
+        ← Back to scrollpop.online
+      </a>
+    </div>
+  );
+};
 import { Refine } from '@refinedev/core';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -147,12 +233,12 @@ const ClerkAppContent: React.FC = () => {
   };
 
   return (
-    <>
+    <MobileGate currentPath={currentPath}>
       <SignedOut>
         {currentPath === '/sign-up' ? <SignUp isDemo={false} /> : <SignIn isDemo={false} />}
       </SignedOut>
       {renderRoute()}
-    </>
+    </MobileGate>
   );
 };
 
@@ -314,9 +400,9 @@ const DemoAppContent: React.FC = () => {
   };
 
   return (
-    <>
+    <MobileGate currentPath={currentPath}>
       {renderRoute()}
-    </>
+    </MobileGate>
   );
 };
 
