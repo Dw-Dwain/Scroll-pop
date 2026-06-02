@@ -100,8 +100,11 @@ branch**. Notes:
   execution.
 - Verify: `SELECT column_name FROM information_schema.columns WHERE table_name = '<table>';`
 
-**Recommended hardening:** set a Render **Pre-Deploy Command** that applies
-pending migrations automatically, so prod can never drift behind the code again.
+**This is now automated via `render.yaml`** — the `preDeployCommand` runs
+`drizzle-kit migrate` before Render swaps traffic to the new instance. If a
+migration fails, Render aborts the deploy and the old instance stays live.
+`DIRECT_DATABASE_URL` must be set in Render → Environment (direct Neon connection,
+not the pooler — drizzle-kit needs it for DDL).
 
 ---
 

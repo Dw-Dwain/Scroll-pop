@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: scrollpop-api
+    runtime: node
+    region: ohio
+    plan: standard
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @scrollpop/api build
+    preDeployCommand: pnpm --filter @scrollpop/api exec drizzle-kit migrate
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_TOKEN
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_KV_NAMESPACE_ID
+        sync: false
+      - key: INTERNAL_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
