@@ -528,6 +528,9 @@ html[data-theme="dark"] .designer-panel .text-zinc-800 { color: #e4e4e7 !importa
 html[data-theme="dark"] .designer-panel .text-zinc-700 { color: #d4d4d8 !important; }
 html[data-theme="dark"] .designer-panel .text-zinc-600 { color: #a1a1aa !important; }
 html[data-theme="dark"] .designer-panel .text-zinc-500 { color: #71717a !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-400 { color: #a1a1aa !important; }
+html[data-theme="dark"] .designer-panel .text-zinc-300 { color: #71717a !important; }
+html[data-theme="dark"] .designer-panel .bg-zinc-200  { background-color: #3f3f46 !important; }
 html[data-theme="dark"] .designer-panel input,
 html[data-theme="dark"] .designer-panel select,
 html[data-theme="dark"] .designer-panel textarea {
@@ -535,4 +538,10 @@ html[data-theme="dark"] .designer-panel textarea {
   border-color: #3f3f46 !important;
   color: #fafafa !important;
 }
+
+/* ── Campaign designer canvas surface (the dotted workspace behind the popup) ──
+   The popup being designed keeps its own configured colors; only this backdrop
+   follows the app theme. */
+.ds-canvas-surface { background-color: #F5F7FA; --ds-canvas-dot: #E2E8F0; }
+html[data-theme="dark"] .ds-canvas-surface { background-color: #0b0b0e; --ds-canvas-dot: #27272a; }
 

@@ -42,7 +42,7 @@ export default function TopBar({
   onBack,
 }: TopBarProps) {
   return (
-    <div className="h-16 w-full shrink-0 border-b border-zinc-200 bg-white px-5 flex items-center justify-between select-none">
+    <div className="designer-panel h-16 w-full shrink-0 border-b border-zinc-200 bg-white px-5 flex items-center justify-between select-none">
 
       {/* 1. Left Side: Back button + Brand identity */}
       <div className="flex items-center gap-3">

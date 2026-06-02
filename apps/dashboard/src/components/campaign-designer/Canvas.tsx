@@ -446,7 +446,7 @@ export default function Canvas({
     <div className="flex-1 bg-zinc-50 border-r border-zinc-200 flex flex-col relative select-none overflow-hidden" id="campaign-designer-canvas-frame">
       
       {/* PUCK STYLE BREADCRUMB / VIEWPORT STATUS BAR */}
-      <div className="h-11 border-b border-zinc-200 bg-white px-5 flex items-center justify-between shrink-0 font-sans z-20">
+      <div className="designer-panel h-11 border-b border-zinc-200 bg-white px-5 flex items-center justify-between shrink-0 font-sans z-20">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-zinc-400 font-mono tracking-wider uppercase">Hierarchy</span>
           <span className="text-zinc-300 text-[10px]">/</span>
@@ -509,13 +509,13 @@ export default function Canvas({
       </div>
 
       {/* CORE CANVAS WORKSPACE CONTAINER */}
-      <div 
-        className="flex-1 relative flex items-center justify-center p-12 overflow-auto" 
+      <div
+        className="ds-canvas-surface flex-1 relative flex items-center justify-center p-12 overflow-auto"
         onClick={() => onSelectElement(null)}
         style={{
-          backgroundColor: '#F5F7FA',
-          // Elegant GrapesJS dot grid background
-          backgroundImage: showGrid ? 'radial-gradient(#E2E8F0 1.2px, transparent 1.2px)' : 'none',
+          // backgroundColor comes from .ds-canvas-surface (theme-aware); the popup being
+          // designed keeps its own configured colors.
+          backgroundImage: showGrid ? 'radial-gradient(var(--ds-canvas-dot) 1.2px, transparent 1.2px)' : 'none',
           backgroundSize: '24px 24px',
         }}
       >

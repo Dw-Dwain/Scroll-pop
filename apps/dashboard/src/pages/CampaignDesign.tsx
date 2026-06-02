@@ -726,13 +726,14 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
   if (!campaign) return null;
 
   return (
-    <div className="flex flex-col overflow-hidden bg-white select-none" style={{
+    <div className="flex flex-col overflow-hidden select-none" style={{
       position: 'fixed',
       top: 'var(--topnav-height, 48px)',
       left: 0,
       right: 0,
       bottom: 0,
       zIndex: 90,
+      background: 'var(--bg-surface)',
     }}>
       {/* Toast Alert */}
       {toast && (
