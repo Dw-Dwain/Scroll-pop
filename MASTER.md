@@ -1248,8 +1248,20 @@ are now a mandatory documented post-merge step (CONTRIBUTING §6); Render Pre-De
 auto-apply is the recommended hardening. **Lesson:** Render does not run migrations on
 deploy — prod silently drifts behind code on every new migration until applied by hand.
 
-### Compliance — address before commercial launch (audit Jun 2 2026)
+### Compliance — audit Jun 2 2026 (most items now addressed)
 > Engineering review, **not legal advice** — have an attorney review Terms/Privacy/DPA.
+
+**Addressed Jun 2 2026:** snippet now honors a host consent signal
+(`window.__sp_consent === false` / Google Consent Mode `analytics_storage:'denied'`)
+in addition to DNT — disables analytics + visitor-id, popups still show (CMP1, partial:
+strict per-tenant opt-in still a config option for later). Marketing claims softened —
+competitor comparisons qualified, "Google-compliant" reworded to "avoids the popup tricks
+Google penalizes" (CMP2/CMP3). Privacy docs (site LegalView + dashboard PrivacyPage)
+reconciled: correct sub-processors (Clerk/Stripe/Cloudflare/Neon/Render/Upstash, Sentry
+when enabled), IP→geo "not stored" disclosed, localStorage (not cookie) clarified, DPA
+"available on request", domain fixed to scrollpop.online (CMP4). License guard documented
+in CONTRIBUTING (`license-checker`); stack is permissive (CMP5). **Still recommended:**
+attorney review + a signed DPA template + a per-tenant strict-opt-in consent mode.
 
 | # | Severity | Item |
 |---|---|---|

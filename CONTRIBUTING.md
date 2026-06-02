@@ -341,4 +341,9 @@ git reset --soft HEAD~1
 
 # Deploy Shopify App Embed Block
 npx shopify app deploy
+
+# License compliance — flag any copyleft (GPL/AGPL/LGPL/SSPL) deps before shipping
+# (the WP plugin is GPL by design; that's separate, not an npm dep)
+npx license-checker --production --summary
+npx license-checker --production --failOn 'GPL;AGPL;LGPL;SSPL'
 ```

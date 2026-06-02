@@ -26,7 +26,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
       id: 'faq_1',
       category: 'product',
       question: 'How is ScrollPop different from Privy, OptinMonster or Poptin?',
-      answer: 'Most popup tools inject 120–250KB of external JavaScript that can hurt your Core Web Vitals. ScrollPop\'s snippet is ~10KB gzipped, loads asynchronously after the page is interactive (using requestIdleCallback), and renders entirely inside a Shadow DOM — so it never touches your host page CSS. You get a full visual drag-and-drop builder, real analytics, and campaign management, without the page-speed penalty.'
+      answer: 'Many popup tools can ship 100 KB+ of external JavaScript, which may affect Core Web Vitals. ScrollPop\'s snippet is ~10KB gzipped, loads asynchronously after the page is interactive (using requestIdleCallback), and renders entirely inside a Shadow DOM — so it never touches your host page CSS. You get a full visual drag-and-drop builder, real analytics, and campaign management, designed to minimise page-speed impact.'
     },
     {
       id: 'faq_2',
@@ -44,7 +44,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
       id: 'faq_4',
       category: 'performance',
       question: 'Will popups hurt my Core Web Vitals or SEO?',
-      answer: 'No. The snippet loads with async + defer and uses requestIdleCallback so it never blocks LCP. Popups render inside a closed Shadow DOM — zero CSS leakage, zero layout shift. All event beaconing uses navigator.sendBeacon (fire-and-forget, doesn\'t block unload). Google explicitly allows scroll-triggered and time-triggered popups that don\'t block content.'
+      answer: 'The snippet is built to minimise impact: it loads async + defer via requestIdleCallback so it doesn\'t block LCP, renders inside a closed Shadow DOM (no CSS leakage, no layout shift from the host page), and beacons events with navigator.sendBeacon. ScrollPop also avoids the back-button/history tricks Google penalizes. Note: any popup can still count as an "intrusive interstitial" if it covers content immediately on mobile entry — use scroll/dwell/exit triggers (the defaults) and avoid full-screen popups on first load.'
     },
     {
       id: 'faq_5',
@@ -71,7 +71,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neutral-900 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-neutral-900"></span>
             </span>
-            <span className="text-[10px] uppercase font-mono tracking-widest text-neutral-600 font-semibold">WordPress & Shopify · Google-compliant · Free to start</span>
+            <span className="text-[10px] uppercase font-mono tracking-widest text-neutral-600 font-semibold">WordPress & Shopify · No back-button hijacking · Free to start</span>
           </div>
 
           <h1 className="font-serif text-5xl md:text-7xl lg:text-[84px] leading-[0.9] text-gradient font-normal max-w-5xl mx-auto mb-8">
@@ -172,9 +172,9 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               <div className="p-3 bg-neutral-100 text-[#111111] rounded-lg w-fit border border-neutral-200 mb-6">
                 <ShieldCheck className="h-6 w-6" />
               </div>
-              <h3 className="font-serif text-2xl font-normal text-neutral-900">Google-Compliant by Design</h3>
+              <h3 className="font-serif text-2xl font-normal text-neutral-900">Avoids the popup tricks Google penalizes</h3>
               <p className="text-neutral-600 text-sm mt-3 font-light leading-relaxed">
-                ScrollPop never uses back-button capture, history manipulation, or popstate listeners — techniques banned by Google since June 2026. Every trigger is scroll-depth, dwell-time, inactivity, or exit-intent (cursor).
+                ScrollPop never uses back-button capture, history manipulation, or popstate listeners — the kind of techniques Google penalizes. Every trigger is scroll-depth, dwell-time, inactivity, or exit-intent (cursor), so popups appear on engagement rather than hijacking navigation.
               </p>
             </div>
             <div className="mt-8 pt-4 border-t border-neutral-200/60 text-xs font-mono text-neutral-500">
@@ -350,11 +350,11 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between font-mono text-xs text-neutral-500">
                 <span>Typical popup apps (React + trackers + iframes)</span>
-                <span className="font-bold text-red-600">120–250 KB</span>
+                <span className="font-bold text-red-600">often 100 KB+</span>
               </div>
               <div className="w-full bg-neutral-100 h-9 rounded-full border border-neutral-200 overflow-hidden relative flex items-center px-4 text-xs">
                 <div className="absolute top-0 bottom-0 left-0 bg-red-100 border-r-2 border-red-500 w-[85%]" />
-                <span className="relative z-10 text-red-800 font-medium">Blocks rendering · layout shift · slow LCP</span>
+                <span className="relative z-10 text-red-800 font-medium">Can block rendering · layout shift · slower LCP</span>
               </div>
             </div>
             <div className="flex flex-col gap-2">
@@ -389,17 +389,17 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
                 <thead>
                   <tr className="bg-neutral-50 text-neutral-800 font-mono text-[10px] tracking-widest uppercase">
                     <th className="p-5 border-b border-neutral-200">Feature</th>
-                    <th className="p-5 border-b border-neutral-200">Privy / OptinMonster</th>
+                    <th className="p-5 border-b border-neutral-200">Typical popup tools</th>
                     <th className="p-5 border-b border-neutral-200 bg-neutral-100/50 text-neutral-900 font-bold">ScrollPop</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 font-sans text-neutral-700">
                   {[
-                    ['Snippet size',          '120–250 KB (blocks render)',       '~10 KB gzipped (async)'],
-                    ['Core Web Vitals impact','Causes layout shift + slow LCP',   '0 CLS · 0 LCP impact'],
+                    ['Snippet size',          'Often 100 KB+ (can block render)', '~10 KB gzipped (async)'],
+                    ['Core Web Vitals impact','Can add layout shift / slower LCP','Async, Shadow DOM — minimal impact'],
                     ['Visual builder',        'Template-locked or code required', 'Full drag-and-drop canvas'],
                     ['Analytics',             'Basic clicks / opens',             'Impressions, CTR, funnel, device, country'],
-                    ['Google compliance',     'Many use banned back-button tricks','Never — history.pushState banned by design'],
+                    ['Back-button / history tricks', 'Some tools rely on them',     'Never — history.pushState blocked by design (CI-enforced)'],
                     ['WordPress install',     'Plugin (some are bloated)',         'Snippet (free) · WP plugin (paid)'],
                     ['Shopify install',       'App embed or script injection',    'theme.liquid snippet · 1-click app soon'],
                     ['Pricing',               '$29–$199/mo',                      'Free → $19–$299/mo'],

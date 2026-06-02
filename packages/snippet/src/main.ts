@@ -126,6 +126,15 @@ function evaluateSkipTracking(): void {
   if (/localhost|127\.0\.0\.1|0\.0\.0\.0|\.local$|\.test$|scrollpop/.test(window.location.hostname)) {
     _skipTracking = true;
   }
+  // Consent gate (GDPR/ePrivacy): the host site or its CMP can deny analytics by
+  // setting window.__sp_consent = false (or Google Consent Mode analytics_storage
+  // = 'denied'). When denied we still render popups but record no analytics and
+  // never persist a visitor id. EU/UK customers should wire this to their CMP.
+  const w = window as any;
+  const cm = w.gtag_consent?.analytics_storage ?? w.__sp_consent_mode;
+  if (w.__sp_consent === false || cm === 'denied') {
+    _skipTracking = true;
+  }
 }
 
 // Returns true if the snippet should abort entirely (e.g. bots)

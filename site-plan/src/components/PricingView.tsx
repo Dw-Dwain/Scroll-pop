@@ -229,9 +229,9 @@ export default function PricingView() {
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold tracking-wide text-neutral-900">Your data, your visitors</h4>
+            <h4 className="text-sm font-semibold tracking-wide text-neutral-900">Privacy-first analytics</h4>
             <p className="text-xs text-neutral-600 mt-1 font-light leading-relaxed">
-              ScrollPop stores analytics in your own database (Neon Postgres). We don't share or sell visitor data. Zero third-party cookie tracking.
+              We never sell visitor data and use first-party storage only — no third-party tracking cookies. ScrollPop respects Do-Not-Track and a host-site consent signal. See our Privacy Policy &amp; DPA for sub-processors and data handling.
             </p>
           </div>
         </div>

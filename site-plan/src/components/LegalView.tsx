@@ -51,19 +51,21 @@ function PrivacyPolicy() {
           <li><strong className="font-medium text-neutral-800">Clerk</strong> — authentication and user management. Processes email and identity data.</li>
           <li><strong className="font-medium text-neutral-800">Stripe</strong> — payment processing. Processes billing and card data under their PCI-DSS compliance.</li>
           <li><strong className="font-medium text-neutral-800">Cloudflare</strong> — edge delivery (CDN, Workers, KV, R2). Processes snippet requests and event ingest.</li>
-          <li><strong className="font-medium text-neutral-800">Neon / Supabase</strong> — Postgres database hosting. Your campaign data and analytics are stored here.</li>
+          <li><strong className="font-medium text-neutral-800">Neon</strong> — Postgres database hosting. Your campaign data and analytics are stored here.</li>
+          <li><strong className="font-medium text-neutral-800">Render</strong> — API hosting; processes event data in transit before it is stored.</li>
           <li><strong className="font-medium text-neutral-800">Upstash</strong> — Redis for rate limiting and event buffering. No personal data stored persistently.</li>
-          <li><strong className="font-medium text-neutral-800">Sentry</strong> — error monitoring. May include sanitised stack traces.</li>
+          <li><strong className="font-medium text-neutral-800">Sentry</strong> — error monitoring (when enabled). May include sanitised stack traces.</li>
         </ul>
+        <p>A Data Processing Agreement (DPA) is available to customers on request.</p>
       </Section>
 
       <Section title="4. Cookies">
-        <p>ScrollPop itself sets no tracking cookies on your website visitors. The JavaScript snippet runs inside a closed Shadow DOM and uses <code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">localStorage</code> (scoped to our edge domain) for frequency-capping only.</p>
-        <p>Our marketing site (scrollpop.io) may use functional cookies for session management and analytics (PostHog, privacy-mode). You can opt out via your browser settings.</p>
+        <p>ScrollPop sets no third-party tracking cookies on your visitors. The snippet uses first-party <code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">localStorage</code> on your own site for frequency-capping and an anonymous visitor identifier. A visitor's IP address is read at the edge (Cloudflare) to derive an approximate country and is <strong className="font-medium text-neutral-800">not stored</strong>. The snippet honours the browser Do-Not-Track signal and a host-site consent signal (<code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">window.__sp_consent = false</code> or Google Consent Mode <code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">analytics_storage: 'denied'</code>), which disables analytics and the visitor identifier while still allowing popups to display.</p>
+        <p>Our marketing site (scrollpop.online) may use functional cookies for session management. You can opt out via your browser settings.</p>
       </Section>
 
       <Section title="5. Data Retention">
-        <p>Account data is retained for the duration of your subscription plus 90 days after cancellation, after which it is deleted. You may request immediate deletion at any time by emailing <a href="mailto:privacy@scrollpop.io" className="text-[#C05621] underline">privacy@scrollpop.io</a>.</p>
+        <p>Account data is retained for the duration of your subscription plus 90 days after cancellation, after which it is deleted. You may request immediate deletion at any time by emailing <a href="mailto:privacy@scrollpop.online" className="text-[#C05621] underline">privacy@scrollpop.online</a>.</p>
         <p>Analytics event data (impressions, clicks, conversions) is retained for 24 months by default. You can purge it from the dashboard at any time under Settings → Data.</p>
       </Section>
 
@@ -77,11 +79,11 @@ function PrivacyPolicy() {
           <li>Data portability (export in machine-readable format).</li>
           <li>Withdraw consent at any time where processing is consent-based.</li>
         </ul>
-        <p>To exercise these rights, email <a href="mailto:privacy@scrollpop.io" className="text-[#C05621] underline">privacy@scrollpop.io</a>. We respond within 30 days.</p>
+        <p>To exercise these rights, email <a href="mailto:privacy@scrollpop.online" className="text-[#C05621] underline">privacy@scrollpop.online</a>. We respond within 30 days.</p>
       </Section>
 
       <Section title="7. Contact">
-        <p>Questions about this policy: <a href="mailto:privacy@scrollpop.io" className="text-[#C05621] underline">privacy@scrollpop.io</a></p>
+        <p>Questions about this policy: <a href="mailto:privacy@scrollpop.online" className="text-[#C05621] underline">privacy@scrollpop.online</a></p>
       </Section>
     </>
   );
@@ -140,7 +142,7 @@ function TermsOfService() {
       </Section>
 
       <Section title="8. Contact">
-        <p>Legal enquiries: <a href="mailto:legal@scrollpop.io" className="text-[#C05621] underline">legal@scrollpop.io</a></p>
+        <p>Legal enquiries: <a href="mailto:legal@scrollpop.online" className="text-[#C05621] underline">legal@scrollpop.online</a></p>
       </Section>
     </>
   );
@@ -200,12 +202,12 @@ function SecurityPage() {
         <ul className="list-disc pl-5 space-y-1.5">
           <li>Notify affected customers by email within 72 hours of confirmed breach (GDPR Article 33 compliant).</li>
           <li>Publish a public post-mortem within 14 days of resolution.</li>
-          <li>Provide a dedicated incident status page at <span className="font-mono text-xs">status.scrollpop.io</span>.</li>
+          <li>Provide a dedicated incident status page at <span className="font-mono text-xs">status.scrollpop.online</span>.</li>
         </ul>
       </Section>
 
       <Section title="Vulnerability Disclosure">
-        <p>If you discover a security vulnerability in ScrollPop, please report it responsibly to <a href="mailto:security@scrollpop.io" className="text-[#C05621] underline">security@scrollpop.io</a>. We aim to acknowledge reports within 24 hours and resolve critical issues within 7 days. We do not pursue legal action against good-faith security researchers.</p>
+        <p>If you discover a security vulnerability in ScrollPop, please report it responsibly to <a href="mailto:security@scrollpop.online" className="text-[#C05621] underline">security@scrollpop.online</a>. We aim to acknowledge reports within 24 hours and resolve critical issues within 7 days. We do not pursue legal action against good-faith security researchers.</p>
       </Section>
     </>
   );
@@ -249,8 +251,8 @@ export default function LegalView({ page }: LegalViewProps) {
 
       <div className="mt-16 pt-8 border-t border-neutral-200 text-xs font-mono text-neutral-400 uppercase tracking-wider">
         Questions? Email us at{' '}
-        <a href="mailto:legal@scrollpop.io" className="text-[#C05621] underline lowercase">
-          legal@scrollpop.io
+        <a href="mailto:legal@scrollpop.online" className="text-[#C05621] underline lowercase">
+          legal@scrollpop.online
         </a>
       </div>
     </div>
