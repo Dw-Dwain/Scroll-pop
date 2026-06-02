@@ -545,3 +545,26 @@ html[data-theme="dark"] .designer-panel textarea {
 .ds-canvas-surface { background-color: #F5F7FA; --ds-canvas-dot: #E2E8F0; }
 html[data-theme="dark"] .ds-canvas-surface { background-color: #0b0b0e; --ds-canvas-dot: #27272a; }
 
+/* ── Designer chrome (TopBar, canvas breadcrumb) — LIGHT-by-default ───────────
+   Unlike .designer-panel (dark-by-default sidebars), this chrome is authored
+   light. Apply DARK-mode overrides only, so light mode keeps its intentional
+   dark accents (logo box, etc.) untouched. */
+html[data-theme="dark"] .ds-chrome.bg-white,
+html[data-theme="dark"] .ds-chrome .bg-white   { background-color: #18181b !important; }
+html[data-theme="dark"] .ds-chrome .bg-zinc-50 { background-color: #0b0b0e !important; }
+html[data-theme="dark"] .ds-chrome .bg-zinc-100{ background-color: #27272a !important; }
+html[data-theme="dark"] .ds-chrome.border-zinc-200,
+html[data-theme="dark"] .ds-chrome .border-zinc-200 { border-color: #27272a !important; }
+html[data-theme="dark"] .ds-chrome .text-zinc-950,
+html[data-theme="dark"] .ds-chrome .text-zinc-900 { color: #fafafa !important; }
+html[data-theme="dark"] .ds-chrome .text-zinc-800,
+html[data-theme="dark"] .ds-chrome .text-zinc-700 { color: #d4d4d8 !important; }
+html[data-theme="dark"] .ds-chrome .text-zinc-600,
+html[data-theme="dark"] .ds-chrome .text-zinc-500,
+html[data-theme="dark"] .ds-chrome .text-zinc-400 { color: #a1a1aa !important; }
+html[data-theme="dark"] .ds-chrome .text-zinc-300 { color: #71717a !important; }
+html[data-theme="dark"] .ds-chrome input,
+html[data-theme="dark"] .ds-chrome select {
+  background-color: #27272a !important; border-color: #3f3f46 !important; color: #fafafa !important;
+}
+

@@ -446,7 +446,7 @@ export default function Canvas({
     <div className="flex-1 bg-zinc-50 border-r border-zinc-200 flex flex-col relative select-none overflow-hidden" id="campaign-designer-canvas-frame">
       
       {/* PUCK STYLE BREADCRUMB / VIEWPORT STATUS BAR */}
-      <div className="designer-panel h-11 border-b border-zinc-200 bg-white px-5 flex items-center justify-between shrink-0 font-sans z-20">
+      <div className="ds-chrome h-11 border-b border-zinc-200 bg-white px-5 flex items-center justify-between shrink-0 font-sans z-20">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-zinc-400 font-mono tracking-wider uppercase">Hierarchy</span>
           <span className="text-zinc-300 text-[10px]">/</span>

@@ -42,7 +42,7 @@ export default function TopBar({
   onBack,
 }: TopBarProps) {
   return (
-    <div className="designer-panel h-16 w-full shrink-0 border-b border-zinc-200 bg-white px-5 flex items-center justify-between select-none">
+    <div className="ds-chrome h-16 w-full shrink-0 border-b border-zinc-200 bg-white px-5 flex items-center justify-between select-none">
 
       {/* 1. Left Side: Back button + Brand identity */}
       <div className="flex items-center gap-3">
@@ -86,7 +86,7 @@ export default function TopBar({
               onClick={() => onStepChange(step)}
               className={`py-1 px-3 rounded-md text-xs font-medium transition-all duration-150 cursor-pointer whitespace-nowrap ${
                 isSelected
-                  ? 'bg-zinc-900 text-white shadow-xs font-semibold'
+                  ? 'bg-indigo-600 text-white shadow-xs font-semibold'
                   : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/80'
               }`}
             >
