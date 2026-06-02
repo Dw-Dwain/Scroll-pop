@@ -266,6 +266,14 @@ Content files: `site-plan/src/components/` — one file per page.
 To edit content: change the relevant TSX file on `dev`, push → Cloudflare Pages auto-rebuilds
 `scrollpop.online` within ~2 minutes. Preview locally at `http://localhost:3000` via `/run`.
 
+**State (Jun 2 2026):** content reconciled to match prod — fabricated testimonials
+removed; WP = snippet (free) / plugin (paid); Shopify = theme.liquid snippet now +
+one-click app "coming soon"; pricing tiers shown but paid CTAs are "Coming Soon"
+(checkout not live). Logo unified with the app (white circle + black diamond, sans
+wordmark) across Header/Footer. Sections use `RevealSection` for a cinematic
+scroll-reveal (motion `whileInView`, honors prefers-reduced-motion). Some pending
+marketing-claim softening is tracked in §25 (CMP2/CMP3).
+
 ### Domain
 | Domain | Registrar | DNS | Purpose |
 |---|---|---|---|
@@ -585,6 +593,17 @@ window.__sp.on(event, fn)      // subscribe to events
 - Bundle ≤10 KB gzipped (CI gate)
 - All non-critical work via `requestIdleCallback`
 - Events via `navigator.sendBeacon()` → `fetch({keepalive:true})` fallback
+
+### Delivery & behaviour notes
+- **Production delivery**: the Worker serves the snippet by importing
+  `apps/worker/src/p.txt`. `pnpm --filter snippet build` now **auto-syncs**
+  `dist/p.js → apps/worker/src/p.txt` — always commit the updated `p.txt`, or
+  source changes never reach prod (this was a silent staleness gap, fixed Jun 2 2026).
+- **"Powered by ScrollPop" badge is plan-enforced**: shown only when the tenant
+  plan (from the config payload) is `free`; paid plans never show it, free users
+  can't remove it — independent of the per-design `showPoweredBy` flag.
+- Respects `navigator.doNotTrack`; skips analytics for the operator's own admin
+  visits and obvious bots. ⚠️ No visitor **consent gate** yet (GDPR/ePrivacy) — see §25.
 
 ---
 
@@ -1228,6 +1247,21 @@ config route threw `column "interval_days" does not exist` (PG 42703) → 500 �
 are now a mandatory documented post-merge step (CONTRIBUTING §6); Render Pre-Deploy
 auto-apply is the recommended hardening. **Lesson:** Render does not run migrations on
 deploy — prod silently drifts behind code on every new migration until applied by hand.
+
+### Compliance — address before commercial launch (audit Jun 2 2026)
+> Engineering review, **not legal advice** — have an attorney review Terms/Privacy/DPA.
+
+| # | Severity | Item |
+|---|---|---|
+| CMP1 | High | **No visitor consent gate** in the snippet (writes a localStorage visitor ID + beacons URL/referrer/device/IP→geo). EU/UK needs prior consent — add a `window.__sp.consent` / Consent-Mode hook. DNT is respected but insufficient. |
+| CMP2 | High | **Comparative marketing claims** about named competitors (Privy/OptinMonster/Poptin "120–250 KB", "banned back-button tricks") must be substantiable (FTC / EU). Soften to qualified language or cite evidence. |
+| CMP3 | Med | **"Google-compliant"** is overstated — true re: no history/popstate, but a mobile modal can still be an intrusive interstitial. Qualify the claim. |
+| CMP4 | Med | ScrollPop is a **data processor** → publish a sub-processor list (Neon, Cloudflare, Upstash, Clerk, Render) + provide a **DPA**; reconcile the "no PII / no IP stored" copy (IP is processed for geo; email-capture collects PII). |
+| CMP5 | Low | Add **`license-checker` in CI** to guard against future copyleft deps. Current stack is permissive (MIT/ISC/Apache/BSD); WP plugin is GPL (correct). Unsplash images + OFL/Apache fonts are commercial-OK. |
+
+**Sentry:** deferred to v2/v3 (cost decision, Jun 2 2026). Mitigations in place: `/e`
+logs dropped events loudly, and `ensure-partitions` / `ensure-notifications` self-heal
+schema on boot.
 
 ### Active Bugs
 | # | Severity | Description | Location |

@@ -326,6 +326,10 @@ git log main..HEAD --oneline
 pnpm run lint && pnpm run typecheck && pnpm run test
 
 # Build snippet + check gzip size
+# NOTE: the build now ALSO syncs the bundle to apps/worker/src/p.txt (the file the
+# Cloudflare Worker actually serves at /v1/:key/p.js). Always commit the updated
+# apps/worker/src/p.txt after a snippet change — the Worker won't serve source
+# changes otherwise. (This was previously a silent staleness gap.)
 pnpm --filter snippet build
 node -e "const fs=require('fs'),z=require('zlib');const b=fs.readFileSync('packages/snippet/dist/p.js');console.log('gzipped:',z.gzipSync(b).length,'/ 10240 bytes')"
 
