@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Crown, CreditCard, X, TrendingUp, Zap, Building2, RefreshCw, ExternalLink } from 'lucide-react';
+import { Check, Crown, CreditCard, X, TrendingUp, Zap, Building2, RefreshCw, ExternalLink, Clock } from 'lucide-react';
 import { usePlan, PLAN_LIMITS, PLAN_PRICES, PLAN_ORDER } from '../hooks/usePlan';
 import { useCustomMutation, useCustom } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
@@ -325,14 +325,10 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
         </table>
       </div>
 
-      {/* Stripe note when keys not configured */}
+      {/* Paid-plans-not-live notice (customer-facing) */}
       <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--bg-raised)', borderRadius: 6, border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <ExternalLink size={12} style={{ flexShrink: 0 }} />
-        Paid plans require Stripe to be configured on the server (
-        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>STRIPE_SECRET_KEY</code>,
-        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}> STRIPE_PRICE_STARTER</code>,
-        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}> STRIPE_PRICE_GROWTH</code>, etc.).
-        Until then, everyone stays on Free.
+        <Clock size={12} style={{ flexShrink: 0 }} />
+        Paid plans are <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>coming soon</strong> — every account is on the Free plan for now. We'll let you know the moment upgrades go live.
       </div>
 
       {/* Confirm modal */}

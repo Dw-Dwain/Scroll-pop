@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useList, useUpdate, useCustomMutation } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
+import { usePlan } from '../hooks/usePlan';
 
 const STORAGE_KEY = '_sp_settings';
 
@@ -265,6 +266,11 @@ export const Settings: React.FC = () => {
     showToast("Account deletion isn't available yet — contact support to close your account.");
   };
 
+  // Organization identity (workspace name/slug/branding) is an Agency-tier feature.
+  // meetsMinPlan('agency') is also true for super-admin / Novatise (unlimited).
+  const { meetsMinPlan } = usePlan();
+  const canManageOrg = meetsMinPlan('agency');
+
   const { data: sitesData } = useList({ resource: 'sites' });
   const sites = (sitesData?.data ?? []) as any[];
   const selectedSite = sites.find((s) => s.id === selectedSiteId) ?? sites[0] ?? null;
@@ -356,7 +362,25 @@ export const Settings: React.FC = () => {
             {/* ── GENERAL ── */}
             {activeTab === 'general' && (
               <div>
-              {/* Organization */}
+              {/* Organization — Agency-tier only */}
+              {!canManageOrg ? (
+                <SectionCard title="Organization" subtitle="Your workspace identity visible to team members.">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Building2 size={15} style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        Organization identity is an Agency-plan feature
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Custom workspace name, slug, website, and support email are available on the Agency plan.
+                      </div>
+                    </div>
+                    <span className="badge badge-neutral" style={{ fontSize: 10, flexShrink: 0 }}>Agency</span>
+                  </div>
+                </SectionCard>
+              ) : (
               <SectionCard title="Organization" subtitle="Your workspace identity visible to team members.">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <FieldRow label="Organization Name">
@@ -370,19 +394,19 @@ export const Settings: React.FC = () => {
                       }}
                     />
                   </FieldRow>
-                  <FieldRow label="Slug" hint="Used in API endpoints and URLs.">
+                  <FieldRow label="Slug" hint="Auto-generated from your organization name; used in API endpoints and URLs.">
                     <div style={{ position: 'relative' }}>
                       <input
                         className="input"
                         type="text"
                         value={settings.orgSlug ?? ''}
                         onChange={(e) => setSettings({ ...settings, orgSlug: slugify(e.target.value) })}
-                        style={{ paddingLeft: 80, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                        style={{ paddingLeft: 124, fontFamily: 'var(--font-mono)', fontSize: 12 }}
                       />
                       <span style={{
-                        position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                        position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
                         fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
-                        pointerEvents: 'none',
+                        pointerEvents: 'none', whiteSpace: 'nowrap',
                       }}>
                         scrollpop.online/
                       </span>
@@ -408,6 +432,7 @@ export const Settings: React.FC = () => {
                   </FieldRow>
                 </div>
               </SectionCard>
+              )}
 
               {/* Localization */}
               <SectionCard title="Localization" subtitle="Regional preferences for dates, times, and currency.">
