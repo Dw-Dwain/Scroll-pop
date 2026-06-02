@@ -140,6 +140,8 @@ export type TargetingKind = z.infer<typeof TargetingKind>;
 export interface SiteConfigPayload {
   siteId: string;
   plan: 'free' | 'starter' | 'growth' | 'scale' | 'agency';
+  /** Strict opt-in: when true the snippet records no analytics until the host grants consent. */
+  requireConsent?: boolean;
   campaigns: Array<{
     id: string;
     design: DesignConfig;

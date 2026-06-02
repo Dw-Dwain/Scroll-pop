@@ -4,7 +4,7 @@
 
 import esbuild from 'esbuild';
 import { createRequire } from 'module';
-import { copyFileSync, existsSync } from 'fs';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'fs';
 
 const watch = process.argv.includes('--watch');
 
@@ -12,6 +12,20 @@ const watch = process.argv.includes('--watch');
 // Keep it in sync with the freshly built bundle so source changes actually reach
 // production (this was a silent staleness source before).
 const WORKER_SNIPPET = '../../apps/worker/src/p.txt';
+
+// After minification, the only newlines left in the bundle live inside template
+// literals — i.e. the embedded <style> CSS. esbuild does not minify template-literal
+// contents, so collapse leading-whitespace newlines there to shave a few hundred
+// bytes. Safe: it never touches code (which is already single-line post-minify).
+function collapseCssWhitespace() {
+  try {
+    const src = readFileSync('dist/p.js', 'utf8');
+    writeFileSync('dist/p.js', src.replace(/\n\s*/g, ''));
+  } catch (err) {
+    console.warn('CSS whitespace collapse skipped:', err.message);
+  }
+}
+
 function syncWorkerSnippet() {
   try {
     copyFileSync('dist/p.js', WORKER_SNIPPET);
@@ -43,6 +57,7 @@ if (watch) {
 } else {
   await ctx.rebuild();
   await ctx.dispose();
+  collapseCssWhitespace();
   console.log('Snippet built → dist/p.js');
   syncWorkerSnippet();
 }

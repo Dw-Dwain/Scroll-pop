@@ -52,8 +52,11 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
       // Fail OPEN: if both checks fail, serve the config rather than block users.
       const tenant = await db.query.tenants.findFirst({
         where: eq(tenants.id, site.tenantId),
-        columns: { monthlyViewLimit: true, plan: true },
+        columns: { monthlyViewLimit: true, plan: true, notificationPrefs: true },
       });
+      // Strict per-tenant opt-in consent: when on, the snippet records no analytics
+      // until the host grants consent. Stored in the tenant prefs JSONB (no migration).
+      const requireConsent = !!((tenant?.notificationPrefs as Record<string, unknown> | undefined)?.['require_consent']);
 
       if (tenant && tenant.monthlyViewLimit > 0) {
         let monthlyViews = 0;
@@ -171,6 +174,7 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
       const payload: SiteConfigPayload = {
         siteId: site.id,
         plan: (tenant?.plan ?? 'free') as SiteConfigPayload['plan'],
+        requireConsent,
         campaigns: validCampaigns as SiteConfigPayload['campaigns'],
         version,
       };

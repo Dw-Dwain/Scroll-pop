@@ -83,6 +83,7 @@ interface CampaignConfig {
 interface SiteConfig {
   siteId: string;
   plan: string;
+  requireConsent?: boolean;
   campaigns: CampaignConfig[];
   version: string;
 }
@@ -116,6 +117,7 @@ let sitePlan = 'free'; // tenant plan — gates the "Powered by ScrollPop" badge
 // Track when the snippet loaded so we can report time-on-page at trigger
 const _pageLoadTime = Date.now();
 let _skipTracking = false;
+let _requireConsent = false; // strict per-tenant opt-in (set from config)
 
 // ─── Exclusion Guards ─────────────────────────────────────────────────────────
 // Evaluates if we should skip analytics tracking (but still show popups)
@@ -130,9 +132,11 @@ function evaluateSkipTracking(): void {
   // setting window.__sp_consent = false (or Google Consent Mode analytics_storage
   // = 'denied'). When denied we still render popups but record no analytics and
   // never persist a visitor id. EU/UK customers should wire this to their CMP.
+  // When the tenant requires strict opt-in (_requireConsent), the default is to skip
+  // until consent is explicitly granted.
   const w = window as any;
   const cm = w.gtag_consent?.analytics_storage ?? w.__sp_consent_mode;
-  if (w.__sp_consent === false || cm === 'denied') {
+  if (w.__sp_consent === false || cm === 'denied' || (_requireConsent && w.__sp_consent !== true && cm !== 'granted')) {
     _skipTracking = true;
   }
 }
@@ -197,6 +201,9 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     activeSiteId = config.siteId;
     adTriggerEnabled = 'growthscaleagency'.includes(config.plan || '');
     sitePlan = config.plan || 'free';
+    // Strict opt-in: popups still render, but record no analytics until consent is
+    // granted. Re-evaluate now that we know the tenant's requireConsent setting.
+    if (config.requireConsent) { _requireConsent = true; evaluateSkipTracking(); }
     console.log('[ScrollPop] Config loaded successfully:', config);
 
     if (!config.campaigns || config.campaigns.length === 0) {
@@ -509,6 +516,11 @@ function injectMacros(text: string): string {
   });
 }
 
+// Append a smart-product keyword to a URL, preserving any existing query string.
+function withKeyword(url: string, title: string): string {
+  return url + (url.includes('?') ? '&' : '?') + `keyword=${encodeURIComponent(title)}`;
+}
+
 export function detectSmartProduct() {
   const scripts = document.querySelectorAll('script[type="application/ld+json"]');
   for (let i = 0; i < scripts.length; i++) {
@@ -572,7 +584,7 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
         } else {
           let rawHref = el.href || slot?.click_tracker_url || slot?.product_url || '#';
           if (smartProduct && smartProduct.title) {
-             rawHref += (rawHref.includes('?') ? '&' : '?') + `keyword=${encodeURIComponent(smartProduct.title)}`;
+             rawHref = withKeyword(rawHref, smartProduct.title);
           }
           const href = injectMacros(rawHref);
           out.push(`<a id="cta-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" style="${style}">${escapeHtml(content || 'Continue')}</a>`);
@@ -628,8 +640,8 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   if (smartProduct && slot) {
     if (smartProduct.image) slot.image_url = smartProduct.image;
     if (smartProduct.title) {
-      if (slot.product_url) slot.product_url += (slot.product_url.includes('?') ? '&' : '?') + `keyword=${encodeURIComponent(smartProduct.title)}`;
-      if (slot.click_tracker_url) slot.click_tracker_url += (slot.click_tracker_url.includes('?') ? '&' : '?') + `keyword=${encodeURIComponent(smartProduct.title)}`;
+      if (slot.product_url) slot.product_url = withKeyword(slot.product_url, smartProduct.title);
+      if (slot.click_tracker_url) slot.click_tracker_url = withKeyword(slot.click_tracker_url, smartProduct.title);
     }
   }
 
@@ -700,7 +712,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 .powered-by{text-align:center;margin-top:4px;font-size:10px;opacity:.4;}
 .gamified-container{display:flex;flex-direction:row;gap:20px;align-items:center;justify-content:center;}
 .gamified-left{flex:1;display:flex;flex-direction:column;gap:10px;}
-.gamified-right{display:flex;align-items:center;justify-content:center;shrink-0;}
+.gamified-right{display:flex;align-items:center;justify-content:center;}
 .spin-wrapper{position:relative;width:220px;height:220px;background:#1e1b4b;border-radius:50%;border:4px solid #312e81;box-shadow:0 4px 12px rgba(0,0,0,.3);overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .spin-wheel-svg{width:100%;height:100%;transform:rotate(0deg);transition:transform 3s cubic-bezier(.15,.85,.25,1);}
 .spin-peg{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #f59e0b;z-index:20;}

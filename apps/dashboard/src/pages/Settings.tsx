@@ -519,6 +519,22 @@ export const Settings: React.FC = () => {
                 </div>
               </SectionCard>
 
+              {/* Visitor Privacy / Consent */}
+              <SectionCard title="Visitor Privacy" subtitle="Consent controls for the analytics your popups collect.">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+                  <div style={{ flex: 1, paddingRight: 24 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Require visitor consent before tracking</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.5 }}>
+                      Strict opt-in (recommended for EU/UK). Popups still display, but no analytics or
+                      visitor ID is recorded until your consent banner grants it via
+                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, margin: '0 3px' }}>window.__sp_consent = true</code>
+                      or Google Consent Mode. Off by default (the snippet only honors Do-Not-Track and explicit denial).
+                    </div>
+                  </div>
+                  <Toggle checked={!!(settings as any).require_consent} onChange={(v) => handleNotifChange('require_consent', v)} label="Require visitor consent" />
+                </div>
+              </SectionCard>
+
               </div>
             )}
 
