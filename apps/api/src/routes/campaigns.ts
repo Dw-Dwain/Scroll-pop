@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { campaigns, sites, designs } from '../db/schema.js';
 import { eq, and, isNull, desc } from 'drizzle-orm';
+import { emitNotification } from './notifications.js';
 
 const CreateCampaignBody = z.object({
   siteId: z.string().uuid(),
@@ -160,6 +161,13 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
 
+    void emitNotification(request.tenantId, {
+      type: 'notif_campaign_status',
+      title: `Campaign "${updated.name}" is live`,
+      body: 'Your popup is now active and serving on its site.',
+      href: `/campaigns/detail/${updated.id}`,
+    });
+
     // TODO: Publish config to Cloudflare KV (Step 5)
     return reply.send({ data: updated });
   };
@@ -184,6 +192,13 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     if (!updated) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
+
+    void emitNotification(request.tenantId, {
+      type: 'notif_campaign_status',
+      title: `Campaign "${updated.name}" paused`,
+      body: 'Popups for this campaign have stopped serving.',
+      href: `/campaigns/detail/${updated.id}`,
+    });
 
     // TODO: Update KV cache (Step 5)
     return reply.send({ data: updated });

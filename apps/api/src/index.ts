@@ -23,6 +23,7 @@ import { analyticsRoutes } from './routes/analytics.js';
 import { billingRoutes } from './routes/billing.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { internalRoutes } from './routes/internal.js';
+import { notificationRoutes } from './routes/notifications.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
@@ -129,6 +130,7 @@ async function bootstrap() {
   await app.register(targetingRoutes, { prefix: '/api/v1' });
   await app.register(frequencyRoutes, { prefix: '/api/v1' });
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
+  await app.register(notificationRoutes, { prefix: '/api/v1' });
   await app.register(opsRoutes, { prefix: '/api/v1' });
   await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });

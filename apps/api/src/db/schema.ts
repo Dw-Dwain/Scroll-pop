@@ -68,6 +68,9 @@ export const tenants = pgTable('tenants', {
   stripeCustomerId: text('stripe_customer_id'),
   stripeSubscriptionId: text('stripe_subscription_id'),
   monthlyViewLimit: integer('monthly_view_limit').notNull().default(1000),
+  // Per-tenant notification channel + event preferences (e.g. { notif_channels_inapp: true,
+  // notif_campaign_status: true, ... }). Gates which notifications get emitted.
+  notificationPrefs: jsonb('notification_prefs').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),
@@ -75,6 +78,23 @@ export const tenants = pgTable('tenants', {
     .notNull()
     .default(sql`NOW()`),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+// ─── Notifications (in-app notification center) ─────────────────────────────────
+
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  // Notification category — also the pref key it's gated by (e.g. 'notif_campaign_status').
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  body: text('body'),
+  // Optional deep-link the bell item navigates to (e.g. /campaigns/detail/:id).
+  href: text('href'),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
 });
 
 // ─── Users ────────────────────────────────────────────────────────────────────

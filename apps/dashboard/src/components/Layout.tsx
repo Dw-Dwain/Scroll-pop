@@ -23,6 +23,7 @@ import { UserButton } from '@clerk/clerk-react';
 import { usePlan } from '../hooks/usePlan';
 import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
+import { NotificationBell } from './NotificationBell';
 
 const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
 
@@ -259,6 +260,9 @@ export const Layout: React.FC<LayoutProps> = ({
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>{plan}</span>
             </div>
           )}
+
+          {/* Notifications */}
+          <NotificationBell onNavigate={onNavigate} />
 
           {/* Theme toggle */}
           <button

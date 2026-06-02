@@ -5,7 +5,7 @@ import {
   Webhook, Download, Pause, Trash2, Info, Clock, Mail, Smartphone,
   Building2, Link2, Languages, CreditCard, Activity,
 } from 'lucide-react';
-import { useList, useUpdate, useCustomMutation } from '@refinedev/core';
+import { useList, useUpdate, useCustomMutation, useCustom } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
 
@@ -321,8 +321,27 @@ export const Settings: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  // Notification preferences are real server data (gate which notifications get
+  // emitted). Seed the notif_* toggles from the server on load, and persist each
+  // change back via PUT /notification-prefs (not just localStorage).
+  const { data: notifPrefsRes } = useCustom({
+    url: `${getApiBase()}/notification-prefs`,
+    method: 'get',
+    queryOptions: { queryKey: ['notification-prefs'] },
+  });
+  React.useEffect(() => {
+    const serverPrefs = (notifPrefsRes as any)?.data;
+    if (serverPrefs && typeof serverPrefs === 'object' && Object.keys(serverPrefs).length > 0) {
+      setSettings((s: Record<string, any>) => ({ ...s, ...serverPrefs }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notifPrefsRes]);
+
   const handleNotifChange = (key: string, value: boolean) => {
     persistSettings({ ...settings, [key]: value });
+    // Persist notification prefs server-side so they gate real notification delivery.
+    customMutate({ url: `${getApiBase()}/notification-prefs`, method: 'put', values: { [key]: value } })
+      .catch(() => showToast("Couldn't save notification preference to the server."));
   };
 
   return (
