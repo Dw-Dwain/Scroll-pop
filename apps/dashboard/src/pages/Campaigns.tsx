@@ -441,9 +441,9 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                     {isMenuOpen && (
                       <div style={{
                         position: 'absolute', right: 0, bottom: '100%', marginBottom: 4,
-                        background: '#fff', border: '1px solid var(--border-default)',
+                        background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
                         borderRadius: 6, minWidth: 140, zIndex: 50,
-                        boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
                       }}>
                         <button
                           onClick={() => { onNavigate(`/campaigns/detail/${c.id}`); setOpenMenuId(null); }}

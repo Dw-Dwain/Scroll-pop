@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowLeft, Eye, Globe, Megaphone, MousePointerClick, Percent, Radar, Sliders, Activity } from 'lucide-react';
-import { useApiUrl, useList, useOne } from '@refinedev/core';
+import { useApiUrl, useCustom, useList, useOne } from '@refinedev/core';
 
 interface CampaignDetailProps {
   campaignId: string;
@@ -13,41 +13,34 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
   const { data: campaignData, isLoading: isCampaignLoading } = useOne({ resource: 'campaigns', id: campaignId });
   const { data: sitesData } = useList({ resource: 'sites' });
   const apiUrl = useApiUrl();
-  const [analytics, setAnalytics] = React.useState<any[]>([]);
-  const [triggers, setTriggers] = React.useState<RuleItem[]>([]);
-  const [targeting, setTargeting] = React.useState<RuleItem[]>([]);
-  const [frequency, setFrequency] = React.useState<RuleItem | null>(null);
-  const [diagnose, setDiagnose] = React.useState<any | null>(null);
-  const [liveEvents, setLiveEvents] = React.useState<any[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  // Fetch per-campaign data through the Refine data provider so auth is handled
+  // uniformly (Clerk JWT on web, internal secret on desktop). The previous raw
+  // fetch read `desktop_token` from localStorage, which is only set in Electron —
+  // so on the live web app every request went out unauthenticated and returned
+  // nothing, leaving this page blank for active campaigns.
+  const { data: analyticsRes, isLoading: analyticsLoading } = useCustom({
+    url: `${apiUrl}/analytics/campaigns/${campaignId}`, method: 'get',
+  });
+  const { data: triggersRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'get' });
+  const { data: targetingRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'get' });
+  const { data: frequencyRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'get' });
+  // journeys/ops are beta + flag-gated and may 404 — don't retry or toast on error.
+  const { data: diagnoseRes } = useCustom({
+    url: `${apiUrl}/journeys/${campaignId}/diagnose`, method: 'get',
+    queryOptions: { retry: false }, errorNotification: false,
+  });
+  const { data: liveEventsRes } = useCustom({
+    url: `${apiUrl}/ops/live-events?campaignId=${campaignId}&limit=12`, method: 'get',
+    queryOptions: { retry: false }, errorNotification: false,
+  });
 
-  React.useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
-      try {
-        const token = localStorage.getItem('desktop_token');
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        const [a, t, g, f, d, l] = await Promise.all([
-          fetch(`${apiUrl}/analytics/campaigns/${campaignId}`, { headers }),
-          fetch(`${apiUrl}/campaigns/${campaignId}/triggers`, { headers }),
-          fetch(`${apiUrl}/campaigns/${campaignId}/targeting`, { headers }),
-          fetch(`${apiUrl}/campaigns/${campaignId}/frequency`, { headers }),
-          fetch(`${apiUrl}/journeys/${campaignId}/diagnose`, { headers }),
-          fetch(`${apiUrl}/ops/live-events?campaignId=${campaignId}&limit=12`, { headers }),
-        ]);
-        if (a.ok) setAnalytics((await a.json()).data || []);
-        if (t.ok) setTriggers((await t.json()).data || []);
-        if (g.ok) setTargeting((await g.json()).data || []);
-        if (f.ok) setFrequency((await f.json()).data || null);
-        if (d.ok) setDiagnose((await d.json()).data || null);
-        if (l.ok) setLiveEvents((await l.json()).data || []);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    void load();
-  }, [campaignId, apiUrl]);
+  const analytics: any[] = (analyticsRes as any)?.data ?? [];
+  const triggers: RuleItem[] = (triggersRes as any)?.data ?? [];
+  const targeting: RuleItem[] = (targetingRes as any)?.data ?? [];
+  const frequency: RuleItem | null = (frequencyRes as any)?.data ?? null;
+  const diagnose: any | null = (diagnoseRes as any)?.data ?? null;
+  const liveEvents: any[] = (liveEventsRes as any)?.data ?? [];
+  const isLoading = analyticsLoading;
 
   const campaign = campaignData?.data;
   const site = sitesData?.data.find((s: any) => s.id === campaign?.siteId);
