@@ -85,7 +85,7 @@ function CampaignThumbnail({ config, status, kind }: { config: any; status: stri
   return (
     <div style={{
       height: 130,
-      background: '#f4f4f5',
+      background: 'var(--bg-raised)',
       borderRadius: '8px 8px 0 0',
       position: 'relative',
       overflow: 'hidden',
@@ -248,7 +248,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
               onClick={() => setStatusFilter(s)}
               style={{
                 padding: '4px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                background: statusFilter === s ? '#fff' : 'transparent',
+                background: statusFilter === s ? 'var(--bg-raised)' : 'transparent',
                 color: statusFilter === s ? 'var(--text-primary)' : 'var(--text-muted)',
                 border: statusFilter === s ? '1px solid var(--border-subtle)' : '1px solid transparent',
                 borderRadius: 4, textTransform: 'capitalize',
@@ -324,7 +324,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
               <div
                 key={c.id}
                 style={{
-                  background: '#fff',
+                  background: 'var(--bg-surface)',
                   border: '1px solid var(--border-subtle)',
                   borderRadius: 8,
                   overflow: 'hidden',
