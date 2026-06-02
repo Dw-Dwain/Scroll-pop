@@ -126,6 +126,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { data: campaignsData } = useList({ resource: 'campaigns' });
   const apiUrl = useApiUrl();
 
+  // "Events over time" chart range. Only 7d/30d — the daily endpoint returns 60d,
+  // so 90d isn't available here (the Analytics page has the full range picker).
+  const [chartRange, setChartRange] = React.useState<'7d' | '30d'>('30d');
+
   // Real-time auto-refresh: poll analytics every 15s so new events surface without a
   // manual reload. Polling pauses automatically while the tab is hidden (default
   // refetchIntervalInBackground: false) and refreshes immediately on window focus.
@@ -161,6 +165,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     (dailyResult as any)?.data?.daily ?? [];
   const prev30 = dailyAll.slice(0, 30);
   const curr30 = dailyAll.slice(30);
+  // Data for the "Events over time" chart, sliced to the selected range.
+  const chartDaily = chartRange === '7d' ? curr30.slice(-7) : curr30;
 
   const sumMetric = (arr: typeof curr30, key: 'impressions' | 'views' | 'clicks') =>
     arr.reduce((s, d) => s + (d[key] ?? 0), 0);
@@ -355,14 +361,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               Events over time
             </h3>
             <div style={{ display: 'flex', gap: 4 }}>
-              {['7d','30d','90d'].map((r) => (
-                <button key={r} className="btn btn-ghost btn-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+              {(['7d','30d'] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setChartRange(r)}
+                  className="btn btn-ghost btn-sm"
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    background: chartRange === r ? 'var(--bg-raised)' : 'transparent',
+                    color: chartRange === r ? 'var(--text-primary)' : 'var(--text-muted)',
+                  }}
+                >
                   {r}
                 </button>
               ))}
             </div>
           </div>
-          <EventsAreaChart daily={curr30} />
+          <EventsAreaChart daily={chartDaily} />
         </div>
 
         {/* Top campaigns leaderboard */}
