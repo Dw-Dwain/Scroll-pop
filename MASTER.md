@@ -603,7 +603,10 @@ window.__sp.on(event, fn)      // subscribe to events
   plan (from the config payload) is `free`; paid plans never show it, free users
   can't remove it — independent of the per-design `showPoweredBy` flag.
 - Respects `navigator.doNotTrack`; skips analytics for the operator's own admin
-  visits and obvious bots. ⚠️ No visitor **consent gate** yet (GDPR/ePrivacy) — see §25.
+  visits and obvious bots. **Consent gate (GDPR/ePrivacy):** honors explicit denial
+  (`window.__sp_consent === false` / Consent Mode `denied`), and — when the tenant
+  enables **strict opt-in** (Settings → Visitor Privacy) — records nothing until
+  consent is granted. Popups still render in all cases; only tracking is gated. See §25.
 
 ---
 
@@ -1253,19 +1256,24 @@ deploy — prod silently drifts behind code on every new migration until applied
 
 **Addressed Jun 2 2026:** snippet now honors a host consent signal
 (`window.__sp_consent === false` / Google Consent Mode `analytics_storage:'denied'`)
-in addition to DNT — disables analytics + visitor-id, popups still show (CMP1, partial:
-strict per-tenant opt-in still a config option for later). Marketing claims softened —
+in addition to DNT — disables analytics + visitor-id, popups still show. **Strict
+per-tenant opt-in consent mode now shipped (CMP1 fully resolved):** when a tenant
+enables it (Settings → Visitor Privacy), the snippet records **nothing** until consent
+is explicitly granted (`window.__sp_consent === true` or Consent Mode
+`analytics_storage:'granted'`). Plumbed migration-free via
+`tenants.notification_prefs.require_consent` (JSONB) → internal config payload
+`requireConsent` → snippet `_requireConsent` flag → `evaluateSkipTracking()`. Marketing claims softened —
 competitor comparisons qualified, "Google-compliant" reworded to "avoids the popup tricks
 Google penalizes" (CMP2/CMP3). Privacy docs (site LegalView + dashboard PrivacyPage)
 reconciled: correct sub-processors (Clerk/Stripe/Cloudflare/Neon/Render/Upstash, Sentry
 when enabled), IP→geo "not stored" disclosed, localStorage (not cookie) clarified, DPA
 "available on request", domain fixed to scrollpop.online (CMP4). License guard documented
 in CONTRIBUTING (`license-checker`); stack is permissive (CMP5). **Still recommended:**
-attorney review + a signed DPA template + a per-tenant strict-opt-in consent mode.
+attorney review + a signed DPA template.
 
 | # | Severity | Item |
 |---|---|---|
-| CMP1 | High | **No visitor consent gate** in the snippet (writes a localStorage visitor ID + beacons URL/referrer/device/IP→geo). EU/UK needs prior consent — add a `window.__sp.consent` / Consent-Mode hook. DNT is respected but insufficient. |
+| CMP1 | ✅ Resolved | Visitor consent gate shipped. Default honors DNT + explicit denial; **strict per-tenant opt-in** (Settings → Visitor Privacy) records nothing until `window.__sp_consent === true` / Consent Mode `granted`. Migration-free via `notification_prefs.require_consent`. |
 | CMP2 | High | **Comparative marketing claims** about named competitors (Privy/OptinMonster/Poptin "120–250 KB", "banned back-button tricks") must be substantiable (FTC / EU). Soften to qualified language or cite evidence. |
 | CMP3 | Med | **"Google-compliant"** is overstated — true re: no history/popstate, but a mobile modal can still be an intrusive interstitial. Qualify the claim. |
 | CMP4 | Med | ScrollPop is a **data processor** → publish a sub-processor list (Neon, Cloudflare, Upstash, Clerk, Render) + provide a **DPA**; reconcile the "no PII / no IP stored" copy (IP is processed for geo; email-capture collects PII). |

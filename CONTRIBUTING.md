@@ -330,8 +330,16 @@ pnpm run lint && pnpm run typecheck && pnpm run test
 # Cloudflare Worker actually serves at /v1/:key/p.js). Always commit the updated
 # apps/worker/src/p.txt after a snippet change — the Worker won't serve source
 # changes otherwise. (This was previously a silent staleness gap.)
+# The build also runs a post-minify CSS-whitespace collapse (build.mjs) — esbuild
+# does not minify the contents of the embedded <style> template literals, so we strip
+# their leading-whitespace newlines to reclaim bundle bytes. Safe: minified JS has no
+# newlines outside template literals.
 pnpm --filter snippet build
-node -e "const fs=require('fs'),z=require('zlib');const b=fs.readFileSync('packages/snippet/dist/p.js');console.log('gzipped:',z.gzipSync(b).length,'/ 10240 bytes')"
+
+# ⚠️ Measure size the SAME WAY CI does — the gzip CLI, NOT node's zlib.
+# node's zlib.gzipSync over-reports vs `gzip -c` by ~90 bytes and will make you
+# think you're over the gate when CI passes. CI uses: gzip -c <bundle> | wc -c
+gzip -c packages/snippet/dist/p.js | wc -c   # must be ≤ 10240
 
 # Recent history
 git log --oneline -15
