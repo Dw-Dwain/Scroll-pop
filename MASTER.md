@@ -1056,10 +1056,23 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - **Campaign designer persists the entire left sidebar** (all triggers/targeting + the
   Display Frequency dropdown) via a `uiTriggers` snapshot in `design.config`.
 - **In-app notifications** (migration 0006): tenant-scoped `notifications` table +
-  `tenants.notification_prefs`. Top-nav bell (unread badge, dropdown, mark-read), emitted
-  on real events (campaign activate/pause), gated by Settings → Notifications prefs (now
-  persisted server-side via `/api/v1/notification-prefs`). Schema auto-ensured on boot
-  (`ensure-notifications.ts`). Email delivery is the next phase (needs a provider).
+  `tenants.notification_prefs`. Top-nav bell (unread badge, dropdown, mark-read), gated by
+  Settings → Notifications prefs (persisted server-side via `/api/v1/notification-prefs`).
+  Schema auto-ensured on boot (`ensure-notifications.ts`).
+  **Triggers wired** (all best-effort, fired from the `/e` ingest path, type === Settings
+  key so per-type toggles work):
+  - `notif_campaign_status` — campaign activate / pause.
+  - `notif_usage_80` / `notif_usage_95` — monthly-view-limit thresholds. Sampled
+    1-in-20 impressions to bound DB load; de-duped once/month via Redis NX flags
+    (`sp_notif:u80|u95:{tenant}:{YYYY-MM}`, 38-day TTL); 95% also sets the 80% flag.
+  - `notif_conversion` — cumulative conversion milestones (100 / 1k / 10k / 100k) via an
+    atomic Redis counter (`sp_conv:{tenant}`); counts from feature launch, not historically.
+  - ⏸ `notif_snippet_error` — **deferred**: needs either snippet-side error beaconing
+    (blocked by the ≤10 KB gzip gate — only ~30 bytes of headroom) or a scheduled
+    "site registered but no events in N days" job (no cron infra yet). Toggle exists; no
+    emitter yet. Same applies to `notif_ab_winner` / `notif_invoice` / `notif_trial` /
+    `notif_weekly` (all need a scheduler).
+  Email/mobile delivery remains the next phase (needs a provider, e.g. Resend).
 
 #### Infrastructure
 - **Render Standard** — API always warm, zero cold starts; analytics event forwarding

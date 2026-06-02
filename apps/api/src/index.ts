@@ -24,7 +24,7 @@ import { analyticsRoutes } from './routes/analytics.js';
 import { billingRoutes } from './routes/billing.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { internalRoutes } from './routes/internal.js';
-import { notificationRoutes } from './routes/notifications.js';
+import { notificationRoutes, emitNotification } from './routes/notifications.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
@@ -301,6 +301,65 @@ async function bootstrap() {
     }
   );
 
+  // ── Notification triggers (best-effort, fired from the event ingest path) ──────
+  // Usage thresholds: notify once per calendar month when a tenant crosses 80% / 95%
+  // of its monthly view limit. De-duplicated with a Redis NX flag (38-day TTL so it
+  // self-clears next month). When 95% fires we also set the 80% flag so it can't
+  // back-fire. Cheap: only runs on a 1-in-20 impression sample (see caller).
+  async function checkUsageThresholds(tenantId: string, count: number, month: string): Promise<void> {
+    if (!redis) return;
+    try {
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, tenantId),
+        columns: { monthlyViewLimit: true },
+      });
+      const limit = tenant?.monthlyViewLimit ?? 0;
+      if (limit <= 0) return;
+      const pct = count / limit;
+      const ttl = 38 * 24 * 60 * 60;
+      const flag80 = `sp_notif:u80:${tenantId}:${month}`;
+      const flag95 = `sp_notif:u95:${tenantId}:${month}`;
+      if (pct >= 0.95) {
+        await redis.set(flag80, '1', { ex: ttl }); // suppress the lower threshold
+        if (await redis.set(flag95, '1', { nx: true, ex: ttl })) {
+          await emitNotification(tenantId, {
+            type: 'notif_usage_95',
+            title: "You've used 95% of your monthly views",
+            body: `${count.toLocaleString()} of ${limit.toLocaleString()} views this month. Upgrade to keep popups live.`,
+            href: '/billing',
+          });
+        }
+      } else if (pct >= 0.8) {
+        if (await redis.set(flag80, '1', { nx: true, ex: ttl })) {
+          await emitNotification(tenantId, {
+            type: 'notif_usage_80',
+            title: "You've used 80% of your monthly views",
+            body: `${count.toLocaleString()} of ${limit.toLocaleString()} views this month.`,
+            href: '/billing',
+          });
+        }
+      }
+    } catch { /* best-effort */ }
+  }
+
+  // Conversion milestones: notify when cumulative conversions cross 100 / 1k / 10k / 100k.
+  // The Redis counter is incremented atomically, so an exact-match on the new total
+  // fires each milestone exactly once (counts from feature launch, not historically).
+  async function checkConversionMilestone(tenantId: string): Promise<void> {
+    if (!redis) return;
+    try {
+      const total = await redis.incr(`sp_conv:${tenantId}`);
+      if (total === 100 || total === 1000 || total === 10000 || total === 100000) {
+        await emitNotification(tenantId, {
+          type: 'notif_conversion',
+          title: `🎉 ${total.toLocaleString()} conversions!`,
+          body: `Your campaigns just crossed ${total.toLocaleString()} total conversions.`,
+          href: '/analytics',
+        });
+      }
+    } catch { /* best-effort */ }
+  }
+
   // 3. Local Ingest Route (Prevents fetch errors when snippet beacons analytics)
   app.post<{ Body: { events?: any[] } }>('/e', async (request, reply) => {
     const payload = request.body;
@@ -345,10 +404,20 @@ async function bootstrap() {
               const month = new Date().toISOString().slice(0, 7); // e.g. "2026-05"
               const key = `sp_views:${campaign.tenantId}:${month}`;
               try {
-                await redis.incr(key);
+                const newCount = await redis.incr(key);
                 // Keep the key alive through the end of the month + a 7-day buffer.
                 await redis.expire(key, 38 * 24 * 60 * 60); // 38 days
+                // Usage-threshold notifications — sampled 1-in-20 to bound DB load
+                // (the warning only needs to land within ~20 views of the crossing).
+                if (typeof newCount === 'number' && newCount % 20 === 0) {
+                  void checkUsageThresholds(campaign.tenantId, newCount, month);
+                }
               } catch { /* non-fatal — enforcement falls back to DB query */ }
+            }
+
+            // Conversion-milestone notifications.
+            if (eventType === 'conversion') {
+              void checkConversionMilestone(campaign.tenantId);
             }
           }
         } catch (err) {
