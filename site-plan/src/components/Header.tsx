@@ -46,14 +46,12 @@ export default function Header({ activePage, onPageChange, onTriggerDemoPopup }:
           onClick={() => { onPageChange('home'); setMobileMenuOpen(false); }}
           className="flex items-center gap-3 group text-left cursor-pointer"
         >
-          <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-white flex items-center justify-center text-black transition-all duration-300 group-hover:scale-105 group-hover:rotate-6 shadow-xl">
-            <div className="w-4 h-4 bg-black rounded-sm transform rotate-45 flex items-center justify-center">
-              <span className="font-sans font-extrabold text-[8px] text-white -rotate-45">S</span>
-            </div>
+          <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-white flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:rotate-6 shadow-xl">
+            <div className="w-4 h-4 md:w-[18px] md:h-[18px] bg-black rounded-sm transform rotate-45" />
           </div>
-          <div>
-            <span className="font-serif text-lg md:text-xl font-normal tracking-tight text-white uppercase">ScrollPop</span>
-            <p className="text-[9px] uppercase font-mono tracking-[0.2em] text-white/50 -mt-1 group-hover:text-white/80 transition-colors">CONVERSION STUDIO</p>
+          <div className="leading-none">
+            <span className="block font-sans text-lg md:text-xl font-bold tracking-[0.14em] text-white uppercase">ScrollPop</span>
+            <p className="text-[9px] uppercase font-sans font-medium tracking-[0.18em] text-white/50 mt-1 group-hover:text-white/80 transition-colors">CONVERSION STUDIO</p>
           </div>
         </button>
 

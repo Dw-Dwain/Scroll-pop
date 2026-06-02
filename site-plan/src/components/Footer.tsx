@@ -29,13 +29,12 @@ export default function Footer({ onPageChange, onTriggerDemoPopup }: FooterProps
         {/* Brand */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-black">
-              <span className="font-serif font-normal text-lg">S</span>
-              <span className="font-sans font-extrabold text-black text-xs -translate-x-0.5 translate-y-1">P</span>
+            <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center shrink-0">
+              <div className="w-4 h-4 bg-black rounded-sm transform rotate-45" />
             </div>
-            <div>
-              <span className="font-serif text-xl font-normal tracking-tight">ScrollPop</span>
-              <p className="text-[10px] uppercase font-mono tracking-widest text-white/50 -mt-1">Conversion Studio</p>
+            <div className="leading-none">
+              <span className="block font-sans text-xl font-bold tracking-[0.14em] uppercase">ScrollPop</span>
+              <p className="text-[10px] uppercase font-sans font-medium tracking-[0.18em] text-white/50 mt-1">Conversion Studio</p>
             </div>
           </div>
           <p className="text-white/50 text-sm font-sans font-light leading-relaxed max-w-sm">
