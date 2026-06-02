@@ -1173,8 +1173,13 @@ Priority order for the next release cycle:
 2. **Stripe Usage Records** — flush monthly view counts to Stripe Usage API so overages are billed correctly.
 3. **Campaign scheduling** — `starts_at` / `ends_at` on campaigns. Worker checks timestamps.
 4. **`api.scrollpop.online` custom domain** — Cloudflare proxied to Render. HTTPS everywhere.
-4a. **Neon partition auto-create** — Add a monthly cron/migration to create the next month's
-    events partition before month rollover, so analytics never silently breaks again.
+4a. **Neon partition auto-create** — ✅ done (`apps/api/src/db/ensure-partitions.ts` runs on
+    API boot). Kept here for history.
+4b. **Affiliate-network links (Amazon Associates / Rakuten)** — Settings → Affiliate Networks UI
+    added (saved links, currently localStorage). Pending: persist to the backend and auto-wire
+    into campaign affiliate slots (append affiliate tags to product/click-tracker URLs) so they
+    flow through to live ads. Org identity + these settings fields need a `tenants`-column
+    migration (website, support_email, locale prefs, affiliate links) — see §25 migration note.
 5. **Email notifications** — Resend/SendGrid integration. Alert at 80 % view cap, campaign go-live, billing failure.
 6. **Geo targeting** — add `geo_country` / `geo_region` to TargetingKind. Worker reads Cloudflare CF-IPCountry header.
 7. **UTM targeting** — match on `utm_source`, `utm_campaign`, `utm_medium` from URL params.

@@ -24,10 +24,9 @@ function loadSettings() {
     timezone: 'UTC',
     dateFormat: 'MMM D, YYYY',
     currency: 'USD',
-    defaultTrigger: 'scroll_pct',
-    defaultScrollPct: 40,
-    defaultFreqCap: 7,
     affiliateLink: 'https://affiliate.example.com',
+    amazonAffiliate: '',
+    rakutenAffiliate: '',
     webhookUrl: '',
     webhookSecret: 'whsec_placeholder_32chars_min',
     notif_weekly: false,
@@ -462,40 +461,9 @@ export const Settings: React.FC = () => {
                 </div>
               </SectionCard>
 
-              {/* Campaign Defaults */}
-              <SectionCard title="Campaign Defaults" subtitle="Pre-filled values when creating new campaigns.">
+              {/* Affiliate Networks */}
+              <SectionCard title="Affiliate Networks" subtitle="Saved affiliate links to reuse across campaigns and ad slots.">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <FieldRow label="Default Trigger">
-                    <select className="input" value={settings.defaultTrigger ?? 'scroll_pct'} onChange={(e) => setSettings({ ...settings, defaultTrigger: e.target.value })}>
-                      <option value="scroll_pct">Scroll Percentage</option>
-                      <option value="dwell_time">Dwell Time</option>
-                      <option value="exit_intent">Exit Intent</option>
-                      <option value="inactivity">Inactivity</option>
-                      <option value="time_delay">Time Delay</option>
-                    </select>
-                  </FieldRow>
-                  <FieldRow label="Scroll Depth Threshold" hint="Default % scroll before popup fires.">
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        className="input"
-                        type="number"
-                        min={5} max={95} step={5}
-                        value={settings.defaultScrollPct ?? 40}
-                        onChange={(e) => setSettings({ ...settings, defaultScrollPct: parseInt(e.target.value, 10) })}
-                        style={{ paddingRight: 36 }}
-                      />
-                      <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text-muted)' }}>%</span>
-                    </div>
-                  </FieldRow>
-                  <FieldRow label="Frequency Cap (days)" hint="Don't show the same popup within N days.">
-                    <input
-                      className="input"
-                      type="number"
-                      min={0} max={90}
-                      value={settings.defaultFreqCap ?? 7}
-                      onChange={(e) => setSettings({ ...settings, defaultFreqCap: parseInt(e.target.value, 10) })}
-                    />
-                  </FieldRow>
                   <FieldRow label="Affiliate Base URL" hint="Default CTA URL pre-filled in new campaigns.">
                     <input
                       className="input"
@@ -505,6 +473,30 @@ export const Settings: React.FC = () => {
                       onChange={(e) => setSettings({ ...settings, affiliateLink: e.target.value })}
                     />
                   </FieldRow>
+                  <FieldRow label="Amazon Associates Link" hint="Your Amazon affiliate link or storefront (e.g. https://amzn.to/… or ?tag=yourtag-20).">
+                    <input
+                      className="input"
+                      type="url"
+                      placeholder="https://www.amazon.com/?tag=yourtag-20"
+                      value={settings.amazonAffiliate ?? ''}
+                      onChange={(e) => setSettings({ ...settings, amazonAffiliate: e.target.value })}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Rakuten Affiliate Link" hint="Your Rakuten Advertising deep link or publisher URL.">
+                    <input
+                      className="input"
+                      type="url"
+                      placeholder="https://click.linksynergy.com/…"
+                      value={settings.rakutenAffiliate ?? ''}
+                      onChange={(e) => setSettings({ ...settings, rakutenAffiliate: e.target.value })}
+                    />
+                  </FieldRow>
+                </div>
+                <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Zap size={14} style={{ color: 'var(--accent-500)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    These links can be selected when adding affiliate slots in the campaign designer. Deeper auto-wiring (auto-tagging product URLs) is coming soon.
+                  </span>
                 </div>
               </SectionCard>
 
