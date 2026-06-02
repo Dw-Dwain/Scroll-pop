@@ -70,9 +70,13 @@ export default function WordPressShopifyGuide() {
                 <Globe className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="font-serif text-2xl font-normal text-neutral-900">WordPress Plugin</h2>
-                <p className="text-xs text-neutral-500 font-mono uppercase tracking-wide mt-0.5">~5KB · Any theme · No code</p>
+                <h2 className="font-serif text-2xl font-normal text-neutral-900">WordPress</h2>
+                <p className="text-xs text-neutral-500 font-mono uppercase tracking-wide mt-0.5">Free: snippet · Paid: dedicated plugin</p>
               </div>
+            </div>
+
+            <div className="mb-8 p-4 bg-neutral-50 border border-neutral-200 rounded-xl text-xs text-neutral-600 font-light leading-relaxed">
+              <strong className="text-neutral-900 font-semibold">On the Free plan</strong>, paste the ScrollPop snippet into your site header — via your theme's <code className="font-mono">functions.php</code> or a "headers and footers" plugin (the exact code is in your dashboard, and on the HTML / JS tab above). <strong className="text-neutral-900 font-semibold">Paid plans</strong> also get the dedicated ScrollPop WordPress plugin below.
             </div>
 
             <div className="flex flex-col gap-8">
@@ -148,21 +152,21 @@ export default function WordPressShopifyGuide() {
                 <ShoppingBag className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="font-serif text-2xl font-normal text-neutral-900">Shopify — Two options</h2>
-                <p className="text-xs text-neutral-500 font-mono uppercase tracking-wide mt-0.5">OAuth auto-inject · App Embed Block · No code</p>
+                <h2 className="font-serif text-2xl font-normal text-neutral-900">Shopify</h2>
+                <p className="text-xs text-neutral-500 font-mono uppercase tracking-wide mt-0.5">Paste a snippet now · one-click app coming soon</p>
               </div>
             </div>
 
-            {/* Option A */}
+            {/* Option A — available now */}
             <div className="mb-10">
               <div className="flex items-center gap-2 mb-5">
-                <span className="px-2.5 py-1 bg-neutral-950 text-white text-[9px] font-mono uppercase tracking-wider rounded-full">OPTION A — RECOMMENDED</span>
-                <span className="text-xs text-neutral-500">OAuth auto-install</span>
+                <span className="px-2.5 py-1 bg-neutral-950 text-white text-[9px] font-mono uppercase tracking-wider rounded-full">AVAILABLE NOW</span>
+                <span className="text-xs text-neutral-500">theme.liquid snippet</span>
               </div>
               {[
-                { step: '01', title: 'Connect your store', body: 'In the ScrollPop dashboard → Sites → Add New Site → Shopify → enter yourstore.myshopify.com → click Connect. You\'ll be redirected to Shopify.' },
-                { step: '02', title: 'Approve the app', body: 'Review the permissions (read products, inject script tag) and click Install. You\'ll be redirected back to your ScrollPop dashboard.' },
-                { step: '03', title: 'Done — snippet is live', body: 'ScrollPop automatically creates a Script Tag on your store. Every page loads the snippet. Launch a campaign from the dashboard to start serving popups.' },
+                { step: '01', title: 'Open your theme code', body: 'In Shopify Admin → Online Store → Themes → (your active theme) → ⋯ → Edit code.' },
+                { step: '02', title: 'Paste the snippet', body: 'Open theme.liquid, and just before </head> paste the ScrollPop snippet (with your Public Key) — copy it from your ScrollPop dashboard. Save.' },
+                { step: '03', title: 'Launch & go live', body: 'Every page now loads the snippet. Launch a campaign from the ScrollPop dashboard to start serving popups.' },
               ].map((s) => (
                 <div key={s.step} className="flex gap-5 mb-6">
                   <div className="flex flex-col items-center">
@@ -177,35 +181,25 @@ export default function WordPressShopifyGuide() {
               ))}
             </div>
 
-            {/* Option B */}
+            {/* Option B — coming soon */}
             <div>
               <div className="flex items-center gap-2 mb-5">
-                <span className="px-2.5 py-1 bg-neutral-100 border border-neutral-200 text-neutral-800 text-[9px] font-mono uppercase tracking-wider rounded-full">OPTION B</span>
-                <span className="text-xs text-neutral-500">App Embed Block (OS 2.0 themes)</span>
+                <span className="px-2.5 py-1 bg-amber-100 border border-amber-200 text-amber-800 text-[9px] font-mono uppercase tracking-wider rounded-full">COMING SOON</span>
+                <span className="text-xs text-neutral-500">One-click Shopify app</span>
               </div>
-              {[
-                { step: '01', title: 'Open Theme Customizer', body: 'In Shopify Admin → Online Store → Themes → Customize (on your active theme).' },
-                { step: '02', title: 'Enable the embed block', body: 'In the Theme Customizer, click "App Embeds" in the bottom-left panel. Find ScrollPop and toggle it on.' },
-                { step: '03', title: 'Paste your Public Key', body: 'In the ScrollPop settings field, paste your site\'s Public Key from the ScrollPop dashboard. Click Save.' },
-              ].map((s) => (
-                <div key={s.step} className="flex gap-5 mb-5">
-                  <div className="h-8 w-8 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-900 font-mono text-xs font-bold flex items-center justify-center flex-shrink-0">{s.step}</div>
-                  <div>
-                    <h4 className="font-serif text-base font-normal text-neutral-900 mb-1">{s.title}</h4>
-                    <p className="text-sm text-neutral-600 font-light leading-relaxed">{s.body}</p>
-                  </div>
-                </div>
-              ))}
+              <p className="text-sm text-neutral-600 font-light leading-relaxed">
+                We're building a native Shopify app so you can install ScrollPop without touching theme code: connect your store via OAuth (ScrollPop auto-injects the snippet), or toggle on the App Embed Block in the Theme Customizer on Online Store 2.0 themes. Until it ships, use the theme.liquid snippet above — it works on every plan and theme today.
+              </p>
             </div>
           </div>
 
           <div className="flex flex-col gap-6">
             <div className="glass rounded-2xl p-8">
-              <h3 className="font-serif text-xl font-normal text-neutral-900 mb-5">Which option should I use?</h3>
+              <h3 className="font-serif text-xl font-normal text-neutral-900 mb-5">How installs work today</h3>
               <div className="flex flex-col gap-4">
                 {[
-                  { label: 'OAuth (Option A)', desc: 'Best for most stores. Works with all themes, set up in 60 seconds, fully automatic.' },
-                  { label: 'App Embed (Option B)', desc: 'Best for Online Store 2.0 themes. No Script Tag in the DOM — cleaner architecture. Requires manual Public Key entry.' },
+                  { label: 'theme.liquid snippet (now)', desc: 'Available today on every Shopify plan and theme. Paste one snippet before </head> — same idea as adding a Google Analytics tag.' },
+                  { label: 'One-click app (coming soon)', desc: 'OAuth auto-install + an App Embed Block toggle, no theme code. In active development — the snippet above works in the meantime.' },
                 ].map((o) => (
                   <div key={o.label} className="flex items-start gap-3 p-4 bg-neutral-50 border border-neutral-200 rounded-xl">
                     <ToggleRight className="h-5 w-5 text-[#C05621] flex-shrink-0 mt-0.5" />
@@ -221,8 +215,8 @@ export default function WordPressShopifyGuide() {
             <div className="glass rounded-2xl p-6">
               <h3 className="font-mono text-xs uppercase tracking-widest text-neutral-500 mb-4">Shopify plan requirements</h3>
               <div className="flex flex-col gap-2 text-xs text-neutral-600 font-light">
-                <div className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600" /><span>Script Tags — all plans including Basic</span></div>
-                <div className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600" /><span>App Embed Block — all OS 2.0 themes</span></div>
+                <div className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600" /><span>theme.liquid snippet — all plans including Basic</span></div>
+                <div className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600" /><span>Works on every theme (no OS 2.0 requirement)</span></div>
                 <div className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600" /><span>No Shopify Plus required</span></div>
               </div>
             </div>
