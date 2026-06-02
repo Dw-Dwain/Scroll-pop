@@ -26,13 +26,12 @@ pattern = "edge.scrollpop.online"
 custom_domain = true
 
 # ── KV Namespace: campaign config cache ───────────────────────────────────────
-# TODO: Create KV namespace in Cloudflare dashboard and add IDs here
-# Run: wrangler kv namespace create SCROLLPOP_CONFIG
-# Then update both id and preview_id below
-# [[kv_namespaces]]
-# binding = "SCROLLPOP_CONFIG"
-# id = "YOUR_KV_NAMESPACE_ID"
-# preview_id = "YOUR_KV_NAMESPACE_ID"
+# Edge cache for site config (60s TTL). The Worker reads/writes this in
+# handleConfig() — a cache hit avoids the Worker→API→DB round-trip entirely.
+[[kv_namespaces]]
+binding = "SCROLLPOP_CONFIG"
+id = "fae43476cd5945319b43fa71200fd479"
+preview_id = "ffb1d5e59c1d49c6b6cb1bd92d88eeb6"
 
 # ── Secrets (set via `wrangler secret put <NAME>` — never commit values) ──────
 # Required secrets:
