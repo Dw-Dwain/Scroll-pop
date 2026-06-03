@@ -647,18 +647,18 @@ No business logic. Only: cache reads/writes, Redis push, static asset serve.
 Path-based for web, handled in `main.tsx`. (The desktop Electron app was removed Jun 2026 —
 ScrollPop is a sole hosted web app now.)
 
-### Auth Modes
+### Auth — single mode (Clerk)
+There is exactly one runtime: the live Clerk-authenticated web app. Demo mode and the Electron
+desktop app were both removed (Jun 2026), so there is no seeded-data showcase build and no
+local-auth bypass anymore.
+
 | Mode | How triggered | Token source |
 |---|---|---|
-| Web (Clerk) | `VITE_CLERK_PUBLISHABLE_KEY` set | `useAuth().getToken()` → Bearer JWT |
-| Demo (Showcase) | `VITE_DEMO_MODE=true` | Local demo state — no real auth, no network |
+| Web (Clerk) | always | `useAuth().getToken()` → Bearer JWT |
 
-> ⚠️ **Demo mode never auto-engages in a production build (hardened Jun 3 2026).** Previously
-> `IS_DEMO_MODE` flipped on for a `pk_test_` or *missing* Clerk key — so a prod deploy missing
-> `VITE_CLERK_PUBLISHABLE_KEY` would have silently served the fake seeded-data demo app to real
-> users. Now: in a prod build (`import.meta.env.PROD`) demo mode requires an explicit
-> `VITE_DEMO_MODE=true`; a missing/test key no longer triggers it (auth just fails visibly,
-> which is the safe failure). Auto-fallback still works for local `vite dev`.
+> Local development requires a real Clerk publishable key (`VITE_CLERK_PUBLISHABLE_KEY`, a
+> `pk_test_…` key is fine) — there is no longer a keyless demo fallback. The backend still has its
+> `NODE_ENV !== 'production'` dev tenant bypass for API calls against a local database.
 
 ### Data Provider
 `apps/dashboard/src/providers/dataProvider.ts`
@@ -905,13 +905,13 @@ SENTRY_DSN=
 ### apps/dashboard (.env)
 ```
 VITE_API_URL=             https://scroll-pop.onrender.com
-VITE_CLERK_PUBLISHABLE_KEY=
+VITE_CLERK_PUBLISHABLE_KEY=  (required — no keyless demo mode)
 VITE_POSTHOG_KEY=
 VITE_STRIPE_PUBLISHABLE_KEY=
-VITE_DEMO_MODE=           false (production)
 ```
-> Note: never set a `VITE_INTERNAL_SECRET` for the dashboard — `VITE_*` vars are baked into the
-> public browser bundle. The internal secret is a server-only value.
+> Note: never set a `VITE_INTERNAL_SECRET` or `VITE_DEMO_MODE` for the dashboard — `VITE_*` vars
+> are baked into the public browser bundle, and demo mode no longer exists. The internal secret is
+> a server-only value.
 
 ### apps/worker (wrangler.toml secrets)
 ```

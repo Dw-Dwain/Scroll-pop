@@ -15,7 +15,7 @@ function resolveUrl(apiBase: string, relativePath: string): string {
 }
 
 // Holds the active token getter so non-Refine code (e.g. authed file downloads) can make
-// authenticated requests in any auth mode (Clerk / demo / desktop) without needing useAuth().
+// authenticated requests (using the Clerk token) without needing useAuth().
 let activeGetToken: () => Promise<string | null> = async () => null;
 
 /**

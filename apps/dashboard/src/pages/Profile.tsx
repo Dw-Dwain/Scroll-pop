@@ -43,7 +43,6 @@ function ClerkBridge({ onReady }: { onReady: (v: ClerkBridgeValue) => void }) {
 }
 
 interface ProfileProps {
-  isDemo: boolean;
   onNavigate: (path: string) => void;
 }
 
@@ -366,7 +365,7 @@ function TwoFAModal({ secret, backupCodes, onVerify, onCancel }: {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export const Profile: React.FC<ProfileProps> = ({ isDemo, onNavigate }) => {
+export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [toastMsg, setToastMsg] = React.useState<string | null>(null);
   const showToast = (msg: string) => {
@@ -391,12 +390,10 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, onNavigate }) => {
       const stored = localStorage.getItem('_sp_profile_v2');
       if (stored) return JSON.parse(stored);
     } catch {}
-    // In real (Clerk) mode start blank — the ClerkBridge fills in the authenticated
-    // identity once it loads. Only demo mode uses the placeholder persona.
-    const clerkMode = !isDemo;
+    // Start blank — the ClerkBridge fills in the authenticated identity once it loads.
     return {
-      name: clerkMode ? '' : 'Dev Admin',
-      email: clerkMode ? '' : 'admin@scrollpop.dev',
+      name: '',
+      email: '',
       role: 'Admin Manager', avatarUrl: '', bio: '',
       developerMode: true, apiKey: 'sp_pk_live_a3e8630f904adceddc1d0553d7bcda0c',
       notifDigest: false,
@@ -442,8 +439,8 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, onNavigate }) => {
   // 2FA modal
   const [setup2FA, setSetup2FA] = React.useState<{ secret: string; backupCodes: string[] } | null>(null);
 
-  // Real (Clerk) mode: password, 2FA, and identity are managed by Clerk, not localStorage.
-  const isClerkMode = !isDemo;
+  // Password, 2FA, and identity are always managed by Clerk, not localStorage.
+  const isClerkMode = true;
   const clerkRef = React.useRef<ClerkBridgeValue | null>(null);
   const [clerkIdentity, setClerkIdentity] = React.useState<ClerkIdentity | null>(null);
   const handleClerkReady = React.useCallback((v: ClerkBridgeValue) => {

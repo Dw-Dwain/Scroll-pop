@@ -125,7 +125,7 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   },
 };
 
-// ─── localStorage fallbacks (desktop mode / pre-load) ─────────────────────────
+// ─── localStorage fallback (used only while the /me API response is loading) ──────
 
 function detectPlanLocal(): PlanId {
   try {

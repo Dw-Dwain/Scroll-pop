@@ -1,23 +1,7 @@
 import React from 'react';
 import { useSignIn } from '@clerk/clerk-react';
 
-interface SignInProps {
-  isDemo?: boolean;
-  onLogin?: () => void;
-}
-
-export const SignIn: React.FC<SignInProps> = ({ isDemo = false, onLogin }) => {
-  const [email, setEmail] = React.useState(isDemo ? 'admin@scrollpop.dev' : '');
-  const [password, setPassword] = React.useState(isDemo ? 'devpass123' : '');
-  const [error] = React.useState('');
-  const [loading] = React.useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Demo mode: the parent's onLogin handler flips local demo auth state.
-    onLogin?.();
-  };
-
+export const SignIn: React.FC = () => {
   const STATS = [
     { num: '12,400', label: 'campaigns created' },
     { num: '4.2M',   label: 'popup views served' },
@@ -97,51 +81,13 @@ export const SignIn: React.FC<SignInProps> = ({ isDemo = false, onLogin }) => {
           </div>
 
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-            {isDemo ? 'Demo Mode' : 'Sign in to ScrollPop'}
+            Sign in to ScrollPop
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 24px' }}>
-            {isDemo ? 'Authentication skipped in demo mode.' : 'Welcome back.'}
+            Welcome back.
           </p>
 
-          {error && (
-            <div style={{
-              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-              borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 13, color: 'var(--status-error)',
-            }}>
-              {error}
-            </div>
-          )}
-
-          {isDemo ? (
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Email</label>
-                <input
-                  type="email" className="input"
-                  value={email} onChange={(e) => setEmail(e.target.value)}
-                  required autoComplete="email"
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Password</label>
-                <input
-                  type="password" className="input"
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                  required autoComplete="current-password"
-                />
-              </div>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading}
-                style={{ width: '100%', justifyContent: 'center', marginTop: 8, height: 40 }}
-              >
-                {loading ? 'Signing in…' : 'Sign in'}
-              </button>
-            </form>
-          ) : (
-            <ClerkSignInForm />
-          )}
+          <ClerkSignInForm />
         </div>
       </div>
     </div>
