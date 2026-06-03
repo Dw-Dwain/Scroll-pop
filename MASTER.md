@@ -1282,7 +1282,18 @@ reconciled: correct sub-processors (Clerk/Stripe/Cloudflare/Neon/Render/Upstash,
 when enabled), IP→geo "not stored" disclosed, localStorage (not cookie) clarified, DPA
 "available on request", domain fixed to scrollpop.online (CMP4). License guard documented
 in CONTRIBUTING (`license-checker`); stack is permissive (CMP5). **Still recommended:**
-attorney review + a signed DPA template.
+attorney review of all legal docs.
+
+**DPA template drafted (Jun 2 2026):** `legal/DPA-TEMPLATE.md` — a standard SaaS
+processor DPA (roles, sub-processors, SCCs, breach notice, TOMs, annexes) for sending
+to customers who request one ("available on request" is already stated on the site +
+dashboard privacy pages). **Engineering draft — needs attorney review before use;**
+all `[BRACKETED]` fields must be filled.
+⚠️ **Follow-up flagged:** the Security page (`site-plan/src/components/LegalView.tsx`
+~L194) claims **"EU data stays in EU regions (Frankfurt)"** — this is **inaccurate**:
+the Neon DB is in `ap-southeast-1` (Asia-Pacific). The DPA template states the correct
+region; the public Security page copy still needs reconciling (false data-residency
+claim = compliance risk).
 
 | # | Severity | Item |
 |---|---|---|
