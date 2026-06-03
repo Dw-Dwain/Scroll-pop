@@ -31,7 +31,28 @@ function resolveUrl(apiBase: string, relativePath: string): string {
   return `${origin}${relativePath}`;
 }
 
+// Holds the active token getter so non-Refine code (e.g. authed file downloads) can make
+// authenticated requests in any auth mode (Clerk / demo / desktop) without needing useAuth().
+let activeGetToken: () => Promise<string | null> = async () => null;
+
+/**
+ * Authenticated fetch for raw (non-JSON) endpoints like file downloads. `path` is relative
+ * to the API base (e.g. "/campaigns/<id>/export"). Uses whatever token the active data
+ * provider was created with.
+ */
+export async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const token = await activeGetToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const apiBase = getApiBase();
+  const url = path.startsWith('http')
+    ? path
+    : `${apiBase.startsWith('http') ? apiBase : `${window.location.origin}${apiBase}`}${path}`;
+  return fetch(url, { ...init, headers });
+}
+
 export const createDataProvider = (getToken: () => Promise<string | null>): DataProvider => {
+  activeGetToken = getToken;
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     const token = await getToken();
     const headers = new Headers(options.headers);

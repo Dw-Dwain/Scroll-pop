@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { db } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
+import { startDeletedDataPurge } from './db/purge-deleted.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from './db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
@@ -480,6 +481,10 @@ async function bootstrap() {
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });
   app.log.info(`API running on port ${port}`);
+
+  // Deleted-data lifecycle: hard-delete analytics events for campaigns/sites soft-deleted
+  // >24h ago (after the download grace window). In-process hourly job; no external cron.
+  startDeletedDataPurge(app.log);
 }
 
 bootstrap().catch((err) => {

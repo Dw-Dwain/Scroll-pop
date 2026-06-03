@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { Plus, Search, Layers, Pencil, Trash2, Play, Pause, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, Layers, Pencil, Trash2, Play, Pause, MoreHorizontal, Download } from 'lucide-react';
 import { useCustom, useDelete, useList, useUpdate, useApiUrl } from '@refinedev/core';
+import { authedFetch } from '../providers/dataProvider';
 
 interface CampaignsProps {
   onNavigate: (path: string) => void;
@@ -213,8 +214,27 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
     );
   };
 
+  const handleDownload = async (id: string, name?: string) => {
+    try {
+      const res = await authedFetch(`/campaigns/${id}/export`);
+      if (!res.ok) { alert('Could not export campaign data. Please try again.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `scrollpop-${(name || 'campaign').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Could not export campaign data. Please try again.');
+    }
+  };
+
   const handleDelete = (id: string) => {
-    if (confirm('Delete this campaign?')) {
+    // The 24h grace window: data stays downloadable for 24h after deletion, then is purged.
+    if (confirm('Delete this campaign?\n\nIts analytics data stays downloadable for 24 hours, then is permanently purged. You can export it now or within that window via "Download data".')) {
       deleteCampaign({ resource: 'campaigns', id }, { onSuccess: () => refetch() });
     }
   };
@@ -452,6 +472,15 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                           onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                         >
                           View details
+                        </button>
+                        <button
+                          onClick={() => { void handleDownload(c.id, c.name); setOpenMenuId(null); }}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-raised)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          <Download size={12} style={{ marginRight: 6, display: 'inline' }} />
+                          Download data
                         </button>
                         <div style={{ height: 1, background: 'var(--border-subtle)' }} />
                         <button

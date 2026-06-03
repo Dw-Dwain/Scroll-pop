@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { campaigns, sites, designs } from '../db/schema.js';
+import { campaigns, sites, designs, events } from '../db/schema.js';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { emitNotification } from './notifications.js';
 
@@ -141,6 +141,45 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
     return reply.code(200).send({ data: deleted });
+  });
+
+  // GET /api/v1/campaigns/:id/export — CSV of this campaign's raw event data.
+  // Works for any campaign owned by the tenant, INCLUDING soft-deleted ones — this is the
+  // "download your data" path during the 24h window before the purge hard-deletes events.
+  fastify.get<{ Params: { id: string } }>('/campaigns/:id/export', async (request, reply) => {
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, request.params.id), eq(campaigns.tenantId, request.tenantId)),
+      columns: { id: true, name: true },
+    });
+    if (!campaign) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    const rows = await db
+      .select({
+        ts: events.ts, eventType: events.eventType, device: events.device,
+        country: events.country, pageUrl: events.pageUrl, referrer: events.referrer,
+        visitorId: events.visitorId, sessionId: events.sessionId, revenueCents: events.revenueCents,
+      })
+      .from(events)
+      .where(and(eq(events.tenantId, request.tenantId), eq(events.campaignId, request.params.id)))
+      .orderBy(desc(events.ts))
+      .limit(100000);
+
+    const header = ['timestamp', 'event_type', 'device', 'country', 'page_url', 'referrer', 'visitor_id', 'session_id', 'revenue_cents'];
+    const esc = (v: unknown) => {
+      const s = v == null ? '' : (v instanceof Date ? v.toISOString() : String(v));
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [header.join(',')]
+      .concat(rows.map((r) => [r.ts, r.eventType, r.device, r.country, r.pageUrl, r.referrer, r.visitorId, r.sessionId, r.revenueCents].map(esc).join(',')))
+      .join('\n');
+
+    const safeName = (campaign.name || 'campaign').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40);
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="scrollpop-${safeName}-${request.params.id.slice(0, 8)}.csv"`)
+      .send(csv);
   });
 
   // POST & PATCH /api/v1/campaigns/:id/activate

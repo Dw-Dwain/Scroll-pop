@@ -1337,6 +1337,19 @@ with the actual stack + the sub-processor list + the DPA template.
 logs dropped events loudly, and `ensure-partitions` / `ensure-notifications` self-heal
 schema on boot.
 
+### Deleted-data lifecycle (Jun 3 2026)
+Deleted campaigns/sites used to keep showing their events in analytics/dashboard forever
+(events are append-only; queries weren't filtered). Now: **24h download window → purge.**
+- On delete (soft-delete as before), the campaign's analytics events stay **downloadable
+  for 24h** via `GET /api/v1/campaigns/:id/export` (CSV; works for soft-deleted campaigns).
+  Dashboard: Campaigns → ⋯ → "Download data"; the delete confirm explains the window.
+- `apps/api/src/db/purge-deleted.ts` runs in-process (hourly, ~30s after boot — no external
+  cron) and **hard-deletes events** for campaigns/sites soft-deleted >24h ago, so they drop
+  out of analytics. Config rows stay soft-deleted (recoverable). This is the deliberate,
+  user-approved exception to the no-hard-delete rule — scoped to analytics events only.
+- Authed file downloads use `authedFetch()` from the data provider (works in Clerk/demo/
+  desktop modes without `useAuth`).
+
 ### Active Bugs
 | # | Severity | Description | Location |
 |---|---|---|---|
