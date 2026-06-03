@@ -160,21 +160,23 @@ function ClerkSignUpForm() {
     }
   };
 
-  const handleGoogle = () => {
-    signUp?.authenticateWithRedirect({
-      strategy: 'oauth_google',
-      redirectUrl: '/sso-callback',
-      redirectUrlComplete: '/dashboard',
-    });
+  // OAuth: use ABSOLUTE redirect URLs (Clerk can silently no-op on relative ones) and
+  // surface any failure instead of failing silently.
+  const oauth = async (strategy: 'oauth_google' | 'oauth_github') => {
+    if (!isLoaded || !signUp) return;
+    setError('');
+    try {
+      await signUp.authenticateWithRedirect({
+        strategy,
+        redirectUrl: `${window.location.origin}/sso-callback`,
+        redirectUrlComplete: `${window.location.origin}/dashboard`,
+      });
+    } catch (err: any) {
+      setError(err?.errors?.[0]?.message ?? 'Could not continue with that provider. Please try again.');
+    }
   };
-
-  const handleGitHub = () => {
-    signUp?.authenticateWithRedirect({
-      strategy: 'oauth_github',
-      redirectUrl: '/sso-callback',
-      redirectUrlComplete: '/dashboard',
-    });
-  };
+  const handleGoogle = () => { void oauth('oauth_google'); };
+  const handleGitHub = () => { void oauth('oauth_github'); };
 
   if (pendingVerification) {
     return (
