@@ -181,11 +181,10 @@ const ClerkAppContent: React.FC = () => {
     // Clerk SSO callback — must be handled before anything else
     if (currentPath.startsWith('/sso-callback')) return <AuthenticateWithRedirectCallback />;
 
-    // Auth routes — sign-up is disabled on staging
-    if (currentPath === '/sign-in') return <SignIn isDemo={false} />;
-    if (currentPath === '/sign-up') {
-      return <SignUp isDemo={false} />;
-    }
+    // Auth routes (/sign-in, /sign-up) are rendered by the <SignedOut> block below —
+    // do NOT also return them here, or two Clerk auth forms mount and the sign-up flow
+    // initializes twice (doubling requests against Clerk's per-IP rate limit, which bites
+    // fastest on cellular/carrier-NAT shared IPs → "too many requests" on mobile).
 
     // Protected Admin routes
     return (
