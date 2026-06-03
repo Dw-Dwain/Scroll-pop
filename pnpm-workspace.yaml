@@ -2,6 +2,7 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'site-plan'
+  - 'e2e'
 allowBuilds:
   '@clerk/shared': true
   '@google/genai': set this to true or false

@@ -592,7 +592,10 @@ packages:
 5. `no-history-manipulation` — AST check: fail if snippet source contains
    `history.pushState`, `history.replaceState`, `onpopstate`, `popstate`
 
-> Playwright E2E is **not** wired (there is no staging environment). It remains a v2 item.
+> Playwright E2E is now wired (Jun 3 2026): with no staging environment, the suite runs
+> against LOCAL servers only — the dashboard in demo mode, the marketing site, and a snippet
+> fixture (built bundle + mocked edge endpoints). It never touches production. Non-gating CI
+> job. See `e2e/`.
 
 ---
 

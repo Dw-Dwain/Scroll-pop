@@ -1222,7 +1222,11 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - Account/org deletion backend
 - GoFundMe / Donorbox platform-specific setup guides
 - Admin impersonation for support
-- Playwright E2E test suite (Vitest unit tests exist)
+- ✅ **Playwright E2E test suite** — DONE (Jun 3 2026). `e2e/` workspace, 15 tests across
+  3 suites: dashboard (demo mode), marketing site, and snippet runtime (injects the built
+  bundle into a real-origin fixture, mocks the edge config/beacon, asserts the popup host
+  renders + targeting gating). Serialized (workers:1) to avoid Vite-dev cold-compile flake.
+  Runs in CI as a **non-gating** `e2e` job (not in any deploy `needs` list).
 - Sentry error tracking (DSN set but `Sentry.init()` not called in API or dashboard)
 - PostHog analytics (key set but `posthog.init()` not called)
 - Affiliate slot click tracking postback (client-side only)
@@ -1350,7 +1354,7 @@ schema on boot.
 | T2 | PostHog `posthog.init()` never called | `apps/dashboard/src/main.tsx` |
 | T3 | `any` types in several Dashboard components (`Sites.tsx`, `CampaignDetail.tsx`) — should be typed to schema types. Now surfaced as ESLint warnings (`no-explicit-any`) — clean up incrementally | Dashboard pages |
 | T-ESLint | ✅ Resolved (Jun 2 2026) — ESLint flat config added to dashboard (`apps/dashboard/eslint.config.js`). Real bugs (rules-of-hooks, no-debugger, no-dupe-keys) are errors; pre-existing style/`any`/legacy patterns are warnings so CI stays green (currently 0 errors / 428 warnings). `lint` script wired into CI. | `apps/dashboard` |
-| T4 | No Playwright E2E tests — only unit tests exist | — |
+| T4 | ✅ Resolved (Jun 3 2026) — Playwright E2E suite added (`e2e/`, 15 tests: dashboard demo + marketing site + snippet runtime). Non-gating CI job. | `e2e/` |
 | T5 | `apps/worker` event flush is a TODO in the Worker; events are currently only flushed by the API's `/e` local endpoint | `apps/worker/src/index.ts` |
 | T6 | Marketing site (`scrollpop.io`) does not exist | — |
 | T7 | `api.scrollpop.io` custom domain not yet configured | Cloudflare DNS |

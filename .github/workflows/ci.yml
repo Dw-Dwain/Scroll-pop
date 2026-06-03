@@ -116,6 +116,36 @@ jobs:
           fi
           echo "✅ PASS: No banned APIs found in snippet source"
 
+  # E2E is intentionally NOT in any deploy job's `needs` list — it provides signal but
+  # never blocks a release (browser E2E can be environment-flaky). Promote it to a gate
+  # once it has proven stable over time.
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '${{ env.NODE_VERSION }}'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The snippet fixture suite asserts against the built bundle.
+      - run: pnpm --filter snippet build
+      - name: Install Playwright (chromium + system deps)
+        run: pnpm --filter @scrollpop/e2e exec playwright install --with-deps chromium
+      - name: Run E2E suite
+        run: pnpm --filter @scrollpop/e2e run e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
   deploy-api:
     name: Deploy API → Render (production)
     runs-on: ubuntu-latest

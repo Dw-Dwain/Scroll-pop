@@ -20,3 +20,8 @@ client_secret_*.json
 env neon pswd
 *.credentials.json
 stitch_file_based_build_system/
+
+# Playwright E2E artifacts
+e2e/playwright-report/
+e2e/test-results/
+e2e/.last-run.json
