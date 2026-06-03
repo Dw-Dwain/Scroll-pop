@@ -38,7 +38,7 @@ export default function Footer({ onPageChange, onTriggerDemoPopup }: FooterProps
             </div>
           </div>
           <p className="text-white/50 text-sm font-sans font-light leading-relaxed max-w-sm">
-            Scroll-triggered affiliate popup campaigns for WordPress and Shopify. Visual builder, real analytics, Google-compliant triggers. Free to start.
+            Scroll-triggered affiliate popup campaigns for WordPress and Shopify. Visual builder, real analytics, and triggers that avoid the popup tricks Google penalizes. Free to start.
           </p>
           <a
             href={`${DASHBOARD_URL}/sign-up`}

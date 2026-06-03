@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk, useUser, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
+import { initObservability } from './lib/observability';
 
 // ── Mobile gate ───────────────────────────────────────────────────────────────
 // The dashboard is a desktop-only tool. Mobile visitors see a friendly
@@ -247,6 +248,8 @@ const Root: React.FC = () => {
     </ClerkProvider>
   );
 };
+
+initObservability();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

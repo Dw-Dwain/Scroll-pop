@@ -1189,7 +1189,11 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - `api.scrollpop.online` custom domain (API still at `scroll-pop.onrender.com`)
 - Clerk Organizations / team UI — personal accounts only; org-based path dormant
 - `scrollpop.online` marketing site
-- Email notifications (view limit warnings, campaign status changes)
+- ✅ **Email notifications (Resend)** — DONE (Jun 4 2026). `emitNotification` now fans out to an
+  email channel (`apps/api/src/lib/email.ts`, `fetch`-based, no `resend` npm dep) alongside the
+  in-app channel, reusing the same per-type prefs + a new `notif_channels_email` toggle. Wired
+  for the existing emitters (campaign status, 80%/95% view-cap, conversion milestones). DORMANT
+  until `RESEND_API_KEY` + `RESEND_FROM` (a Resend-verified sender) are set in Render.
 - ✅ **Campaign scheduling (start/end dates)** — DONE (Jun 3 2026). Optional run window
   per campaign, evaluated in the **visitor's local time** (datetime-local strings, no
   timezone). Stored in the design config (`design.config.schedule = { startsAt, endsAt }`)
@@ -1220,7 +1224,9 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   A/B testing item (v2 #6), which supersedes the simple % gate anyway. The dashboard still
   has the % slider but it won't gate until #6.
 - Webhook / outbound HTTP on conversion events
-- Campaign duplication via UI (backend supports it; no button)
+- ✅ **Campaign duplication via UI** — DONE (Jun 4 2026). `POST /api/v1/campaigns/:id/duplicate`
+  clones the campaign + design + triggers + targeting + frequency as a new **draft** (events not
+  copied); dashboard Campaigns card → ⋯ → "Duplicate".
 - Bulk campaign operations
 - Team invitations UI (Clerk org invitations exist but no dashboard wrapper)
 - Shopify App Store submission (App Embed Block needed first)
@@ -1240,8 +1246,8 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   bundle into a real-origin fixture, mocks the edge config/beacon, asserts the popup host
   renders + targeting gating). Serialized (workers:1) to avoid Vite-dev cold-compile flake.
   Runs in CI as a **non-gating** `e2e` job (not in any deploy `needs` list).
-- Sentry error tracking (DSN set but `Sentry.init()` not called in API or dashboard)
-- PostHog analytics (key set but `posthog.init()` not called)
+- ✅ **Sentry error tracking** — wired Jun 4 2026 (dep-free; see §25 T1). Dormant until `SENTRY_DSN`/`VITE_SENTRY_DSN` set.
+- ✅ **PostHog analytics** — wired Jun 4 2026 (CDN; see §25 T2). Dormant until `VITE_POSTHOG_KEY` set.
 - Affiliate slot click tracking postback (client-side only)
 - Conversion event API (external postback from merchant site)
 - Teaser + success step WYSIWYG rendering (snippet uses built-in layout for those two steps)
@@ -1368,8 +1374,8 @@ Deleted campaigns/sites used to keep showing their events in analytics/dashboard
 |---|---|---|---|
 | B1 | ✅ Resolved (Jun 3 2026) | View cap now enforced at the **edge on every config request**. The API config payload carries internal `tenantId` + `monthlyViewLimit`; the Worker reads the live `sp_views:{tenant}:{month}` counter from Upstash REST and empties `campaigns` when over limit, then **strips** those internal fields before responding. Closes the up-to-60s overage window of the old cache-miss-only check (which remains as defence-in-depth). **Fails OPEN** if the Worker can't reach Redis. ⚠️ Requires `REDIS_URL`/`REDIS_TOKEN` set as Worker secrets (see `wrangler.toml`) — without them the edge check no-ops and only the API cache-miss check applies. | `apps/worker/src/index.ts` |
 | B2 | High | Stripe usage records not synced — overage billing doesn't work | `apps/api/src/routes/billing.ts` |
-| B3 | Medium | `tenants.deleted_at` check missing in some tenant queries | `apps/api/src/plugins/tenant-context.ts` |
-| B4 | Medium | No retry logic on Redis event queue flush — events can be lost if DB is down during flush | `apps/api/src/routes/internal.ts` |
+| B3 | ✅ Resolved (Jun 4 2026) — personal + Novatise tenant lookups now filter `isNull(deletedAt)` and **revive on conflict** (a soft-deleted tenant is restored on the owner's next sign-in instead of dangling or 500-ing on the unique `clerkOrgId` constraint). | `apps/api/src/plugins/tenant-context.ts` |
+| B4 | ✅ Resolved (Jun 4 2026) — the live event path is Worker `/e` → API `/e` (not the Redis queue). Added a 1-retry + backoff to the Worker's `forwardEventsToApi` (each attempt 10s timeout; 4xx = no retry); a transient origin blip no longer silently loses a batch. | `apps/worker/src/index.ts` |
 | B5 | ✅ Resolved (Jun 3 2026) — `devUrl` in Sites.tsx now defaults to empty (operator pastes their own tunnel URL) instead of a hardcoded personal loca.lt URL | `apps/dashboard/src/pages/Sites.tsx` |
 
 ### Dev/showcase content audit (Jun 3 2026)
@@ -1385,15 +1391,15 @@ seed view/conversion numbers, and the "Test webhook" button's placeholder HMAC s
 ### Tech Debt
 | # | Description | File |
 |---|---|---|
-| T1 | Sentry SDK imported but `Sentry.init()` never called in production | Both API and Dashboard |
-| T2 | PostHog `posthog.init()` never called | `apps/dashboard/src/main.tsx` |
+| T1 | ✅ Resolved (Jun 4 2026) — Sentry wired **dependency-free** (no `@sentry/node`, avoids lockfile/CI drift): API reports via a `fetch`-based envelope client (`apps/api/src/lib/sentry.ts`, hooked into the error handler + `uncaughtException`/`unhandledRejection`); dashboard loads the Sentry CDN loader. Both DORMANT until `SENTRY_DSN` / `VITE_SENTRY_DSN` are set. | API + Dashboard |
+| T2 | ✅ Resolved (Jun 4 2026) — PostHog loaded from CDN (`array.js` via the `_i` queue) in `apps/dashboard/src/lib/observability.ts`, gated on `VITE_POSTHOG_KEY` (+ optional `VITE_POSTHOG_HOST`). No npm dep (sidesteps the pnpm v11 block that removed `posthog-js`). | `apps/dashboard/src/lib/observability.ts` |
 | T3 | `any` types in several Dashboard components (`Sites.tsx`, `CampaignDetail.tsx`) — should be typed to schema types. Now surfaced as ESLint warnings (`no-explicit-any`) — clean up incrementally | Dashboard pages |
 | T-ESLint | ✅ Resolved (Jun 2 2026) — ESLint flat config added to dashboard (`apps/dashboard/eslint.config.js`). Real bugs (rules-of-hooks, no-debugger, no-dupe-keys) are errors; pre-existing style/`any`/legacy patterns are warnings so CI stays green (currently 0 errors / 428 warnings). `lint` script wired into CI. | `apps/dashboard` |
 | T4 | ✅ Resolved (Jun 3 2026) — Playwright E2E suite added (`e2e/`, 15 tests: dashboard demo + marketing site + snippet runtime). Non-gating CI job. | `e2e/` |
 | T5 | `apps/worker` event flush is a TODO in the Worker; events are currently only flushed by the API's `/e` local endpoint | `apps/worker/src/index.ts` |
 | T6 | Marketing site (`scrollpop.io`) does not exist | — |
 | T7 | `api.scrollpop.io` custom domain not yet configured | Cloudflare DNS |
-| T8 | WordPress plugin `.zip` download URL (`cdn.scrollpop.io/plugins/scrollpop-wp.zip`) returns 404 — file not uploaded to R2 | R2 bucket |
+| T8 | 🟡 Artifact built (Jun 4 2026) — `pnpm`/`Compress-Archive` produces `packages/wp-plugin/dist/scrollpop-wp.zip` (folder `scrollpop/` at zip root so WP extracts to `wp-content/plugins/scrollpop`). **Still needs upload** to the GitHub release asset / R2 path the dashboard links to. Build: `Compress-Archive -Path packages/wp-plugin/scrollpop -DestinationPath packages/wp-plugin/dist/scrollpop-wp.zip` | R2 / GitHub release |
 | T9 | ✅ Resolved (Jun 2 2026) — Shopify OAuth callback rate limited to 20/min per IP via per-route `@fastify/rate-limit` config | `apps/api/src/routes/shopify.ts` |
 | T10 | `weight` field on affiliate slots is in schema but no UI exposes it. Part of the in-progress **Affiliate ad templates (#9)** work — see §23. | Dashboard |
 

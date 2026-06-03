@@ -1,10 +1,21 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyError } from 'fastify';
 import { ZodError } from 'zod';
+import { captureException } from '../lib/sentry.js';
 
 const errorHandlerPluginImpl: FastifyPluginAsync = async (fastify) => {
-  fastify.setErrorHandler((error: FastifyError, _request, reply) => {
+  fastify.setErrorHandler((error: FastifyError, request, reply) => {
     fastify.log.error({ err: error }, 'Request error');
+
+    // Report genuine server faults to Sentry (no-op until SENTRY_DSN is set). Client
+    // errors (validation, 4xx, rate limits) are expected and intentionally not reported.
+    const isServerFault =
+      !(error instanceof ZodError) &&
+      !error.validation &&
+      (!error.statusCode || error.statusCode >= 500);
+    if (isServerFault) {
+      void captureException(error, { method: request.method, url: request.url });
+    }
 
     // Zod validation errors → 400 Bad Request
     if (error instanceof ZodError) {

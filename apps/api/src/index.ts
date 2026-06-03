@@ -37,6 +37,7 @@ import { shopifyRoutes, shopifyWebhookRoutes } from './routes/shopify.js';
 // Plugins
 import { tenantContextPlugin } from './plugins/tenant-context.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
+import { captureException, sentryEnabled } from './lib/sentry.js';
 
 const isDev = process.env['NODE_ENV'] !== 'production';
 const __filename = fileURLToPath(import.meta.url);
@@ -570,7 +571,24 @@ async function bootstrap() {
   startDeletedDataPurge(app.log);
 }
 
-bootstrap().catch((err) => {
-  console.error(err);
-  process.exit(1);
+// Last-resort error reporting to Sentry (no-op until SENTRY_DSN is set). Log and report,
+// but don't exit on unhandledRejection — Fastify keeps serving; an uncaught synchronous
+// exception is genuinely unsafe so we report then exit non-zero (Render restarts the instance).
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+  void captureException(reason, { kind: 'unhandledRejection' });
 });
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  void captureException(err, { kind: 'uncaughtException' });
+});
+
+bootstrap()
+  .then(() => {
+    if (sentryEnabled()) console.log('[sentry] error reporting enabled');
+  })
+  .catch((err) => {
+    console.error(err);
+    void captureException(err, { kind: 'bootstrap' });
+    process.exit(1);
+  });

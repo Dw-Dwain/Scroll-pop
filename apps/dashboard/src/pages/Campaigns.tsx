@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { Plus, Search, Layers, Pencil, Trash2, Play, Pause, MoreHorizontal, Download } from 'lucide-react';
-import { useCustom, useDelete, useList, useUpdate, useApiUrl } from '@refinedev/core';
+import { Plus, Search, Layers, Pencil, Trash2, Play, Pause, MoreHorizontal, Download, Copy } from 'lucide-react';
+import { useCustom, useCreate, useDelete, useList, useUpdate, useApiUrl } from '@refinedev/core';
 import { authedFetch } from '../providers/dataProvider';
 
 interface CampaignsProps {
@@ -171,6 +171,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
   const { data: sitesData } = useList({ resource: 'sites' });
   const { mutate: updateCampaign } = useUpdate();
   const { mutate: deleteCampaign } = useDelete();
+  const { mutate: createResource } = useCreate();
   const apiUrl = useApiUrl();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
@@ -230,6 +231,17 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
     } catch {
       alert('Could not export campaign data. Please try again.');
     }
+  };
+
+  const handleDuplicate = (id: string) => {
+    // Clones the campaign (+ design, triggers, targeting, frequency) as a new draft.
+    createResource(
+      { resource: `campaigns/${id}/duplicate`, values: {} },
+      {
+        onSuccess: () => refetch(),
+        onError: () => alert('Could not duplicate campaign. Please try again.'),
+      }
+    );
   };
 
   const handleDelete = (id: string) => {
@@ -481,6 +493,15 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                         >
                           <Download size={12} style={{ marginRight: 6, display: 'inline' }} />
                           Download data
+                        </button>
+                        <button
+                          onClick={() => { handleDuplicate(c.id); setOpenMenuId(null); }}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-raised)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          <Copy size={12} style={{ marginRight: 6, display: 'inline' }} />
+                          Duplicate
                         </button>
                         <div style={{ height: 1, background: 'var(--border-subtle)' }} />
                         <button

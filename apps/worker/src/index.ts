@@ -297,35 +297,45 @@ async function forwardEventsToApi(env: Env, events: unknown[], clientIp: string)
     return;
   }
 
-  // 10s timeout prevents silent hangs when the API origin is cold-starting (Render free tier
-  // can take 10-30s on first request — without a timeout the Worker execution context hangs,
-  // events are dropped, and analytics never populate).
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const url = `${env.API_ORIGIN}/e`;
+  const body = JSON.stringify({ events });
+  // One retry: a transient origin blip (brief 5xx / network reset) shouldn't silently lose a
+  // batch. Each attempt has its own 10s timeout (Render is always-warm now, but a redeploy can
+  // still blip). 2 attempts max keeps the Worker's waitUntil budget bounded.
+  const MAX_ATTEMPTS = 2;
 
-  try {
-    const url = `${env.API_ORIGIN}/e`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Secret': env.INTERNAL_SECRET,
-        'X-CF-Connecting-IP': clientIp,
-      },
-      body: JSON.stringify({ events }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!response.ok) {
-      console.error('API event forwarding returned non-ok status:', response.status);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': env.INTERNAL_SECRET,
+          'X-CF-Connecting-IP': clientIp,
+        },
+        body,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (response.ok) return;
+      // 4xx is a permanent client error (bad payload, rate limited) — retrying won't help.
+      if (response.status < 500) {
+        console.error('API event forwarding rejected (no retry):', response.status);
+        return;
+      }
+      console.warn(`API event forwarding got ${response.status} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+    } catch (err: unknown) {
+      clearTimeout(timeout);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`Event forwarding error on attempt ${attempt}/${MAX_ATTEMPTS}: ${msg}`);
     }
-  } catch (err: unknown) {
-    clearTimeout(timeout);
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('aborted')) {
-      console.warn('Event forwarding timed out — API cold start? Events lost for this batch.');
+
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, 500)); // brief backoff before the retry
     } else {
-      console.error('Error forwarding events to API:', err);
+      console.error('Event forwarding failed after retries — batch lost.');
     }
   }
 }

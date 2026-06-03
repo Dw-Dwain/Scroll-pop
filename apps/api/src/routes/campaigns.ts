@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { campaigns, sites, designs, events } from '../db/schema.js';
+import { campaigns, sites, designs, events, triggers, targetingRules, frequencyRules } from '../db/schema.js';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { emitNotification } from './notifications.js';
 
@@ -141,6 +141,76 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
     return reply.code(200).send({ data: deleted });
+  });
+
+  // POST /api/v1/campaigns/:id/duplicate — clone a campaign (+ its design, triggers,
+  // targeting, frequency) as a new DRAFT. Analytics/events are NOT copied. Tenant-scoped.
+  fastify.post<{ Params: { id: string } }>('/campaigns/:id/duplicate', async (request, reply) => {
+    const source = await db.query.campaigns.findFirst({
+      where: and(
+        eq(campaigns.id, request.params.id),
+        eq(campaigns.tenantId, request.tenantId),
+        isNull(campaigns.deletedAt)
+      ),
+    });
+    if (!source) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    // Create the new campaign as a draft. Name suffixed "(Copy)", capped to the 200-char column.
+    const copyName = `${source.name} (Copy)`.slice(0, 200);
+    const [clone] = await db
+      .insert(campaigns)
+      .values({
+        tenantId: request.tenantId,
+        siteId: source.siteId,
+        name: copyName,
+        status: 'draft',
+        startsAt: source.startsAt,
+        endsAt: source.endsAt,
+      })
+      .returning();
+    if (!clone) {
+      return reply.code(500).send({ error: { code: 'CLONE_FAILED', message: 'Could not duplicate campaign' } });
+    }
+
+    // Clone child rows. Best-effort per group — a missing design shouldn't abort the others.
+    const [srcDesign, srcTriggers, srcTargeting, srcFreq] = await Promise.all([
+      db.query.designs.findFirst({ where: and(eq(designs.campaignId, source.id), eq(designs.tenantId, request.tenantId)) }),
+      db.query.triggers.findMany({ where: and(eq(triggers.campaignId, source.id), eq(triggers.tenantId, request.tenantId)) }),
+      db.query.targetingRules.findMany({ where: and(eq(targetingRules.campaignId, source.id), eq(targetingRules.tenantId, request.tenantId)) }),
+      db.query.frequencyRules.findFirst({ where: and(eq(frequencyRules.campaignId, source.id), eq(frequencyRules.tenantId, request.tenantId)) }),
+    ]);
+
+    if (srcDesign) {
+      await db.insert(designs).values({
+        campaignId: clone.id,
+        tenantId: request.tenantId,
+        kind: srcDesign.kind,
+        config: srcDesign.config,
+        affiliateSlots: srcDesign.affiliateSlots,
+      });
+    }
+    if (srcTriggers.length > 0) {
+      await db.insert(triggers).values(
+        srcTriggers.map((t) => ({ campaignId: clone.id, tenantId: request.tenantId, type: t.type, params: t.params }))
+      );
+    }
+    if (srcTargeting.length > 0) {
+      await db.insert(targetingRules).values(
+        srcTargeting.map((r) => ({ campaignId: clone.id, tenantId: request.tenantId, kind: r.kind, operator: r.operator, value: r.value }))
+      );
+    }
+    if (srcFreq) {
+      await db.insert(frequencyRules).values({
+        campaignId: clone.id,
+        tenantId: request.tenantId,
+        frequency: srcFreq.frequency,
+        intervalDays: srcFreq.intervalDays,
+      });
+    }
+
+    return reply.code(201).send({ data: clone });
   });
 
   // GET /api/v1/campaigns/:id/export — CSV of this campaign's raw event data.

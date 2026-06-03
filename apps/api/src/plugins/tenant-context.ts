@@ -262,13 +262,15 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     // Unverified @novatise.com emails fall through to a regular free personal tenant.
     if (isNovatiseDomain(userEmail) && emailVerified) {
       let novaTenant = await db.query.tenants.findFirst({
-        where: eq(tenants.clerkOrgId, NOVATISE_ORG_KEY),
+        where: and(eq(tenants.clerkOrgId, NOVATISE_ORG_KEY), isNull(tenants.deletedAt)),
       });
       if (!novaTenant) {
+        // Revive on conflict: a previously soft-deleted shared org is restored rather than
+        // leaving a returning member with no live tenant.
         const inserted = await db
           .insert(tenants)
           .values({ clerkOrgId: NOVATISE_ORG_KEY, name: NOVATISE_ORG_NAME, plan: 'agency', monthlyViewLimit: 2_000_000 })
-          .onConflictDoNothing()
+          .onConflictDoUpdate({ target: tenants.clerkOrgId, set: { deletedAt: null, updatedAt: new Date() } })
           .returning();
         novaTenant =
           inserted[0] ??
@@ -300,14 +302,17 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
 
     // ─── Regular personal tenant ──────────────────────────────────────────────
     let tenant = await db.query.tenants.findFirst({
-      where: eq(tenants.clerkOrgId, personalOrgKey),
+      where: and(eq(tenants.clerkOrgId, personalOrgKey), isNull(tenants.deletedAt)),
     });
 
     if (!tenant) {
+      // Revive on conflict: if this user's personal tenant was soft-deleted (e.g. via the
+      // user.deleted webhook) and they sign in again, restore it rather than 500-ing on the
+      // unique clerkOrgId constraint or leaving them tenant-less.
       const inserted = await db
         .insert(tenants)
         .values({ clerkOrgId: personalOrgKey, name: resolvedName ?? userEmail, plan: 'free', monthlyViewLimit: 1000 })
-        .onConflictDoNothing()
+        .onConflictDoUpdate({ target: tenants.clerkOrgId, set: { deletedAt: null, updatedAt: new Date() } })
         .returning();
       tenant =
         inserted[0] ??

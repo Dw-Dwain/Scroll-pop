@@ -2,7 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { and, eq, isNull, desc, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { notifications, tenants } from '../db/schema.js';
+import { notifications, tenants, tenantMembers, users } from '../db/schema.js';
+import { sendEmail, emailEnabled } from '../lib/email.js';
 
 /**
  * Create an in-app notification for a tenant, respecting the tenant's notification
@@ -22,17 +23,58 @@ export async function emitNotification(
       columns: { notificationPrefs: true },
     });
     const prefs = (tenant?.notificationPrefs ?? {}) as Record<string, unknown>;
-    if (prefs['notif_channels_inapp'] === false) return; // in-app channel off
-    if (prefs[n.type] === false) return;                 // this event type off
-    await db.insert(notifications).values({
-      tenantId,
-      type: n.type,
-      title: n.title,
-      body: n.body ?? null,
-      href: n.href ?? null,
-    });
+    if (prefs[n.type] === false) return;                 // this event type off entirely
+
+    // In-app channel (on unless explicitly disabled).
+    if (prefs['notif_channels_inapp'] !== false) {
+      await db.insert(notifications).values({
+        tenantId,
+        type: n.type,
+        title: n.title,
+        body: n.body ?? null,
+        href: n.href ?? null,
+      });
+    }
+
+    // Email channel — on unless explicitly disabled, and only does anything once
+    // RESEND_API_KEY + RESEND_FROM are configured. Resolves the tenant owner's email.
+    if (prefs['notif_channels_email'] !== false && emailEnabled()) {
+      void sendNotificationEmail(tenantId, n);
+    }
   } catch {
     /* notifications are best-effort — never break the originating action */
+  }
+}
+
+const APP_URL = process.env['DASHBOARD_URL'] ?? 'https://dashboard.scrollpop.online';
+
+/** Look up the tenant owner's email and send the notification as an email. Best-effort. */
+async function sendNotificationEmail(
+  tenantId: string,
+  n: { type: string; title: string; body?: string; href?: string },
+): Promise<void> {
+  try {
+    const [owner] = await db
+      .select({ email: users.email })
+      .from(tenantMembers)
+      .innerJoin(users, eq(users.id, tenantMembers.userId))
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.role, 'owner')))
+      .limit(1);
+    if (!owner?.email || owner.email.endsWith('@users.scrollpop.local')) return;
+
+    const link = n.href ? `${APP_URL}${n.href}` : APP_URL;
+    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+    const html =
+      `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto">` +
+      `<h2 style="font-size:18px;color:#111">${esc(n.title)}</h2>` +
+      (n.body ? `<p style="font-size:14px;color:#444;line-height:1.6">${esc(n.body)}</p>` : '') +
+      `<p style="margin-top:24px"><a href="${esc(link)}" style="background:#6366f1;color:#fff;` +
+      `padding:10px 18px;border-radius:6px;text-decoration:none;font-size:14px">Open ScrollPop</a></p>` +
+      `<p style="font-size:11px;color:#999;margin-top:24px">Manage email alerts in Settings → Notifications.</p>` +
+      `</div>`;
+    await sendEmail({ to: owner.email, subject: n.title, html, text: `${n.title}\n\n${n.body ?? ''}\n\n${link}` });
+  } catch {
+    /* best-effort */
   }
 }
 
