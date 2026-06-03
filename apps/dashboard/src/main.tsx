@@ -145,8 +145,14 @@ const PUBLISHABLE_KEY =
   (window as any).__ENV__?.VITE_CLERK_PUBLISHABLE_KEY;
 
 const isDevKey = PUBLISHABLE_KEY?.startsWith('pk_test_');
+const IS_PROD_BUILD = (import.meta as any).env.PROD === true;
+const EXPLICIT_DEMO = (import.meta as any).env.VITE_DEMO_MODE === 'true';
 
-const IS_DEMO_MODE = isDevKey || !PUBLISHABLE_KEY || ((import.meta as any).env.VITE_DEMO_MODE === 'true');
+// Demo mode renders seeded "dev" data. In a PRODUCTION build we must NEVER silently fall
+// into it — otherwise a misconfigured deploy (missing/test Clerk key) would serve the fake
+// demo app, with fake data, to real users on the live domain. So: prod = real Clerk unless
+// VITE_DEMO_MODE is explicitly set; only local/dev builds auto-fall-back on a missing/test key.
+const IS_DEMO_MODE = EXPLICIT_DEMO || (!IS_PROD_BUILD && (isDevKey || !PUBLISHABLE_KEY));
 const OPS_CENTER_ENABLED = isFeatureEnabled('ff_realtime_ops_dashboard');
 const JOURNEYS_ENABLED = isFeatureEnabled('ff_journeys_ui');
 const EXPERIMENTS_ENABLED = isFeatureEnabled('ff_experiments_v1');

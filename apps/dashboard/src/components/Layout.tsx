@@ -341,8 +341,8 @@ export const Layout: React.FC<LayoutProps> = ({
                 boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)',
               }}>
                 <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userProfile?.name ?? 'Admin'}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{userProfile?.email ?? 'admin@scrollpop.dev'}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{userProfile?.name ?? 'Account'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{userProfile?.email ?? ''}</div>
                   {!isAdmin && (
                     <div style={{ marginTop: 6 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>

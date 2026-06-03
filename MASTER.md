@@ -653,6 +653,13 @@ Hash-based for desktop Electron mode, path-based for web. Both handled in `main.
 | Desktop (Electron) | `window.electronAPI.isDesktop === true` | `localStorage.desktop_token` = `VITE_INTERNAL_SECRET` |
 | Demo (Showcase) | `VITE_DEMO_MODE=true` | Same as Desktop — no real auth |
 
+> ⚠️ **Demo mode never auto-engages in a production build (hardened Jun 3 2026).** Previously
+> `IS_DEMO_MODE` flipped on for a `pk_test_` or *missing* Clerk key — so a prod deploy missing
+> `VITE_CLERK_PUBLISHABLE_KEY` would have silently served the fake seeded-data demo app to real
+> users. Now: in a prod build (`import.meta.env.PROD`) demo mode requires an explicit
+> `VITE_DEMO_MODE=true`; a missing/test key no longer triggers it (auth just fails visibly,
+> which is the safe failure). Auto-fallback still works for local `vite dev`.
+
 ### Data Provider
 `apps/dashboard/src/providers/dataProvider.ts`
 - `getApiBase()` → reads `VITE_API_URL` env var for web, or `electronAPI.getLocalApiUrl()` for desktop
