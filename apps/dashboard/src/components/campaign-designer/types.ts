@@ -107,7 +107,8 @@ export interface CampaignTriggers {
   // Advanced audience targeting
   newVisitorOnly: boolean; // show only to first-time visitors
   sessionPageCount: number; // fire after visiting N pages (0 = disabled)
-  utmSource: string; // show only when utm_source matches (empty = all)
+  utmParam: string;  // which UTM param to match: utm_source/medium/campaign/term/content
+  utmValue: string;  // show only when the chosen UTM param matches this value (empty = all)
   abTestPercent: number; // 0-100, percentage of visitors to show to
   enableSmartAffiliate?: boolean; // scrape page to inject dynamic product details
   // How often the popup may show to the same visitor (persisted as the campaign frequency rule)

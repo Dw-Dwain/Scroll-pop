@@ -222,7 +222,8 @@ const getDefaultTriggers = (): CampaignTriggers => ({
   frequencyCapDays: 1,
   newVisitorOnly: false,
   sessionPageCount: 0,
-  utmSource: '',
+  utmParam: 'utm_source',
+  utmValue: '',
   abTestPercent: 100,
 });
 
@@ -1599,11 +1600,13 @@ export default function SidebarLeft({
                   <option value="All Countries">🌍 All Worldwide Markets</option>
                   <option value="US">🇺🇸 United States Only</option>
                   <option value="CA">🇨🇦 Canada Only</option>
+                  <option value="GB">🇬🇧 United Kingdom Only</option>
+                  <option value="AU">🇦🇺 Australia Only</option>
+                  <option value="DE">🇩🇪 Germany Only</option>
+                  <option value="FR">🇫🇷 France Only</option>
                   <option value="JP">🇯🇵 Japan Only</option>
-                  <option value="EU">🇪🇺 European Union Zone</option>
-                  <option value="AUS">🇦🇺 Australia Only</option>
-                  <option value="UK">🇬🇧 United Kingdom Only</option>
                   <option value="IN">🇮🇳 India Only</option>
+                  <option value="BR">🇧🇷 Brazil Only</option>
                 </select>
               </div>
 
@@ -1689,20 +1692,33 @@ export default function SidebarLeft({
                 <p className="text-[10.5px] text-zinc-600 leading-normal font-sans">Fire after visitor views N pages in same session.</p>
               </div>
 
-              {/* 9. UTM Source Tag */}
+              {/* 9. UTM Filter */}
               <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-zinc-400" />
-                  <span className="text-xs font-semibold text-zinc-100">UTM Source Filter</span>
+                  <span className="text-xs font-semibold text-zinc-100">UTM Filter</span>
                 </div>
-                <input
-                  type="text"
-                  placeholder="e.g. instagram, google, email..."
-                  value={(campaign.triggers as any).utmSource ?? ''}
-                  onChange={(e) => onUpdateTriggers('utmSource', e.target.value)}
-                  className="w-full text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden font-mono placeholder:text-zinc-600"
-                />
-                <p className="text-[10.5px] text-zinc-600 leading-normal">Only show to visitors arriving from this UTM source. Leave empty for all.</p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  <select
+                    value={(campaign.triggers as any).utmParam ?? 'utm_source'}
+                    onChange={(e) => onUpdateTriggers('utmParam', e.target.value)}
+                    className="col-span-2 text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden font-mono"
+                  >
+                    <option value="utm_source">utm_source</option>
+                    <option value="utm_medium">utm_medium</option>
+                    <option value="utm_campaign">utm_campaign</option>
+                    <option value="utm_term">utm_term</option>
+                    <option value="utm_content">utm_content</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="e.g. instagram, newsletter…"
+                    value={(campaign.triggers as any).utmValue ?? ''}
+                    onChange={(e) => onUpdateTriggers('utmValue', e.target.value)}
+                    className="col-span-3 text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden font-mono placeholder:text-zinc-600"
+                  />
+                </div>
+                <p className="text-[10.5px] text-zinc-600 leading-normal">Only show to visitors whose chosen UTM parameter matches this value (case-insensitive). Matches the current URL or the visitor's first-touch UTM. Leave the value empty for all.</p>
               </div>
 
               {/* 10. A/B Test Percentage */}

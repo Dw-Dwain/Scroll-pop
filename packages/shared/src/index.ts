@@ -23,6 +23,7 @@ export const TriggerType = z.enum([
 
 export const TargetingKind = z.enum([
   'url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor',
+  'geo', 'session_page_views', 'utm', 'ab_test',
 ]);
 
 // ─── Builder Blocks ─────────────────────────────────────────────────────────────

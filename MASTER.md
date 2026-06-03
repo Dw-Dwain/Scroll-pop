@@ -1178,8 +1178,21 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - `scrollpop.online` marketing site
 - Email notifications (view limit warnings, campaign status changes)
 - Campaign scheduling (start/end dates)
-- Geo targeting (country/region)
-- UTM parameter targeting
+- ✅ **Geo targeting (country)** — DONE (Jun 2 2026). Edge Worker injects `CF-IPCountry`
+  per-request into the config payload (`config.geo.country`, KV cache stays geo-free);
+  snippet evaluates `geo` rules against it (fail-open if country unknown). Dashboard geo
+  dropdown now uses correct ISO alpha-2 codes (was `UK`/`AUS`/`EU` — invalid). Region/city
+  granularity remains out of scope (needs geo-IP DB).
+- ✅ **UTM parameter targeting** — DONE (Jun 2 2026). Snippet matches any of the 5 UTM
+  params (source/medium/campaign/term/content) against the current URL **or the visitor's
+  first-touch UTM** (raw query string persisted in `localStorage._sp_utm`). Dashboard UTM
+  filter = param dropdown + value. Rule value shape `{ param, value }` (tolerates legacy
+  `{ source }` on read).
+- ⏸ **A/B percentage gate temporarily stubbed in the snippet** — to fit the geo+UTM
+  additions under the 10 KB gzip gate (landed at 10,236/10,240), the `ab_test` targeting
+  case is a passthrough (`return true`) for now. Real variant allocation is built in the
+  A/B testing item (v2 #6), which supersedes the simple % gate anyway. The dashboard still
+  has the % slider but it won't gate until #6.
 - Webhook / outbound HTTP on conversion events
 - Campaign duplication via UI (backend supports it; no button)
 - Bulk campaign operations

@@ -83,10 +83,12 @@ async function handleConfig(
   if (env.SCROLLPOP_CONFIG) {
     const cached = await env.SCROLLPOP_CONFIG.get(kvKey, 'text');
     if (cached) {
-      return new Response(cached, {
+      return new Response(withGeo(cached, request), {
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=60',
+          // private: the body is augmented per-request with the visitor's country,
+          // so it must not be shared-cached across visitors.
+          'Cache-Control': 'private, max-age=60',
           'X-Cache': 'HIT',
           ...CORS_HEADERS,
         },
@@ -139,14 +141,34 @@ async function handleConfig(
     );
   }
 
-  return new Response(configJson, {
+  return new Response(withGeo(configJson, request), {
     headers: {
       'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=60',
+      'Cache-Control': 'private, max-age=60',
       'X-Cache': 'MISS',
       ...CORS_HEADERS,
     },
   });
+}
+
+/**
+ * Inject the visitor's country (ISO 3166-1 alpha-2 from Cloudflare) into the config
+ * payload so the snippet can evaluate geo targeting. Done per-request AFTER the KV
+ * read, so the shared KV cache stays geo-free. Cheap JSON round-trip on a small object.
+ */
+function withGeo(configJson: string, request: Request): string {
+  const country =
+    ((request as { cf?: { country?: string } }).cf?.country) ||
+    request.headers.get('CF-IPCountry') ||
+    '';
+  if (!country || country === 'XX' || country === 'T1') return configJson; // unknown/Tor
+  try {
+    const c = JSON.parse(configJson);
+    c.geo = { country };
+    return JSON.stringify(c);
+  } catch {
+    return configJson;
+  }
 }
 
 // ─── Event Ingest Handler ─────────────────────────────────────────────────────

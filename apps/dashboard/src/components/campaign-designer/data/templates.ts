@@ -12,7 +12,8 @@ const getDefaultTriggers = () => ({
   frequencyCapDays: 7,
   newVisitorOnly: false,
   sessionPageCount: 0,
-  utmSource: '',
+  utmParam: 'utm_source',
+  utmValue: '',
   abTestPercent: 100,
 });
 

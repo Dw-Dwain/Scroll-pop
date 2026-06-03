@@ -55,7 +55,8 @@ function bootstrapCampaign(
   let pageTargeting = '*';
   let geoTargeting = 'All Countries';
   let sessionPageCount = 0;
-  let utmSource = '';
+  let utmParam = 'utm_source';
+  let utmValue = '';
   let abTestPercent = 100;
 
   if (targetingData.length > 0) {
@@ -65,7 +66,10 @@ function bootstrapCampaign(
       if (t.kind === 'url_contains') pageTargeting = t.value?.pattern || '*';
       if (t.kind === 'geo') geoTargeting = t.value?.country || 'All Countries';
       if (t.kind === 'session_page_views') sessionPageCount = t.value?.count || 0;
-      if (t.kind === 'utm') utmSource = t.value?.source || '';
+      if (t.kind === 'utm') {
+        utmParam = t.value?.param || 'utm_source';
+        utmValue = t.value?.value ?? t.value?.source ?? ''; // tolerate legacy { source }
+      }
       if (t.kind === 'ab_test') abTestPercent = t.value?.percent || 100;
     });
   } else {
@@ -74,7 +78,8 @@ function bootstrapCampaign(
     pageTargeting = config.steps?.main?.triggers?.pageTargeting ?? '*';
     geoTargeting = config.steps?.main?.triggers?.geoTargeting ?? 'All Countries';
     sessionPageCount = config.steps?.main?.triggers?.sessionPageCount ?? 0;
-    utmSource = config.steps?.main?.triggers?.utmSource ?? '';
+    utmParam = config.steps?.main?.triggers?.utmParam ?? 'utm_source';
+    utmValue = config.steps?.main?.triggers?.utmValue ?? config.steps?.main?.triggers?.utmSource ?? '';
     abTestPercent = config.steps?.main?.triggers?.abTestPercent ?? 100;
   }
 
@@ -96,7 +101,8 @@ function bootstrapCampaign(
     frequencyCapDays,
     newVisitorOnly,
     sessionPageCount,
-    utmSource,
+    utmParam,
+    utmValue,
     abTestPercent,
     frequency: (frequencyData?.frequency as Campaign['triggers']['frequency']) ?? 'once_per_session',
   };
@@ -678,7 +684,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') targetingList.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
       if (t.geoTargeting && t.geoTargeting !== 'All Countries') targetingList.push({ kind: 'geo', operator: 'include', value: { country: t.geoTargeting } });
       if (t.sessionPageCount > 0) targetingList.push({ kind: 'session_page_views', operator: 'include', value: { count: t.sessionPageCount } });
-      if (t.utmSource && t.utmSource.trim() !== '') targetingList.push({ kind: 'utm', operator: 'include', value: { source: t.utmSource.trim() } });
+      if (t.utmValue && t.utmValue.trim() !== '') targetingList.push({ kind: 'utm', operator: 'include', value: { param: t.utmParam || 'utm_source', value: t.utmValue.trim() } });
       if (t.abTestPercent < 100) targetingList.push({ kind: 'ab_test', operator: 'include', value: { percent: t.abTestPercent } });
     }
 

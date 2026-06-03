@@ -84,6 +84,7 @@ interface SiteConfig {
   siteId: string;
   plan: string;
   requireConsent?: boolean;
+  geo?: { country?: string }; // injected per-request by the edge Worker (CF-IPCountry)
   campaigns: CampaignConfig[];
   version: string;
 }
@@ -113,6 +114,7 @@ const EDGE_URL = getEdgeUrl();
 let activeSiteId = '';
 let adTriggerEnabled = false; // growth+ plans only
 let sitePlan = 'free'; // tenant plan — gates the "Powered by ScrollPop" badge
+let visitorCountry = ''; // ISO country from the edge (config.geo.country) for geo targeting
 
 // Track when the snippet loaded so we can report time-on-page at trigger
 const _pageLoadTime = Date.now();
@@ -144,7 +146,7 @@ function evaluateSkipTracking(): void {
 // Returns true if the snippet should abort entirely (e.g. bots)
 function shouldAbortBoot(): boolean {
   const ua = navigator.userAgent;
-  const botPattern = /bot|spider|crawl|slurp|headlesschrome|facebookexternalhit|embedly|pinterest|outbrain/i;
+  const botPattern = /bot|spider|crawl|slurp|headless|facebookexternalhit|embedly|pinterest|outbrain/i;
   if (botPattern.test(ua) || navigator.webdriver) {
     console.log('[ScrollPop] Bot/crawler detected — aborting boot.');
     return true;
@@ -201,6 +203,7 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     activeSiteId = config.siteId;
     adTriggerEnabled = 'growthscaleagency'.includes(config.plan || '');
     sitePlan = config.plan || 'free';
+    visitorCountry = config.geo?.country || '';
     // Strict opt-in: popups still render, but record no analytics until consent is
     // granted. Re-evaluate now that we know the tenant's requireConsent setting.
     if (config.requireConsent) { _requireConsent = true; evaluateSkipTracking(); }
@@ -276,7 +279,11 @@ function evaluateRule(rule: TargetingRule): boolean {
       return isReturning === (value['is_returning'] as boolean);
     }
 
-    case 'geo': return true;
+    case 'geo':
+      // Country match against the edge-injected visitor country (ISO alpha-2, already
+      // uppercase). Fail open if the edge couldn't resolve a country. The dashboard
+      // stores uppercase ISO codes, so no normalisation needed here.
+      return !visitorCountry || visitorCountry === value['country'];
 
     case 'session_page_views': {
       let c = +(sessionStorage.getItem('_sp_pc') || 0);
@@ -287,21 +294,21 @@ function evaluateRule(rule: TargetingRule): boolean {
       return c >= +(value['count'] || 0);
     }
 
-    case 'utm':
-      return location.search.toLowerCase().includes(((value['source'] as string) || '').toLowerCase());
-
-    case 'ab_test': {
-      let p = +(value['percent'] || 100);
-      if (p >= 100) return true;
-      if (p <= 0) return false;
-      let k = `_sp_ab_${rule.id}`;
-      let a = localStorage.getItem(k);
-      if (!a) {
-        a = Math.random() * 100 <= p ? '1' : '0';
-        localStorage.setItem(k, a);
-      }
-      return a === '1';
+    case 'utm': {
+      // Match a UTM param (utm_source/medium/campaign/term/content) against the current
+      // URL, falling back to the first-touch query string saved in localStorage. We store
+      // the raw search string (cheap) rather than a parsed object. Legacy rules used
+      // { source }; current rules use { param, value }.
+      const s = location.search, h = s.indexOf('utm_') >= 0;
+      let ft = localStorage.getItem('_sp_utm');
+      if (h && !ft) localStorage.setItem('_sp_utm', ft = s);
+      const got = new URLSearchParams(h ? s : (ft || '')).get((value['param'] as string) || 'utm_source') || '';
+      return got.toLowerCase() === String(value['value'] ?? '').toLowerCase();
     }
+
+    // ab_test: real variant allocation is built in the A/B testing feature (backlog #6).
+    // Until then this is a passthrough — the percentage gate is rebuilt there properly.
+    case 'ab_test': return true;
 
     default:
       return true;
