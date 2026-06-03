@@ -11,19 +11,34 @@ import { useClerk, useUser } from '@clerk/clerk-react';
 // Captures the Clerk client/user into the parent without calling Clerk hooks
 // at the parent's top level — this child only mounts in real (Clerk) mode,
 // so the hooks never run in demo/desktop mode where there is no ClerkProvider.
-type ClerkBridgeValue = { openUserProfile: () => void; updateName: (name: string) => Promise<void> };
+type ClerkIdentity = { name: string; email: string; avatarUrl: string };
+type ClerkBridgeValue = {
+  openUserProfile: () => void;
+  updateName: (name: string) => Promise<void>;
+  identity: ClerkIdentity | null;
+};
 function ClerkBridge({ onReady }: { onReady: (v: ClerkBridgeValue) => void }) {
   const clerk = useClerk();
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   React.useEffect(() => {
+    // The real authenticated identity — fires once Clerk's user actually loads (async),
+    // so the parent can replace any placeholder/stale-localStorage profile values.
+    const identity: ClerkIdentity | null = isLoaded && user
+      ? {
+          name: user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || '',
+          email: user.primaryEmailAddress?.emailAddress ?? '',
+          avatarUrl: user.imageUrl ?? '',
+        }
+      : null;
     onReady({
       openUserProfile: () => clerk.openUserProfile(),
       updateName: async (name: string) => {
         const [firstName, ...rest] = name.trim().split(/\s+/);
         await user?.update({ firstName: firstName ?? '', lastName: rest.join(' ') });
       },
+      identity,
     });
-  }, [clerk, user, onReady]);
+  }, [clerk, user, isLoaded, onReady]);
   return null;
 }
 
@@ -390,9 +405,12 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
         };
       }
     } catch {}
+    // In real (Clerk) mode start blank — the ClerkBridge fills in the authenticated
+    // identity once it loads. Only demo/desktop modes use the placeholder persona.
+    const clerkMode = !isDemo && !isDesktop;
     return {
-      name: 'Dev Admin',
-      email: isDesktop ? 'admin@scrollpop.local' : 'admin@scrollpop.dev',
+      name: clerkMode ? '' : 'Dev Admin',
+      email: clerkMode ? '' : (isDesktop ? 'admin@scrollpop.local' : 'admin@scrollpop.dev'),
       role: 'Admin Manager', avatarUrl: '', bio: '',
       developerMode: true, apiKey: 'sp_pk_live_a3e8630f904adceddc1d0553d7bcda0c',
       notifDigest: false,
@@ -441,7 +459,28 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
   // Real (Clerk) mode: password, 2FA, and identity are managed by Clerk, not localStorage.
   const isClerkMode = !isDemo && !isDesktop;
   const clerkRef = React.useRef<ClerkBridgeValue | null>(null);
-  const handleClerkReady = React.useCallback((v: ClerkBridgeValue) => { clerkRef.current = v; }, []);
+  const [clerkIdentity, setClerkIdentity] = React.useState<ClerkIdentity | null>(null);
+  const handleClerkReady = React.useCallback((v: ClerkBridgeValue) => {
+    clerkRef.current = v;
+    if (v.identity) setClerkIdentity(v.identity);
+  }, []);
+
+  // Once Clerk's real identity loads, replace any placeholder or stale-localStorage values
+  // (e.g. demo-persona "Dev Admin"/admin@scrollpop.dev that got cached from a prior demo
+  // session). This is why the page used to show dev data until a hard refresh.
+  React.useEffect(() => {
+    if (!isClerkMode || !clerkIdentity) return;
+    const isPlaceholder = (s: string) =>
+      !s || s === 'Dev Admin' || s === 'admin@scrollpop.dev' || s === 'admin@scrollpop.local';
+    setProfile((prev: typeof profile) => {
+      const next = { ...prev };
+      if (clerkIdentity.name && isPlaceholder(prev.name)) next.name = clerkIdentity.name;
+      // Email is the authenticated login identity — always reflect the real one in Clerk mode.
+      if (clerkIdentity.email) next.email = clerkIdentity.email;
+      if (clerkIdentity.avatarUrl && !prev.avatarUrl) next.avatarUrl = clerkIdentity.avatarUrl;
+      return next;
+    });
+  }, [isClerkMode, clerkIdentity]);
 
   const storedAuth = (() => {
     try {
