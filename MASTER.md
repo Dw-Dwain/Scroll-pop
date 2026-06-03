@@ -1931,9 +1931,80 @@ intact) and **dormant until keys are set** (nothing breaks before configuration)
 - Paste keys to activate: `SENTRY_DSN` (Render) + `VITE_SENTRY_DSN` (CF Pages/CI); `VITE_POSTHOG_KEY`
   (+ `VITE_POSTHOG_HOST` if EU); `RESEND_API_KEY` + `RESEND_FROM` (Render, after verifying the
   `scrollpop.online` sender domain in Resend). `VITE_*` vars bake at build → redeploy after setting.
+  **Detailed step-by-step in the section below.**
 - Upload `scrollpop-wp.zip` to the release/R2 path (T8).
 - **Rotate the GitHub PATs** embedded in the git remote URLs (single-use per CONTRIBUTING):
   https://github.com/settings/tokens
+
+---
+
+## Activate Observability & Email — Setup Steps (TODO, accounts already created)
+
+> **Status:** the code is merged and live but DORMANT — it no-ops until these keys are set, so
+> nothing breaks before configuration. Free accounts for Sentry / PostHog / Resend already exist.
+> Do these steps, then redeploy. All three are on free tiers — **no new spend.**
+
+### 1. Sentry (TWO projects — one for the backend, one for the dashboard)
+
+Sentry separates errors by project, so create one of each platform.
+
+**A. Backend (Node) project → `SENTRY_DSN` on Render**
+1. Sentry → **Create Project** → platform **Node.js** → name e.g. `scrollpop-api`.
+2. **Settings → Client Keys (DSN)** → copy the **DSN**
+   (looks like `https://<publicKey>@o<org>.ingest.sentry.io/<projectId>`).
+3. Render → service `scroll-pop` → **Environment** → add:
+   - `SENTRY_DSN=<the DSN>`
+4. Save → Render redeploys. On boot the API logs `[sentry] error reporting enabled`.
+   - Implementation: dependency-free `fetch` envelope client (`apps/api/src/lib/sentry.ts`),
+     reports 500-class request errors + `uncaughtException` / `unhandledRejection`.
+
+**B. Dashboard (React) project → `VITE_SENTRY_DSN`**
+1. Sentry → **Create Project** → platform **React** (or Browser JavaScript) → name e.g. `scrollpop-dashboard`.
+2. Copy that project's **DSN** (different from the API's).
+3. Set `VITE_SENTRY_DSN=<dsn>` wherever the other `VITE_*` vars live:
+   - **Cloudflare Pages** → `scrollpop-dashboard` → Settings → Environment variables (Production), AND
+   - the **`deploy-dashboard` job** in `.github/workflows/ci.yml` if that builds prod
+     (it's a publishable value — safe to hardcode there alongside `VITE_API_URL`).
+4. **Redeploy** the dashboard (Deployments → Retry) — `VITE_*` vars are baked at build time.
+   - Implementation: loads the Sentry CDN loader, deriving the loader key from the DSN
+     (`apps/dashboard/src/lib/observability.ts`), `tracesSampleRate:0` (free error-only tier).
+
+### 2. PostHog (dashboard product analytics)
+
+1. PostHog → **Project Settings** → copy the **Project API Key** (`phc_…`) and note your region
+   (US vs EU).
+2. Set the `VITE_*` vars alongside the others (Cloudflare Pages + `ci.yml` as above):
+   - `VITE_POSTHOG_KEY=<phc_…>`
+   - `VITE_POSTHOG_HOST=https://eu.i.posthog.com` **only if** your project is EU
+     (default is US, `https://us.i.posthog.com` — can be omitted).
+3. **Redeploy** the dashboard (VITE vars bake at build time).
+   - Implementation: loads `array.js` from the region asset host via the official `_i` queue
+     (`apps/dashboard/src/lib/observability.ts`) — no npm dependency.
+
+### 3. Resend (transactional email for notifications)
+
+1. Resend → **Domains → Add domain** → `scrollpop.online`.
+2. Add the **DKIM / SPF (and any Return-Path) records** Resend shows you into **Cloudflare DNS**
+   for `scrollpop.online` → wait until Resend marks the domain **Verified**.
+   - ⚠️ These are DNS-only records; do not proxy them.
+3. Resend → **API Keys → Create** → copy the key.
+4. Render → service `scroll-pop` → **Environment** → add:
+   - `RESEND_API_KEY=<key>`
+   - `RESEND_FROM=ScrollPop <notifications@scrollpop.online>`
+     (the sender address MUST be on the verified domain).
+5. Save → Render redeploys. Email then flows automatically for the wired emitters
+   (campaign status, 80%/95% view-cap, conversion milestones).
+   - Operators can toggle email per-account in **Settings → Notifications**
+     (the `notif_channels_email` preference); per-type toggles also apply.
+   - Implementation: dependency-free `fetch` client (`apps/api/src/lib/email.ts`); `emitNotification`
+     resolves the tenant **owner's** email and sends best-effort alongside the in-app notification.
+
+### Verify after setup
+- Sentry (API): trigger any 500 and confirm an issue appears in the Node project.
+- Sentry (dashboard): throw a test error in the console and confirm it lands in the React project.
+- PostHog: load the dashboard → confirm a pageview event appears in PostHog Live Events.
+- Resend: trigger a campaign activate/pause → confirm the owner receives an email and it shows in
+  Resend → Emails.
 
 ---
 
