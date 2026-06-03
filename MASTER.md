@@ -644,14 +644,14 @@ No business logic. Only: cache reads/writes, Redis push, static asset serve.
 **Build command:** `pnpm build` → `vite build`
 
 ### Routing
-Hash-based for desktop Electron mode, path-based for web. Both handled in `main.tsx`.
+Path-based for web, handled in `main.tsx`. (The desktop Electron app was removed Jun 2026 —
+ScrollPop is a sole hosted web app now.)
 
 ### Auth Modes
 | Mode | How triggered | Token source |
 |---|---|---|
 | Web (Clerk) | `VITE_CLERK_PUBLISHABLE_KEY` set | `useAuth().getToken()` → Bearer JWT |
-| Desktop (Electron) | `window.electronAPI.isDesktop === true` | `localStorage.desktop_token` = `VITE_INTERNAL_SECRET` |
-| Demo (Showcase) | `VITE_DEMO_MODE=true` | Same as Desktop — no real auth |
+| Demo (Showcase) | `VITE_DEMO_MODE=true` | Local demo state — no real auth, no network |
 
 > ⚠️ **Demo mode never auto-engages in a production build (hardened Jun 3 2026).** Previously
 > `IS_DEMO_MODE` flipped on for a `pk_test_` or *missing* Clerk key — so a prod deploy missing
@@ -662,7 +662,7 @@ Hash-based for desktop Electron mode, path-based for web. Both handled in `main.
 
 ### Data Provider
 `apps/dashboard/src/providers/dataProvider.ts`
-- `getApiBase()` → reads `VITE_API_URL` env var for web, or `electronAPI.getLocalApiUrl()` for desktop
+- `getApiBase()` → reads `VITE_API_URL` env var (the hosted API origin)
 - All CRUD via Refine hooks (useList, useCreate, useUpdate, useDelete, useCustomMutation)
 - Direct `fetch` calls were replaced with `useCustomMutation` so auth is handled uniformly
 
@@ -763,8 +763,13 @@ When a user is deleted in the Clerk dashboard, the `user.deleted` webhook fires 
 ### Dev Bypass (non-production only)
 If `NODE_ENV !== 'production'` and no Clerk auth is present, the preHandler creates/reuses a demo tenant (`org_demo_12345`) and sets tenant context automatically. This lets you test locally without a Clerk account.
 
-### Internal Secret Bypass
-Any request with `Authorization: Bearer {INTERNAL_SECRET}` bypasses Clerk auth. This is for the Cloudflare Worker and the desktop Electron app. The internal secret endpoint `/api/v1/auth/login` is gated to dev-only.
+### Internal Secret (server-to-server only)
+`INTERNAL_SECRET` is used **only** for server-to-server calls: the Cloudflare Worker authenticates
+its config-cache-miss requests to `/api/v1/internal/*` and its event-IP-forwarding with the
+`X-Internal-Secret` header (validated by `assertInternalSecret`). There is **no** `Authorization:
+Bearer {INTERNAL_SECRET}` tenant-context bypass and **no** `/api/v1/auth/login` endpoint anymore —
+both were removed with the desktop app (Jun 2026) to eliminate the tenant-impersonation surface.
+All user-facing auth is Clerk JWT only.
 
 ### RLS
 Every tenant-scoped table has a Postgres RLS policy. The API service layer additionally filters by `tenantId` on all queries (defence in depth).
@@ -903,9 +908,10 @@ VITE_API_URL=             https://scroll-pop.onrender.com
 VITE_CLERK_PUBLISHABLE_KEY=
 VITE_POSTHOG_KEY=
 VITE_STRIPE_PUBLISHABLE_KEY=
-VITE_INTERNAL_SECRET=     (desktop Electron only)
 VITE_DEMO_MODE=           false (production)
 ```
+> Note: never set a `VITE_INTERNAL_SECRET` for the dashboard — `VITE_*` vars are baked into the
+> public browser bundle. The internal secret is a server-only value.
 
 ### apps/worker (wrangler.toml secrets)
 ```
@@ -1487,9 +1493,11 @@ curl https://{REDIS_URL}/llen/sp_events \
 ### Rotate INTERNAL_SECRET
 1. Generate new secret: `openssl rand -base64 32`
 2. Update `INTERNAL_SECRET` env var in Render
-3. Update in `VITE_INTERNAL_SECRET` in Cloudflare Pages (for desktop mode — if used)
-4. Redeploy API
-5. Update Worker secret: `wrangler secret put INTERNAL_SECRET`
+3. Redeploy API
+4. Update Worker secret: `wrangler secret put INTERNAL_SECRET`
+
+Both must match — the Worker sends it as `X-Internal-Secret` and the API validates it. It is a
+server-only secret; it is never shipped to any browser bundle.
 
 ### Rotate Neon Password ⚠️
 1. Neon console → Project → Settings → Roles → neondb_owner → Reset password
@@ -1843,10 +1851,12 @@ to 10,250 bytes gzipped — 10 bytes over the 10,240 byte CI gate. Fixed by:
 Result: 10,207 bytes gzipped. ✅
 
 ### Admin console security hardening
-`isAdmin` in `usePlan.ts` previously fell back to `detectAdminLocal()` which checks
-`localStorage.desktop_user`. Any user with `{role: 'admin'}` in localStorage could access
-the admin console. Fixed: `isAdmin` now only true when `/me` API confirms `dwain3991@gmail.com`
-— no localStorage fallback. `dwain@novatise.com` users confirmed blocked from admin console.
+`isAdmin` in `usePlan.ts` previously fell back to `detectAdminLocal()` which checked
+`localStorage.desktop_user` — any user with `{role: 'admin'}` in localStorage could reach the
+admin console UI. Fixed in stages: first `isAdmin` was made to require the `/me` API confirming
+the admin email; then (Jun 2026, with the desktop app removal) `detectAdminLocal()` was reduced
+to `return false` — there is no client-side admin path at all now. The server additionally
+requires a **verified** Clerk primary email matching `ADMIN_EMAIL` for any `/admin/*` route.
 
 
 

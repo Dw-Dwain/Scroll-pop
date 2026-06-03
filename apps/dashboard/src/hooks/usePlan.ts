@@ -138,18 +138,6 @@ function detectPlanLocal(): PlanId {
   return 'free';
 }
 
-function detectAdminLocal(): boolean {
-  try {
-    const isDesktop = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
-    if (isDesktop) return true;
-    const desktopUser = localStorage.getItem('desktop_user');
-    if (desktopUser) {
-      const u = JSON.parse(desktopUser) as { role?: string; email?: string };
-      if (u.role === 'admin' || u.email === ADMIN_EMAIL) return true;
-    }
-  } catch {}
-  return false;
-}
 
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
@@ -177,8 +165,8 @@ export function usePlan() {
   const isAdmin: boolean = apiEmail ? isSuperAdminEmail(apiEmail) : false;
 
   // isUnlimited = super-admin OR @novatise.com (agency plan limits, no admin console).
-  // Falls back to detectAdminLocal() only for the desktop Electron app.
-  const isUnlimited: boolean = (apiEmail ? isUnlimitedEmail(apiEmail) : false) || detectAdminLocal();
+  // Determined solely by the /me API email — no client-side fallback.
+  const isUnlimited: boolean = apiEmail ? isUnlimitedEmail(apiEmail) : false;
 
   const [, rerender] = React.useState(0);
   React.useEffect(() => {

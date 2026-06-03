@@ -6,7 +6,7 @@ through an admin dashboard. A lightweight JS snippet (~10 KB gzipped) runs on cu
 (WordPress, Shopify, raw HTML) and renders popups in a Shadow DOM.
 
 **Monorepo:** `apps/dashboard` (React 19 + Vite), `apps/api` (Fastify 5 + Postgres),
-`apps/desktop` (Electron), `packages/snippet` (vanilla TS browser snippet).
+`apps/worker` (Cloudflare Worker edge), `packages/snippet` (vanilla TS browser snippet).
 
 **Dev stack:** pnpm workspaces + Turborepo. Dashboard at `localhost:5173`, API at `localhost:3001`.
 API proxied via Vite (`/api` → `localhost:3001`). No `.env` in dashboard = auto demo mode (no Clerk).

@@ -1381,7 +1381,7 @@ Use **Lucide** icons throughout. Size conventions:
 
 ### Do NOT Change
 
-- Routing logic in `main.tsx` (three-mode execution: Clerk / Demo / Electron)
+- Routing logic in `main.tsx` (two-mode execution: Clerk / Demo)
 - API data provider in `providers/dataProvider.ts`
 - Feature flag system in `lib/flags.ts`
 - `packages/shared` types

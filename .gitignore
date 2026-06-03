@@ -12,8 +12,6 @@ coverage/
 .wrangler/
 .dev.vars
 
-apps/desktop/release/
-
 # Secrets — never commit these
 client_secret_*.json
 *client_secret*.json

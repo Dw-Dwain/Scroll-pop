@@ -44,7 +44,6 @@ function ClerkBridge({ onReady }: { onReady: (v: ClerkBridgeValue) => void }) {
 
 interface ProfileProps {
   isDemo: boolean;
-  isDesktop?: boolean;
   onNavigate: (path: string) => void;
 }
 
@@ -367,7 +366,7 @@ function TwoFAModal({ secret, backupCodes, onVerify, onCancel }: {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onNavigate }) => {
+export const Profile: React.FC<ProfileProps> = ({ isDemo, onNavigate }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [toastMsg, setToastMsg] = React.useState<string | null>(null);
   const showToast = (msg: string) => {
@@ -392,25 +391,12 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
       const stored = localStorage.getItem('_sp_profile_v2');
       if (stored) return JSON.parse(stored);
     } catch {}
-    try {
-      const desktop = localStorage.getItem('desktop_user');
-      if (desktop) {
-        const u = JSON.parse(desktop);
-        return {
-          name: u.name ?? 'Dev Admin',
-          email: u.email ?? 'admin@scrollpop.local',
-          role: 'Admin Manager', avatarUrl: u.avatarUrl ?? '', bio: '',
-          developerMode: true, apiKey: `sp_pk_live_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-          notifDigest: false,
-        };
-      }
-    } catch {}
     // In real (Clerk) mode start blank — the ClerkBridge fills in the authenticated
-    // identity once it loads. Only demo/desktop modes use the placeholder persona.
-    const clerkMode = !isDemo && !isDesktop;
+    // identity once it loads. Only demo mode uses the placeholder persona.
+    const clerkMode = !isDemo;
     return {
       name: clerkMode ? '' : 'Dev Admin',
-      email: clerkMode ? '' : (isDesktop ? 'admin@scrollpop.local' : 'admin@scrollpop.dev'),
+      email: clerkMode ? '' : 'admin@scrollpop.dev',
       role: 'Admin Manager', avatarUrl: '', bio: '',
       developerMode: true, apiKey: 'sp_pk_live_a3e8630f904adceddc1d0553d7bcda0c',
       notifDigest: false,
@@ -457,7 +443,7 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
   const [setup2FA, setSetup2FA] = React.useState<{ secret: string; backupCodes: string[] } | null>(null);
 
   // Real (Clerk) mode: password, 2FA, and identity are managed by Clerk, not localStorage.
-  const isClerkMode = !isDemo && !isDesktop;
+  const isClerkMode = !isDemo;
   const clerkRef = React.useRef<ClerkBridgeValue | null>(null);
   const [clerkIdentity, setClerkIdentity] = React.useState<ClerkIdentity | null>(null);
   const handleClerkReady = React.useCallback((v: ClerkBridgeValue) => {
@@ -507,18 +493,6 @@ export const Profile: React.FC<ProfileProps> = ({ isDemo, isDesktop = false, onN
     // via the Clerk webhook). Avatar-by-URL and bio stay local (Clerk avatars are uploads).
     if (isClerkMode && clerkRef.current) {
       try { await clerkRef.current.updateName(profile.name); } catch { /* surfaced below */ }
-    }
-    if (isDesktop) {
-      const token = localStorage.getItem('desktop_token');
-      const apiBase = (window as any).electronAPI?.getLocalApiUrl?.() ?? 'http://127.0.0.1:3010';
-      try {
-        const res = await fetch(`${apiBase}/api/v1/auth/profile`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name: profile.name, avatarUrl: profile.avatarUrl }),
-        });
-        if (res.ok) localStorage.setItem('desktop_user', JSON.stringify((await res.json()).data ?? {}));
-      } catch {}
     }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);

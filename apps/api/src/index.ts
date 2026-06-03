@@ -78,7 +78,7 @@ async function bootstrap() {
     // Explicitly allow the methods/headers the dashboard uses — the design editor
     // saves via PUT, which was missing from the default preflight allow-list.
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id', 'X-Tenant-Override'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   // Rate limiting
@@ -118,23 +118,7 @@ async function bootstrap() {
   // Shopify OAuth callback (public — HMAC verified inside route)
   await app.register(shopifyRoutes, { prefix: '/api/v1' });
 
-  // Dev-only auth login bypass (local/desktop client convenience — never runs in production)
-  if (isDev) {
-    app.post('/api/v1/auth/login', async (_request, reply) => {
-      const internalSecret = process.env['INTERNAL_SECRET'];
-      return reply.send({
-        token: internalSecret,
-        user: {
-          id: 'admin_desktop_client',
-          email: 'admin@scrollpop.local',
-          name: 'Local Admin',
-          role: 'admin',
-        }
-      });
-    });
-  }
-
-  // Internal (called by Cloudflare Worker, auth via API_SECRET header)
+  // Internal (called by Cloudflare Worker, auth via X-Internal-Secret header)
   await app.register(internalRoutes, { prefix: '/api/v1/internal' });
 
   // Authenticated routes

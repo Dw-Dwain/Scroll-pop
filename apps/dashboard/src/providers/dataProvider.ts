@@ -1,23 +1,6 @@
 import type { DataProvider, BaseRecord } from '@refinedev/core';
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      isDesktop: boolean;
-      getLocalApiUrl: () => string;
-      getVersion: () => Promise<string>;
-      checkForUpdates: () => Promise<void>;
-      onUpdateAvailable: (cb: (info: unknown) => void) => void;
-      onUpdateDownloaded: (cb: (info: unknown) => void) => void;
-      installUpdate: () => Promise<void>;
-    };
-  }
-}
-
 export function getApiBase(): string {
-  if (typeof window !== 'undefined' && window.electronAPI?.isDesktop) {
-    return `${window.electronAPI.getLocalApiUrl()}/api/v1`;
-  }
   // VITE_API_URL is set at build time for the web dashboard (e.g. https://api.scrollpop.online)
   const configured = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
   return configured ? `${configured}/api/v1` : '/api/v1';

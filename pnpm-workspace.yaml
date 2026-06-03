@@ -7,7 +7,6 @@ allowBuilds:
   '@clerk/shared': true
   '@google/genai': set this to true or false
   core-js: set this to true or false
-  electron: true
   esbuild: true
   protobufjs: set this to true or false
   sharp: true

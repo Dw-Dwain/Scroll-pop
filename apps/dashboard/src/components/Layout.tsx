@@ -25,8 +25,6 @@ import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
 import { NotificationBell } from './NotificationBell';
 
-const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
-
 interface LayoutProps {
   children: React.ReactNode;
   currentPath: string;
@@ -223,7 +221,7 @@ export const Layout: React.FC<LayoutProps> = ({
         </nav>
 
         {/* Right section */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0, paddingRight: IS_DESKTOP_MODE ? 150 : 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0, paddingRight: 16 }}>
 
           {/* New Campaign shortcut */}
           <button

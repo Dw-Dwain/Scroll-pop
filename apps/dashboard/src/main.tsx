@@ -111,8 +111,6 @@ import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { LicensePage } from './pages/LicensePage';
 
-const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
-
 
 
 const getCampaignDetailId = (path: string) => {
@@ -408,92 +406,7 @@ const DemoAppContent: React.FC = () => {
   );
 };
 
-const DesktopAppContent: React.FC = () => {
-  const getInitialDesktopPath = () => {
-    const hash = window.location.hash.replace('#', '');
-    return hash || '/dashboard';
-  };
-  const [currentPath, setCurrentPath] = React.useState(getInitialDesktopPath);
-  const [isAuthenticated, setIsAuthenticated] = React.useState(() => !!localStorage.getItem('desktop_token'));
-
-  React.useEffect(() => {
-    const handleHashChange = () => setCurrentPath(getInitialDesktopPath());
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  const navigate = (path: string) => {
-    window.location.hash = path;
-    setCurrentPath(path);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('desktop_token');
-    setIsAuthenticated(false);
-    navigate('/sign-in');
-  };
-  
-  const handleLogin = () => {
-    // Save the internal secret to auth bypass the cloud
-    const secret = (import.meta as any).env.VITE_INTERNAL_SECRET;
-    localStorage.setItem('desktop_token', secret);
-    setIsAuthenticated(true);
-    try {
-      const prefs = JSON.parse(localStorage.getItem('_sp_prefs') ?? '{}');
-      const view = prefs.defaultView ?? 'dashboard';
-      navigate(`/${view}`);
-    } catch {
-      navigate('/dashboard');
-    }
-  };
-
-  const desktopGetToken = React.useCallback(async () => localStorage.getItem('desktop_token'), []);
-  const dataProvider = React.useMemo(() => createDataProvider(desktopGetToken), [desktopGetToken]);
-
-  const renderRoute = () => {
-    if (currentPath === '/sign-in') return <SignIn isDemo={true} isDesktop={true} onLogin={handleLogin} />;
-    if (currentPath === '/sign-up') return <SignIn isDemo={true} isDesktop={true} onLogin={handleLogin} />;
-
-    if (!isAuthenticated) return <SignIn isDemo={true} isDesktop={true} onLogin={handleLogin} />;
-
-    return (
-      <Refine dataProvider={dataProvider} options={{ syncWithLocation: false, warnWhenUnsavedChanges: false, disableTelemetry: true }}>
-        <Layout currentPath={currentPath} onNavigate={navigate} onLogout={handleLogout} isDemo={true}>
-          {currentPath === '/dashboard' || currentPath === '/' ? (OPS_CENTER_ENABLED ? <OpsCenter onNavigate={navigate} /> : <Dashboard onNavigate={navigate} />) : null}
-          {currentPath === '/journeys' && JOURNEYS_ENABLED ? <Journeys onNavigate={navigate} /> : null}
-          {currentPath === '/experiments' && EXPERIMENTS_ENABLED ? <Experiments onNavigate={navigate} /> : null}
-          {currentPath === '/sites' ? <Sites /> : null}
-          {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
-          {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}
-          {getCampaignDetailId(currentPath) ? <CampaignDetail campaignId={getCampaignDetailId(currentPath)!} onNavigate={navigate} /> : null}
-          {getCampaignDesignId(currentPath) ? <CampaignDesign campaignId={getCampaignDesignId(currentPath)!} onNavigate={navigate} /> : null}
-          {currentPath === '/analytics' ? <Analytics onNavigate={navigate} /> : null}
-          {currentPath === '/billing' ? <Billing /> : null}
-          {currentPath === '/settings' ? <Settings /> : null}
-          {currentPath === '/profile' ? <Profile isDemo={false} isDesktop={true} onNavigate={navigate} /> : null}
-          {currentPath === '/docs'     ? <DocsPage     onNavigate={navigate} /> : null}
-          {currentPath === '/status'   ? <StatusPage   onNavigate={navigate} /> : null}
-          {currentPath === '/privacy'  ? <PrivacyPage  onNavigate={navigate} /> : null}
-          {currentPath === '/terms'    ? <TermsPage    onNavigate={navigate} /> : null}
-          {currentPath === '/licenses' ? <LicensePage  onNavigate={navigate} /> : null}
-          {currentPath === '/calendar' ? <CalendarPage /> : null}
-          {currentPath === '/gallery' ? <ImageGallery /> : null}
-          {currentPath === '/chat' ? <SupportChat /> : null}
-          {currentPath === '/messages' ? <MessagesPage /> : null}
-          {currentPath === '/forms' ? <FormsPage /> : null}
-          {currentPath === '/tables' ? <TablesPage /> : null}
-        </Layout>
-      </Refine>
-    );
-  };
-
-  return <>{renderRoute()}</>;
-};
-
 const Root: React.FC = () => {
-  if (IS_DESKTOP_MODE) {
-    return <DesktopAppContent />;
-  }
   if (IS_DEMO_MODE) {
     return <DemoAppContent />;
   }
