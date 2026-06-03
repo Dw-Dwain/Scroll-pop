@@ -730,8 +730,6 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 .success-coupon-box{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed ${design.accentColor};border-radius:8px;padding:12px;background:rgba(99,102,241,.05);font-size:18px;font-weight:800;font-family:monospace;letter-spacing:2px;text-align:center;cursor:pointer;transition:background .2s;}
 .success-coupon-box:hover{background:rgba(99,102,241,.1);}
 .success-icon{width:44px;height:44px;background:#d1fae5;color:#065f46;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px auto;font-size:20px;}
-.email-suggest{font-size:11px;color:${design.accentColor};background:rgba(99,102,241,.08);padding:6px 12px;border-radius:6px;margin-top:-4px;margin-bottom:4px;cursor:pointer;display:none;align-items:center;gap:4px;font-weight:600;}
-.email-suggest:hover{background:rgba(99,102,241,.15);}
 </style>
   `);
 
@@ -1317,7 +1315,6 @@ function escapeHtml(str: string | undefined | null): string {
     .replace(/'/g, '&#039;');
 }
 
-// Removed suggestCorrectEmail
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 function extractPublicKey(): string | null {
