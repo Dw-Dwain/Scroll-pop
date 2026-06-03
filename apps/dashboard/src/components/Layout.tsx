@@ -25,19 +25,16 @@ import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
 import { NotificationBell } from './NotificationBell';
 
-const IS_DESKTOP_MODE = typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop;
-
 interface LayoutProps {
   children: React.ReactNode;
   currentPath: string;
   onNavigate: (path: string) => void;
   onLogout: () => void;
-  isDemo?: boolean;
 }
 
 function loadProfileFromStorage() {
   try {
-    const raw = localStorage.getItem('desktop_user') || localStorage.getItem('_sp_profile');
+    const raw = localStorage.getItem('_sp_profile');
     if (raw) return JSON.parse(raw) as { name?: string; email?: string; avatar?: string; avatarUrl?: string };
   } catch {}
   return null;
@@ -60,7 +57,6 @@ export const Layout: React.FC<LayoutProps> = ({
   currentPath,
   onNavigate,
   onLogout,
-  isDemo = false,
 }) => {
   const [userMenuOpen, setUserMenuOpen] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
@@ -223,7 +219,7 @@ export const Layout: React.FC<LayoutProps> = ({
         </nav>
 
         {/* Right section */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0, paddingRight: IS_DESKTOP_MODE ? 150 : 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0, paddingRight: 16 }}>
 
           {/* New Campaign shortcut */}
           <button
@@ -311,19 +307,7 @@ export const Layout: React.FC<LayoutProps> = ({
                 color: 'rgba(255,255,255,0.65)',
               }}
             >
-              {isDemo ? (
-                <div style={{
-                  width: 26, height: 26, borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.15)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 600, color: '#fff', flexShrink: 0,
-                }}>
-                  {userProfile?.name ? getInitials(userProfile.name) : 'DA'}
-                </div>
-              ) : (
-                <UserButton afterSignOutUrl="/sign-in" />
-              )}
+              <UserButton afterSignOutUrl="/sign-in" />
               <ChevronDown size={12} style={{ color: 'rgba(255,255,255,0.4)', transition: 'transform 150ms', transform: userMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </button>
 

@@ -4,11 +4,12 @@ import { defineConfig, devices } from '@playwright/test';
  * ScrollPop E2E — runs against LOCAL dev servers only (no staging env exists, and prod
  * uses live Clerk auth + a live DB, so we never point E2E at production).
  *
- *  - Dashboard runs in DEMO mode (VITE_DEMO_MODE=true): no Clerk, no real DB — the
- *    built-in showcase auth path. Safe to navigate and exercise UI flows.
  *  - Marketing site runs as-is (fully static).
  *  - The snippet suite needs no server — it injects the built bundle into a fixture page
  *    and mocks the edge config/beacon endpoints with Playwright route interception.
+ *
+ * The dashboard is intentionally NOT covered here: it now requires real Clerk auth + a live
+ * DB (the demo/no-auth showcase build was removed Jun 2026), which E2E deliberately avoids.
  *
  * CI: a non-gating `e2e` job runs this headless. It does NOT block deploys (kept out of
  * the deploy `needs` list) so E2E flake can never wedge a release.
@@ -38,15 +39,8 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
 
-  // Boot the dashboard (demo mode) + marketing site for the UI suites.
+  // Boot the marketing site for the UI suite. (The snippet suite needs no server.)
   webServer: [
-    {
-      command: 'pnpm --filter @scrollpop/dashboard dev',
-      url: 'http://localhost:5173',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-      env: { VITE_DEMO_MODE: 'true' },
-    },
     {
       command: 'pnpm --filter react-example dev',
       url: 'http://localhost:3000',

@@ -13,11 +13,9 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
   const { data: campaignData, isLoading: isCampaignLoading } = useOne({ resource: 'campaigns', id: campaignId });
   const { data: sitesData } = useList({ resource: 'sites' });
   const apiUrl = useApiUrl();
-  // Fetch per-campaign data through the Refine data provider so auth is handled
-  // uniformly (Clerk JWT on web, internal secret on desktop). The previous raw
-  // fetch read `desktop_token` from localStorage, which is only set in Electron —
-  // so on the live web app every request went out unauthenticated and returned
-  // nothing, leaving this page blank for active campaigns.
+  // Fetch per-campaign data through the Refine data provider so the Clerk JWT is
+  // attached uniformly. (A previous raw fetch read a localStorage token that was
+  // never set on the web app, leaving this page blank for active campaigns.)
   const { data: analyticsRes, isLoading: analyticsLoading } = useCustom({
     url: `${apiUrl}/analytics/campaigns/${campaignId}`, method: 'get',
   });

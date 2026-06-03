@@ -1,12 +1,7 @@
 import React from 'react';
 import { useSignUp } from '@clerk/clerk-react';
 
-interface SignUpProps {
-  isDemo?: boolean;
-  onSignUp?: () => void;
-}
-
-export const SignUp: React.FC<SignUpProps> = ({ isDemo = false, onSignUp }) => {
+export const SignUp: React.FC = () => {
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-root)' }}>
       {/* Left panel */}
@@ -49,7 +44,7 @@ export const SignUp: React.FC<SignUpProps> = ({ isDemo = false, onSignUp }) => {
             Start free. Upgrade when you grow.
           </p>
 
-          {isDemo ? <DemoSignUpForm onSignUp={onSignUp} /> : <ClerkSignUpForm />}
+          <ClerkSignUpForm />
 
           <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
             Already have an account?{' '}
@@ -63,48 +58,6 @@ export const SignUp: React.FC<SignUpProps> = ({ isDemo = false, onSignUp }) => {
 
 const fieldLabel: React.CSSProperties = { fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 };
 const errorBox: React.CSSProperties = { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 13, color: 'var(--status-error)' };
-
-function DemoSignUpForm({ onSignUp }: { onSignUp?: (() => void) | undefined }) {
-  const [name, setName] = React.useState('');
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !email || !password) return;
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      onSignUp?.();
-    }, 600);
-  };
-
-  return (
-    <>
-      {error && <div style={errorBox}>{error}</div>}
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <label style={fieldLabel}>Full Name</label>
-          <input type="text" className="input" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
-        <div>
-          <label style={fieldLabel}>Email</label>
-          <input type="email" className="input" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </div>
-        <div>
-          <label style={fieldLabel}>Password</label>
-          <input type="password" className="input" placeholder="Minimum 8 characters" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-        </div>
-        <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 8, height: 40 }}>
-          {loading ? 'Creating account…' : 'Create account'}
-        </button>
-      </form>
-    </>
-  );
-}
 
 function ClerkSignUpForm() {
   const { signUp, isLoaded, setActive } = useSignUp();

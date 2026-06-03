@@ -85,42 +85,6 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', async (request: FastifyRequest, reply) => {
     // Skip public routes
     if (PUBLIC_ROUTES.some((r) => request.url.startsWith(r))) return;
-    // Check for Internal Secret bypass (for Desktop Admin app)
-    const authHeader = request.headers.authorization;
-    const internalSecret = process.env['INTERNAL_SECRET'];
-    if (authHeader && authHeader === `Bearer ${internalSecret}`) {
-      const tenantOverride = request.headers['x-tenant-override'] as string | undefined;
-      if (tenantOverride && tenantOverride.length === 36) {
-        request.tenantId = tenantOverride;
-        request.log.warn({
-          security: 'internal_secret_tenant_override',
-          tenantId: tenantOverride,
-          ip: request.ip,
-          url: request.url,
-        }, 'SECURITY: INTERNAL_SECRET tenant override used');
-      } else {
-        // Create seed tenant if it doesn't exist
-        let tenant = await db.query.tenants.findFirst({
-          where: eq(tenants.clerkOrgId, 'org_demo_12345'),
-        });
-        if (!tenant) {
-          const results = await db.insert(tenants).values({
-            clerkOrgId: 'org_demo_12345',
-            name: 'Demo Local Org',
-            plan: 'free',
-            monthlyViewLimit: 1000,
-          }).returning();
-          tenant = results[0];
-        }
-        if (!tenant) {
-          throw new Error('Failed to create or retrieve demo tenant');
-        }
-        request.tenantId = tenant.id;
-      }
-      request.userId = 'admin_desktop_client';
-      request.memberRole = 'admin';
-      return;
-    }
 
     // Get Clerk session claims via getAuth helper
     const auth = getAuth(request);

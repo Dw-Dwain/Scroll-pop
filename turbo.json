@@ -18,10 +18,6 @@
       "dependsOn": [],
       "outputs": []
     },
-    "@scrollpop/desktop#build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "out/**"]
-    },
     "dev": {
       "cache": false,
       "persistent": true

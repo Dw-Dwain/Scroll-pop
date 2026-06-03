@@ -413,28 +413,10 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 
   const handleVerify = async (id: string) => {
     setVerifyingId(id);
-    const isDesktop = !!(window as any).electronAPI?.isDesktop;
-    if (isDesktop) {
-      try {
-        const token = localStorage.getItem('desktop_token');
-        const apiBase = (window as any).electronAPI.getLocalApiUrl();
-        const res = await fetch(`${apiBase}/api/v1/sites/${id}/verify`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) refetch();
-        else alert('Verification failed.');
-      } catch {
-        alert('Cannot reach local server.');
-      } finally {
-        setVerifyingId(null);
-      }
-    } else {
-      updateSite({ resource: 'sites', id, values: { verifiedAt: new Date().toISOString() } }, {
-        onSuccess: () => { refetch(); setVerifyingId(null); },
-        onError: () => { setVerifyingId(null); },
-      });
-    }
+    updateSite({ resource: 'sites', id, values: { verifiedAt: new Date().toISOString() } }, {
+      onSuccess: () => { refetch(); setVerifyingId(null); },
+      onError: () => { setVerifyingId(null); },
+    });
   };
 
   const handleShopifyDisconnect = async (site: any) => {
