@@ -3,6 +3,21 @@
 > **Audience:** Owner / lead developer. Everything about this product in one place.
 > Last updated: June 4, 2026 · v0.1.2-beta
 
+### 🔄 Recent Updates (most recent first)
+
+> Keep this block current at the top of every MASTER edit — newest entry first, dated.
+
+- **Jun 4 2026** — Observability + email wired (Sentry API+dashboard, PostHog, Resend), all
+  dependency-free & dormant until keys set; B3 (tenant `deleted_at` revive) + B4 (Worker event
+  retry) fixed; campaign duplication (API+UI); WP plugin zip built; "Google-compliant" claim
+  softened. Merged + synced both repos at `8c859a8`. ⏳ One **unpushed local docs commit**
+  (`6f1ccea`, activation steps) to go up with tomorrow's key-setup redeploy. Next: activate the
+  3 integrations (see "Activate Observability & Email — Setup Steps"), upload `scrollpop-wp.zip`,
+  rotate GitHub PATs. **Live-gate still open:** Stripe billing (keys pending).
+- **Jun 3 2026** — Campaign scheduling, geo + UTM targeting, deleted-data 24h-then-purge
+  lifecycle, Playwright E2E suite (non-gating CI), gamified popup types removed (~1.8 KB
+  reclaimed); dev/showcase content audit; B5 resolved.
+
 ---
 
 ## Table of Contents
