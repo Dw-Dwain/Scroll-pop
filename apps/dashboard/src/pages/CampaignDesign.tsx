@@ -58,6 +58,9 @@ function bootstrapCampaign(
   let utmParam = 'utm_source';
   let utmValue = '';
   let abTestPercent = 100;
+  // Schedule lives in config.schedule (canonical) with a uiTriggers fallback.
+  const startsAt: string = config.schedule?.startsAt ?? config.uiTriggers?.startsAt ?? '';
+  const endsAt: string = config.schedule?.endsAt ?? config.uiTriggers?.endsAt ?? '';
 
   if (targetingData.length > 0) {
     targetingData.forEach((t) => {
@@ -103,6 +106,8 @@ function bootstrapCampaign(
     sessionPageCount,
     utmParam,
     utmValue,
+    startsAt,
+    endsAt,
     abTestPercent,
     frequency: (frequencyData?.frequency as Campaign['triggers']['frequency']) ?? 'once_per_session',
   };
@@ -356,6 +361,12 @@ function mapCampaignToDesign(campaign: Campaign) {
     // editor exactly as the user left it (incl. Display Frequency, page-targeting rules,
     // and Smart Product Match, which the normalized trigger/targeting tables don't capture).
     uiTriggers: campaign.triggers,
+    // Campaign schedule — start/end window, evaluated in the visitor's LOCAL time by the
+    // snippet. datetime-local strings ("YYYY-MM-DDTHH:mm", no timezone). Empty = unbounded.
+    schedule: {
+      startsAt: campaign.triggers.startsAt || '',
+      endsAt: campaign.triggers.endsAt || '',
+    },
     backgroundColor: mainStep.backgroundColor,
     borderRadius: mainStep.borderRadius,
     borderColor: mainStep.borderColor,

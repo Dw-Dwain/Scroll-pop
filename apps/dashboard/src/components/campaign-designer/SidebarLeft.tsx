@@ -224,6 +224,8 @@ const getDefaultTriggers = (): CampaignTriggers => ({
   sessionPageCount: 0,
   utmParam: 'utm_source',
   utmValue: '',
+  startsAt: '',
+  endsAt: '',
   abTestPercent: 100,
 });
 
@@ -1719,6 +1721,35 @@ export default function SidebarLeft({
                   />
                 </div>
                 <p className="text-[10.5px] text-zinc-600 leading-normal">Only show to visitors whose chosen UTM parameter matches this value (case-insensitive). Matches the current URL or the visitor's first-touch UTM. Leave the value empty for all.</p>
+              </div>
+
+              {/* 9.5. Campaign Schedule */}
+              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-zinc-400" />
+                  <span className="text-xs font-semibold text-zinc-100">Campaign Schedule</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-[10.5px] text-zinc-500 block mb-1">Starts</span>
+                    <input
+                      type="datetime-local"
+                      value={(campaign.triggers as any).startsAt ?? ''}
+                      onChange={(e) => onUpdateTriggers('startsAt', e.target.value)}
+                      className="w-full text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10.5px] text-zinc-500 block mb-1">Ends</span>
+                    <input
+                      type="datetime-local"
+                      value={(campaign.triggers as any).endsAt ?? ''}
+                      onChange={(e) => onUpdateTriggers('endsAt', e.target.value)}
+                      className="w-full text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden"
+                    />
+                  </label>
+                </div>
+                <p className="text-[10.5px] text-zinc-600 leading-normal">The popup only fires within this window, evaluated in each <strong className="text-zinc-400">visitor's local time</strong>. Leave a field empty for no bound (starts now / never expires).</p>
               </div>
 
               {/* 10. A/B Test Percentage */}

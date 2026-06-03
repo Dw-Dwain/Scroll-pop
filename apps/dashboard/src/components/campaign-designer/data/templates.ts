@@ -14,6 +14,8 @@ const getDefaultTriggers = () => ({
   sessionPageCount: 0,
   utmParam: 'utm_source',
   utmValue: '',
+  startsAt: '',
+  endsAt: '',
   abTestPercent: 100,
 });
 

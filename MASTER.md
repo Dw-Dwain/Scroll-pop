@@ -1177,7 +1177,12 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - Clerk Organizations / team UI — personal accounts only; org-based path dormant
 - `scrollpop.online` marketing site
 - Email notifications (view limit warnings, campaign status changes)
-- Campaign scheduling (start/end dates)
+- ✅ **Campaign scheduling (start/end dates)** — DONE (Jun 3 2026). Optional run window
+  per campaign, evaluated in the **visitor's local time** (datetime-local strings, no
+  timezone). Stored in the design config (`design.config.schedule = { startsAt, endsAt }`)
+  — zero migration, flows through the existing config payload. Snippet gates rendering via
+  `withinSchedule()` (popup simply doesn't fire outside the window; empty bound = unbounded).
+  Designer UI: "Campaign Schedule" section (two datetime-local inputs) in the left sidebar.
 - ✅ **Geo targeting (country)** — DONE (Jun 2 2026). Edge Worker injects `CF-IPCountry`
   per-request into the config payload (`config.geo.country`, KV cache stays geo-free);
   snippet evaluates `geo` rules against it (fail-open if country unknown). Dashboard geo

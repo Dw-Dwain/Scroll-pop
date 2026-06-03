@@ -69,6 +69,9 @@ interface DesignConfig {
   dismissText?: string;
   animation: 'fade' | 'slide_up' | 'slide_down' | 'zoom' | 'none';
   showPoweredBy: boolean;
+  // Optional run window — datetime-local strings ("YYYY-MM-DDTHH:mm", no timezone),
+  // evaluated in the VISITOR'S local time.
+  schedule?: { startsAt?: string; endsAt?: string };
 }
 
 interface CampaignConfig {
@@ -215,6 +218,10 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     }
 
     for (const campaign of config.campaigns) {
+      if (!withinSchedule(campaign.design)) {
+        console.log('[ScrollPop] Campaign outside its scheduled window:', campaign.id);
+        continue;
+      }
       if (meetsTargetingRules(campaign.targeting)) {
         console.log('[ScrollPop] Registering triggers for campaign:', campaign.id);
         registerCampaignTriggers(campaign);
@@ -226,6 +233,19 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     console.error('[ScrollPop] Error booting snippet:', e);
     // Silent fail — never throw errors onto the host page
   }
+}
+
+// ─── Scheduling ───────────────────────────────────────────────────────────────
+// Start/end window evaluated in the VISITOR'S local time. startsAt/endsAt are
+// datetime-local strings ("YYYY-MM-DDTHH:mm", no timezone), so new Date() parses
+// them in the visitor's own zone. Popups simply don't fire outside the window.
+function withinSchedule(design: DesignConfig): boolean {
+  const s = design.schedule;
+  if (!s) return true;
+  const now = Date.now();
+  if (s.startsAt && now < new Date(s.startsAt).getTime()) return false;
+  if (s.endsAt && now > new Date(s.endsAt).getTime()) return false;
+  return true;
 }
 
 // ─── Targeting ────────────────────────────────────────────────────────────────
