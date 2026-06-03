@@ -36,6 +36,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
   const { isAdmin } = usePlan();
   const { getToken } = useAuth();
 
+  // Hooks must run unconditionally on every render (Rules of Hooks). Declare them
+  // ABOVE the admin gate below — isAdmin starts false until /me resolves and then
+  // flips true, so a conditional hook order would crash ("rendered more hooks than
+  // during the previous render") the moment the admin's status is confirmed.
+  const [search, setSearch] = React.useState('');
+  const [activeTab, setActiveTab] = React.useState<'tenants' | 'system'>('tenants');
+  const [syncing, setSyncing] = React.useState(false);
+  const [syncMsg, setSyncMsg] = React.useState<string | null>(null);
+
+  // staleTime: 0 so every refetch hits the server — admin data must always be fresh
+  const { data: tenantsData, isLoading: loading, isError, refetch } = useCustom({
+    url: `${getApiBase()}/admin/tenants`,
+    method: 'get',
+    queryOptions: { staleTime: 0 },
+  });
+  const { data: statsData, refetch: refetchStats } = useCustom({
+    url: `${getApiBase()}/admin/stats`,
+    method: 'get',
+    queryOptions: { staleTime: 0 },
+  });
+
   // Hard gate — render nothing useful until the API confirms admin status.
   // isAdmin is only true when the verified API email === ADMIN_EMAIL.
   // This prevents any logged-in user from seeing the admin UI.
@@ -69,24 +90,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
       </div>
     );
   }
-
-  const [search, setSearch] = React.useState('');
-  const [activeTab, setActiveTab] = React.useState<'tenants' | 'system'>('tenants');
-
-  const [syncing, setSyncing] = React.useState(false);
-  const [syncMsg, setSyncMsg] = React.useState<string | null>(null);
-
-  // staleTime: 0 so every refetch hits the server — admin data must always be fresh
-  const { data: tenantsData, isLoading: loading, isError, refetch } = useCustom({
-    url: `${getApiBase()}/admin/tenants`,
-    method: 'get',
-    queryOptions: { staleTime: 0 },
-  });
-  const { data: statsData, refetch: refetchStats } = useCustom({
-    url: `${getApiBase()}/admin/stats`,
-    method: 'get',
-    queryOptions: { staleTime: 0 },
-  });
 
   const users: AdminUser[] = ((tenantsData?.data as any) ?? []).map((t: any) => ({
     id: t.id,
@@ -123,27 +126,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     await Promise.all([refetch(), refetchStats()]);
     setSyncing(false);
   };
-
-  if (!isAdmin) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 24px', textAlign: 'center', gap: 16 }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 10, background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--status-error)',
-        }}>
-          <Lock size={20} />
-        </div>
-        <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', margin: 0 }}>Access Denied</h2>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 280, margin: 0 }}>
-          This area is restricted to master administrators only.
-        </p>
-        <button className="btn btn-secondary" onClick={() => onNavigate('/dashboard')}>
-          Back to Dashboard
-        </button>
-      </div>
-    );
-  }
 
   const filtered = users.filter((u) =>
     (u.name ?? '').toLowerCase().includes(search.toLowerCase()) ||

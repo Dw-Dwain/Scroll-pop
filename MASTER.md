@@ -1311,7 +1311,8 @@ schema on boot.
 |---|---|---|
 | T1 | Sentry SDK imported but `Sentry.init()` never called in production | Both API and Dashboard |
 | T2 | PostHog `posthog.init()` never called | `apps/dashboard/src/main.tsx` |
-| T3 | `any` types in several Dashboard components (`Sites.tsx`, `CampaignDetail.tsx`) — should be typed to schema types | Dashboard pages |
+| T3 | `any` types in several Dashboard components (`Sites.tsx`, `CampaignDetail.tsx`) — should be typed to schema types. Now surfaced as ESLint warnings (`no-explicit-any`) — clean up incrementally | Dashboard pages |
+| T-ESLint | ✅ Resolved (Jun 2 2026) — ESLint flat config added to dashboard (`apps/dashboard/eslint.config.js`). Real bugs (rules-of-hooks, no-debugger, no-dupe-keys) are errors; pre-existing style/`any`/legacy patterns are warnings so CI stays green (currently 0 errors / 428 warnings). `lint` script wired into CI. | `apps/dashboard` |
 | T4 | No Playwright E2E tests — only unit tests exist | — |
 | T5 | `apps/worker` event flush is a TODO in the Worker; events are currently only flushed by the API's `/e` local endpoint | `apps/worker/src/index.ts` |
 | T6 | Marketing site (`scrollpop.io`) does not exist | — |
