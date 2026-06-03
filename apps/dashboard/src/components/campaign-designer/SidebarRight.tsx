@@ -593,7 +593,6 @@ export default function SidebarRight({
                 <option value="stickybar">➖ Sticky Top/Bottom Bar</option>
                 <option value="slidein">➠ Slide-in Drawer Window</option>
                 <option value="floating">🏷 Floating Bottom Teaser</option>
-                <option value="spinwheel">🎡 Gamified Spin Wheel popup</option>
               </select>
             </div>
           </div>

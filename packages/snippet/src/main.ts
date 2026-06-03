@@ -652,11 +652,6 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
     }
   }
 
-  // Check popup kinds
-  const popupType = (design as any).steps?.main?.popupType || design.kind || 'modal';
-  const isSpinWheel = popupType === 'spinwheel' || design.headline?.toLowerCase().includes('spin') || campaignId.includes('spin');
-  const isScratchCard = popupType === 'scratchcard' || design.headline?.toLowerCase().includes('scratch') || campaignId.includes('scratch');
-
   const getStep = (id: string) => {
     const s = (design as any).steps;
     return Array.isArray(s) ? s.find((x: any) => x.id === id) : s?.[id];
@@ -665,7 +660,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   // Visual-builder element mode: render the main step's positioned elements
   // (matches the dashboard canvas) instead of the fixed flat-field layout.
   const mainStep = getStep('main');
-  const elementMode = !isSpinWheel && !isScratchCard && Array.isArray(mainStep?.elements) && mainStep.elements.length > 0;
+  const elementMode = Array.isArray(mainStep?.elements) && mainStep.elements.length > 0;
   const hasCloseEl = elementMode && mainStep.elements.some((e: any) => e.type === 'close');
 
   // Create host element
@@ -685,8 +680,6 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
     case 'md': width = '480px'; break;
     case 'lg': width = '600px'; break;
   }
-  // If Spinwheel or Scratch Card, let's make it a bit wider to look premium
-  if (isSpinWheel) width = '640px';
   // Element mode: match the editor's canvas box width.
   if (elementMode && mainStep.width) width = `${mainStep.width}px`;
 
@@ -717,16 +710,6 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 .dismiss-text{text-align:center;margin-top:4px;font-size:12px;opacity:.6;cursor:pointer;}
 .dismiss-text:hover{opacity:1;}
 .powered-by{text-align:center;margin-top:4px;font-size:10px;opacity:.4;}
-.gamified-container{display:flex;flex-direction:row;gap:20px;align-items:center;justify-content:center;}
-.gamified-left{flex:1;display:flex;flex-direction:column;gap:10px;}
-.gamified-right{display:flex;align-items:center;justify-content:center;}
-.spin-wrapper{position:relative;width:220px;height:220px;background:#1e1b4b;border-radius:50%;border:4px solid #312e81;box-shadow:0 4px 12px rgba(0,0,0,.3);overflow:hidden;display:flex;align-items:center;justify-content:center;}
-.spin-wheel-svg{width:100%;height:100%;transform:rotate(0deg);transition:transform 3s cubic-bezier(.15,.85,.25,1);}
-.spin-peg{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #f59e0b;z-index:20;}
-.spin-center-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:#fff;border:3px solid #1e1b4b;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#1e1b4b;cursor:pointer;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.2);}
-.scratch-container{position:relative;width:260px;height:150px;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;background:#000;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 2px 6px rgba(0,0,0,.4);}
-.scratch-canvas{position:absolute;inset:0;cursor:crosshair;z-index:10;touch-action:none;}
-.scratch-prize{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;font-family:monospace;z-index:1;}
 .success-coupon-box{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed ${design.accentColor};border-radius:8px;padding:12px;background:rgba(99,102,241,.05);font-size:18px;font-weight:800;font-family:monospace;letter-spacing:2px;text-align:center;cursor:pointer;transition:background .2s;}
 .success-coupon-box:hover{background:rgba(99,102,241,.1);}
 .success-icon{width:44px;height:44px;background:#d1fae5;color:#065f46;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px auto;font-size:20px;}
@@ -771,12 +754,6 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   // Inner Content
   htmlChunks.push('<div class="popup-inner" id="popup-view-main">');
 
-  // If gamified, let's wrap with flex layout
-  if (isSpinWheel || isScratchCard) {
-    htmlChunks.push('<div class="gamified-container">');
-    htmlChunks.push('<div class="gamified-left">');
-  }
-
   htmlChunks.push('<h2 class="headline">');
   htmlChunks.push(escapeHtml(injectMacros(design.headline || '')));
   htmlChunks.push('</h2>');
@@ -794,7 +771,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   }
 
   // Render product image for standard templates if present
-  if (!isSpinWheel && !isScratchCard && slot?.image_url) {
+  if (slot?.image_url) {
     htmlChunks.push('<img class="product-image" src="');
     htmlChunks.push(escapeHtml(slot.image_url));
     htmlChunks.push('" alt="');
@@ -812,13 +789,11 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
   if (slot) {
     const btnText = slot.cta_text || design.ctaText;
-    const isGamifiedSubmit = isSpinWheel || isScratchCard || showEmailInput;
-    
-    if (isGamifiedSubmit) {
-      // Form Submit / Spin Trigger Button
-      const actText = isSpinWheel ? 'SPIN WHEEL NOW 🎰' : (isScratchCard ? 'REVEAL MY OFFER ⚡' : btnText);
+
+    if (showEmailInput) {
+      // Lead-capture submit button
       htmlChunks.push('<button class="cta-btn" id="cta-submit-btn">');
-      htmlChunks.push(escapeHtml(actText));
+      htmlChunks.push(escapeHtml(btnText));
       htmlChunks.push('</button>');
     } else {
       const trackerUrl = slot.click_tracker_url || slot.product_url;
@@ -849,66 +824,6 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   // per-design flag so free users can't remove it and paid users never see it).
   if (sitePlan === 'free') {
     htmlChunks.push('<p class="powered-by">Powered by ScrollPop</p>');
-  }
-
-  if (isSpinWheel || isScratchCard) {
-    htmlChunks.push('</div>'); // End gamified-left
-    htmlChunks.push('<div class="gamified-right">');
-    
-    if (isSpinWheel) {
-      // Conic SVG Spin Wheel
-      htmlChunks.push('<div class="spin-wrapper">');
-      htmlChunks.push('<div class="spin-peg"></div>');
-      htmlChunks.push('<svg viewBox="0 0 300 300" class="spin-wheel-svg" id="spin-wheel-element">');
-      
-      const slices = [
-        { label: '50% OFF', color: '#ec4899' },
-        { label: 'TRY AGAIN', color: '#1e1b4b' },
-        { label: 'FREE SHIP', color: '#6366f1' },
-        { label: 'NO LUCK', color: '#312e81' },
-        { label: '25% OFF', color: '#f59e0b' },
-        { label: 'TRY AGAIN', color: '#4338ca' },
-      ];
-      
-      slices.forEach((slice, i) => {
-        const sliceAngle = 360 / slices.length;
-        const startAngleRad = (i * sliceAngle - 90) * Math.PI / 180;
-        const endAngleRad = ((i + 1) * sliceAngle - 90) * Math.PI / 180;
-
-        const x1 = 150 + 140 * Math.cos(startAngleRad);
-        const y1 = 150 + 140 * Math.sin(startAngleRad);
-        const x2 = 150 + 140 * Math.cos(endAngleRad);
-        const y2 = 150 + 140 * Math.sin(endAngleRad);
-
-        const pathData = `M 150 150 L ${x1} ${y1} A 140 140 0 0 1 ${x2} ${y2} Z`;
-
-        const textAngleRad = (i * sliceAngle + sliceAngle / 2 - 90) * Math.PI / 180;
-        const textX = 150 + 80 * Math.cos(textAngleRad);
-        const textY = 150 + 80 * Math.sin(textAngleRad);
-
-        htmlChunks.push('<g>');
-        htmlChunks.push(`<path d="${pathData}" fill="${slice.color}" stroke="#ffffff" stroke-width="2"/>`);
-        htmlChunks.push(`<text x="${textX}" y="${textY}" fill="#ffffff" font-family="sans-serif" font-size="11" font-weight="900" text-anchor="middle" dominant-baseline="middle" transform="rotate(${(i * sliceAngle + sliceAngle / 2)}, ${textX}, ${textY})">${slice.label}</text>`);
-        htmlChunks.push('</g>');
-      });
-      
-      htmlChunks.push('</svg>');
-      htmlChunks.push('<div class="spin-center-btn" id="spin-center-btn">SPIN</div>');
-      htmlChunks.push('</div>'); // End spin-wrapper
-    } else {
-      // HTML5 Canvas Scratcher
-      htmlChunks.push('<div class="scratch-container" id="scratch-container">');
-      htmlChunks.push('<div class="scratch-prize">');
-      htmlChunks.push('🏆 MYSTERY VOUCHER 🏆');
-      htmlChunks.push(`<h4 style="margin: 4px 0; color: #fbbf24; font-size: 16px;">${escapeHtml(slot?.product_name || 'SECRET SPECIALS 30% OFF')}</h4>`);
-      htmlChunks.push(`<span style="font-size: 14px; font-weight: bold; background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 6px; border: 1px dashed #fbbf24;">${escapeHtml(slot?.coupon || 'SCRATCH30')}</span>`);
-      htmlChunks.push('</div>');
-      htmlChunks.push('<canvas class="scratch-canvas" id="scratch-canvas"></canvas>');
-      htmlChunks.push('</div>'); // End scratch-container
-    }
-    
-    htmlChunks.push('</div>'); // End gamified-right
-    htmlChunks.push('</div>'); // End gamified-container
   }
 
   htmlChunks.push('</div>'); // End popup-view-main
@@ -1051,135 +966,10 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
   if (submitBtn) {
     submitBtn.addEventListener('click', () => {
-      if (isSpinWheel) {
-        // Spin Wheel Trigger
-        const spinWheelEl = shadow.getElementById('spin-wheel-element') as SVGElement | null;
-        const emailVal = emailInput ? emailInput.value.trim() : '';
-        if (!emailVal || !emailVal.includes('@')) {
-          if (emailInput) {
-            emailInput.style.borderColor = '#ef4444';
-            emailInput.focus();
-          }
-          return;
-        }
-
-        submitBtn.setAttribute('disabled', 'true');
-        submitBtn.textContent = '🎰 SPINNING...';
-
-        // Select a winning segment and spin
-        const targetDegrees = 360 * 5 + (Math.random() * 360);
-        if (spinWheelEl) {
-          spinWheelEl.style.transform = `rotate(${targetDegrees}deg)`;
-        }
-
-        setTimeout(() => {
-          transitionToSuccess(emailVal);
-        }, 3000);
-      } else if (isScratchCard) {
-        // Scratch card fallback submit
-        executeLeadSubmit();
-      } else {
-        // Standard email capture submit
-        executeLeadSubmit();
-      }
+      // Lead-capture submit (email-capture popups)
+      executeLeadSubmit();
     });
   }
-
-  // Real-time Spin Wheel center button click
-  shadow.getElementById('spin-center-btn')?.addEventListener('click', () => {
-    submitBtn?.dispatchEvent(new Event('click'));
-  });
-
-  // Real physics Scratch Card logic inside shadow DOM
-  if (isScratchCard) {
-    const canvas = shadow.getElementById('scratch-canvas') as HTMLCanvasElement | null;
-    const container = shadow.getElementById('scratch-container');
-    
-    if (canvas && container) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        // Sizing
-        canvas.width = 260;
-        canvas.height = 150;
-
-        // Draw luxury silver coating
-        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        grad.addColorStop(0, '#d1d5db');
-        grad.addColorStop(0.3, '#f3f4f6');
-        grad.addColorStop(0.5, '#e5e7eb');
-        grad.addColorStop(0.8, '#9ca3af');
-        grad.addColorStop(1, '#6b7280');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Text Overlay
-        ctx.fillStyle = '#374151';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Scratch to Reveal ⚡', canvas.width / 2, canvas.height / 2);
-
-        // Scratching state
-        let isScratching = false;
-        let scratchCount = 0;
-
-        const scratch = (clientX: number, clientY: number) => {
-          const rect = canvas.getBoundingClientRect();
-          const x = clientX - rect.left;
-          const y = clientY - rect.top;
-
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.beginPath();
-          ctx.arc(x, y, 16, 0, Math.PI * 2);
-          ctx.fill();
-
-          scratchCount++;
-          // Auto reveal once they scratch enough
-          if (scratchCount > 40) {
-            canvas.style.display = 'none';
-          }
-        };
-
-        canvas.addEventListener('mousedown', (e) => {
-          isScratching = true;
-          scratch(e.clientX, e.clientY);
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-          if (isScratching) scratch(e.clientX, e.clientY);
-        });
-
-        window.addEventListener('mouseup', () => {
-          isScratching = false;
-        });
-
-        // Touch support
-        canvas.addEventListener('touchstart', (e) => {
-          if (e.touches[0]) {
-            isScratching = true;
-            scratch(e.touches[0].clientX, e.touches[0].clientY);
-          }
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-          if (isScratching && e.touches[0]) {
-            scratch(e.touches[0].clientX, e.touches[0].clientY);
-          }
-        });
-
-        canvas.addEventListener('touchend', () => {
-          isScratching = false;
-        });
-      }
-    }
-  }
-
-  // Attach auto email correction logic inside shadow DOM / document form elements
-  try {
-    if (emailInput) {
-      // Logic removed for bundle size
-    }
-  } catch (err) { /* ignore safety bounds */ }
 
   // Beacon view after 1s (user actually saw it)
   setTimeout(() => beaconEvent(campaign, 'view'), 1000);

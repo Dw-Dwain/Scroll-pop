@@ -1188,6 +1188,14 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   first-touch UTM** (raw query string persisted in `localStorage._sp_utm`). Dashboard UTM
   filter = param dropdown + value. Rule value shape `{ param, value }` (tolerates legacy
   `{ source }` on read).
+- 🗑️ **Gamified popup types (spin wheel + scratch card) removed (Jun 3 2026).** Both were
+  non-functional (spin didn't spin in the editor; scratch had no editor entry point at all —
+  no template, no popup-type option, no preview). Removed from the snippet (renderer + CSS +
+  handlers), the editor popup-type dropdown, and the template gallery (3 templates:
+  `spin-to-win`, `spin-to-win-raffle`, `scratch-reveal-curiosity`). **Snippet dropped from
+  10,184 → 8,388 gzipped (~1,800 B reclaimed, ~1,850 B headroom under the 10 KB gate).** If
+  gamified popups are wanted later, build them properly as a **lazy-loaded** module (fetched
+  only when a gamified campaign renders) so they never pressure the core budget.
 - ⏸ **A/B percentage gate temporarily stubbed in the snippet** — to fit the geo+UTM
   additions under the 10 KB gzip gate (landed at 10,236/10,240), the `ab_test` targeting
   case is a passthrough (`return true`) for now. Real variant allocation is built in the
