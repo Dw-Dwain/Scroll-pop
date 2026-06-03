@@ -335,7 +335,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const [selectedSite, setSelectedSite] = React.useState<any | null>(null);
   const [activeTab, setActiveTab] = React.useState<'snippet' | 'shopify' | 'shopify-embed' | 'wordpress'>('snippet');
   const [embedMode, setEmbedMode] = React.useState<'cdn' | 'dev'>('cdn');
-  const [devUrl, setDevUrl] = React.useState('https://whole-ends-divide.loca.lt');
+  const [devUrl, setDevUrl] = React.useState(''); // operator pastes their own tunnel URL
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [editSite, setEditSite] = React.useState({ id: '', name: '', platform: 'html' });
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);

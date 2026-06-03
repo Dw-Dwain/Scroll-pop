@@ -1364,7 +1364,16 @@ Deleted campaigns/sites used to keep showing their events in analytics/dashboard
 | B2 | High | Stripe usage records not synced — overage billing doesn't work | `apps/api/src/routes/billing.ts` |
 | B3 | Medium | `tenants.deleted_at` check missing in some tenant queries | `apps/api/src/plugins/tenant-context.ts` |
 | B4 | Medium | No retry logic on Redis event queue flush — events can be lost if DB is down during flush | `apps/api/src/routes/internal.ts` |
-| B5 | Low | `devUrl` (tunnel URL) in Sites.tsx is hardcoded to a loca.lt URL | `apps/dashboard/src/pages/Sites.tsx:352` |
+| B5 | ✅ Resolved (Jun 3 2026) — `devUrl` in Sites.tsx now defaults to empty (operator pastes their own tunnel URL) instead of a hardcoded personal loca.lt URL | `apps/dashboard/src/pages/Sites.tsx` |
+
+### Dev/showcase content audit (Jun 3 2026)
+Swept the dashboard for dev/demo content that could surface on the live app. Resolved:
+Profile now shows the real Clerk identity (not the "Dev Admin" persona); Layout nav email
+fallback removed; **demo mode can no longer auto-engage in a production build** (§10);
+**UI-kit showcase pages** (`/calendar /gallery /chat /messages /forms /tables`, hardcoded
+sample data) removed from the production (Clerk) router — they were URL-reachable though
+not in the nav; kept in demo mode only. Remaining cosmetic (not data leaks): template-card
+seed view/conversion numbers, and the "Test webhook" button's placeholder HMAC signature.
 | B6 | Low | `Experiments` and `Journeys` pages show placeholder content — routes exist but features not functional | Dashboard |
 
 ### Tech Debt

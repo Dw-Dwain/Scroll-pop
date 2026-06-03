@@ -225,12 +225,9 @@ const ClerkAppContent: React.FC = () => {
             {currentPath === '/privacy'  ? <PrivacyPage  onNavigate={navigate} /> : null}
             {currentPath === '/terms'    ? <TermsPage    onNavigate={navigate} /> : null}
             {currentPath === '/licenses' ? <LicensePage  onNavigate={navigate} /> : null}
-            {currentPath === '/calendar' ? <CalendarPage /> : null}
-            {currentPath === '/gallery' ? <ImageGallery /> : null}
-            {currentPath === '/chat' ? <SupportChat /> : null}
-            {currentPath === '/messages' ? <MessagesPage /> : null}
-            {currentPath === '/forms' ? <FormsPage /> : null}
-            {currentPath === '/tables' ? <TablesPage /> : null}
+            {/* UI-kit showcase pages (calendar/gallery/chat/messages/forms/tables) are
+                intentionally NOT routed in production — they render hardcoded sample data
+                and have no real backing. They remain available in demo mode only. */}
           </Layout>
         </Refine>
       </SignedIn>
