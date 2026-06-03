@@ -10,7 +10,7 @@ import { getAuth, clerkClient } from '@clerk/fastify';
 //                 Gets unlimited plan + admin console access.
 // novatise.com  = Novatise agency. All @novatise.com emails share ONE org tenant
 //                 (org_novatise) and get unlimited agency plan, but no admin console.
-const ADMIN_EMAIL       = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
+const ADMIN_EMAIL       = process.env['ADMIN_EMAIL']?.toLowerCase() ?? '';
 const NOVATISE_ORG_KEY  = 'org_novatise';
 const NOVATISE_ORG_NAME = 'Novatise';
 
@@ -21,6 +21,29 @@ function isUnlimitedUser(email: string): boolean {
 
 function isNovatiseDomain(email: string): boolean {
   return email.toLowerCase().endsWith('@novatise.com');
+}
+
+// Confirm the user's PRIMARY Clerk email is verified AND matches the email we're about to
+// grant elevated perks to. Clerk allows attaching unverified addresses, so without this an
+// attacker could sign up with an unverified @novatise.com or admin email and inherit the
+// agency/unlimited plan. Fails CLOSED (returns false) on any lookup error.
+async function isVerifiedPrimaryEmail(
+  clerkUserId: string,
+  expectedEmail: string,
+  prefetched?: Awaited<ReturnType<typeof clerkClient.users.getUser>> | null,
+): Promise<boolean> {
+  try {
+    const cu = prefetched ?? (await clerkClient.users.getUser(clerkUserId));
+    const primary =
+      cu.emailAddresses.find((e) => e.id === cu.primaryEmailAddressId) ?? cu.emailAddresses[0];
+    return (
+      !!primary &&
+      primary.verification?.status === 'verified' &&
+      primary.emailAddress.toLowerCase() === expectedEmail.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function ensureUnlimitedTenant(tenantId: string): Promise<void> {
@@ -69,6 +92,12 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
       const tenantOverride = request.headers['x-tenant-override'] as string | undefined;
       if (tenantOverride && tenantOverride.length === 36) {
         request.tenantId = tenantOverride;
+        request.log.warn({
+          security: 'internal_secret_tenant_override',
+          tenantId: tenantOverride,
+          ip: request.ip,
+          url: request.url,
+        }, 'SECURITY: INTERNAL_SECRET tenant override used');
       } else {
         // Create seed tenant if it doesn't exist
         let tenant = await db.query.tenants.findFirst({
@@ -99,6 +128,18 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     const isDev = process.env['NODE_ENV'] !== 'production';
 
     if (isDev && !hasClerkAuth) {
+      // Guard: refuse to bypass auth if the database URL points to a remote host.
+      // This prevents the dev-mode bypass from silently activating on production
+      // if NODE_ENV is unset or misconfigured.
+      const dbUrl = process.env['DATABASE_URL'] ?? '';
+      const isLocalDb = dbUrl === '' || dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+      if (!isLocalDb) {
+        throw new Error(
+          'FATAL: dev-mode auth bypass is active but DATABASE_URL points to a remote database. ' +
+          'Set NODE_ENV=production to disable the bypass.',
+        );
+      }
+
       // Create seed tenant if it doesn't exist
       let tenant = await db.query.tenants.findFirst({
         where: eq(tenants.clerkOrgId, 'org_demo_12345'),
@@ -197,8 +238,10 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Auto-upgrade novatise.com / admin users to unlimited
-      if (isUnlimitedUser(user.email)) await ensureUnlimitedTenant(tenant.id);
+      // Auto-upgrade novatise.com / admin users to unlimited — only if their email is verified.
+      if (isUnlimitedUser(user.email) && (await isVerifiedPrimaryEmail(clerkUserId, user.email))) {
+        await ensureUnlimitedTenant(tenant.id);
+      }
 
       request.tenantId = tenant.id;
       request.userId = user.id;
@@ -216,16 +259,18 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     // Resolve email early so we can route @novatise.com users to their shared org.
     let resolvedEmail: string | null = null;
     let resolvedName: string | null = null;
+    let clerkUser: Awaited<ReturnType<typeof clerkClient.users.getUser>> | null = null;
 
     if (!user) {
-      const clerkUser = await clerkClient.users.getUser(clerkUserId);
+      const cu = await clerkClient.users.getUser(clerkUserId);
+      clerkUser = cu;
       resolvedEmail =
-        clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+        cu.emailAddresses.find((e) => e.id === cu.primaryEmailAddressId)
           ?.emailAddress ??
-        clerkUser.emailAddresses[0]?.emailAddress ??
+        cu.emailAddresses[0]?.emailAddress ??
         `${clerkUserId}@users.scrollpop.local`;
       resolvedName =
-        [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null;
+        [cu.firstName, cu.lastName].filter(Boolean).join(' ') || null;
 
       const inserted = await db
         .insert(users)
@@ -242,10 +287,16 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
 
     const userEmail = resolvedEmail ?? user.email;
 
+    // Elevated perks (Novatise agency plan, platform admin unlimited) require a verified email.
+    // Only computed for elevated candidates to avoid a Clerk lookup on every normal request.
+    const isElevatedCandidate = isUnlimitedUser(userEmail);
+    const emailVerified =
+      isElevatedCandidate && (await isVerifiedPrimaryEmail(clerkUserId, userEmail, clerkUser));
 
     // ─── @novatise.com → shared Novatise org tenant ───────────────────────────
     // All Novatise emails share a single org rather than getting personal tenants.
-    if (isNovatiseDomain(userEmail)) {
+    // Unverified @novatise.com emails fall through to a regular free personal tenant.
+    if (isNovatiseDomain(userEmail) && emailVerified) {
       let novaTenant = await db.query.tenants.findFirst({
         where: eq(tenants.clerkOrgId, NOVATISE_ORG_KEY),
       });
@@ -317,8 +368,8 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
         }));
     }
 
-    // Auto-upgrade admin account to unlimited
-    if (isUnlimitedUser(userEmail)) await ensureUnlimitedTenant(tenant.id);
+    // Auto-upgrade admin account to unlimited — only with a verified email.
+    if (isElevatedCandidate && emailVerified) await ensureUnlimitedTenant(tenant.id);
 
     request.tenantId = tenant.id;
     request.userId = user.id;

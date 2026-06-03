@@ -66,6 +66,18 @@ scrollpop/
 4. Snippet must render in **Shadow DOM** (`attachShadow({mode:'closed'})`) — never inject global
    CSS into the host page.
 5. No `eval()`, no `document.write()`, no dynamic `Function()` constructor in the snippet.
+5a. **Every tenant-controlled value rendered by the snippet MUST pass through a sanitizer from
+   `packages/snippet/src/sanitize.ts` before reaching the DOM.** No exceptions. Text/attribute
+   values → `escapeHtml`; hrefs/src → `safeHref`; colors → `safeCssColor`; CSS url() → `safeCssUrl`;
+   numeric CSS → `cssNum`/`safeCssInt`; font-family → `cssFont`; lengths → `cssLen`; alignment →
+   `cssAlign`; weight → `cssWeight`; regex targeting → `isSafeRegex`. NEVER interpolate a config
+   value raw into an HTML string, `style="…"` attribute, or `<style>` block. Design element fields
+   (`fontFamily`, `x/y/w/h`, `padding`, etc.) are NOT in the Zod schema, so the render-time
+   sanitizer is the only thing standing between a malicious design and stored XSS on a customer
+   site. The sanitizers have unit tests (`sanitize.test.ts`) — keep them green.
+5b. **The `/e` event-ingest endpoint MUST validate every client-supplied field** (event type
+   against the enum, IDs as UUIDs, URLs as http(s), numerics clamped) and apply the per-(campaign,
+   IP) impression flood gate. Events are unauthenticated — never trust their contents or counts.
 
 ### Performance
 6. Snippet bundle **MUST** stay under 10 KB gzipped. This is a hard CI gate — builds fail if

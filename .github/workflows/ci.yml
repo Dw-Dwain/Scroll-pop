@@ -81,6 +81,19 @@ jobs:
             exit 1
           fi
           echo "✅ PASS: Bundle is within size limit"
+      - name: Snippet integrity gate (Worker bundle must equal audited source)
+        # `pnpm --filter snippet build` rebuilds dist/p.js AND syncs apps/worker/src/p.txt.
+        # If the committed p.txt differs from a fresh build, it's either stale or tampered —
+        # this guarantees the edge serves exactly the reviewed snippet source.
+        run: |
+          if ! git diff --quiet -- apps/worker/src/p.txt; then
+            echo "❌ FAIL: apps/worker/src/p.txt does not match the freshly built snippet."
+            echo "   Someone edited p.txt directly, or forgot to rebuild after a snippet change."
+            echo "   Fix: run 'pnpm --filter snippet build' and commit the updated p.txt."
+            git diff --stat -- apps/worker/src/p.txt
+            exit 1
+          fi
+          echo "✅ PASS: Worker snippet bundle is byte-identical to the built source"
 
   no-history-manipulation:
     # ⚠️ MARKETING DEPENDENCY — do not remove or weaken this gate.
@@ -116,6 +129,44 @@ jobs:
           fi
           echo "✅ PASS: No banned APIs found in snippet source"
 
+  migration-safety:
+    name: Migration Safety Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for destructive SQL in new migrations
+        run: |
+          MIGRATION_DIR="apps/api/drizzle/migrations"
+          if [ ! -d "$MIGRATION_DIR" ]; then
+            echo "No migrations directory found — skipping"
+            exit 0
+          fi
+          # Find migration files changed/added in this PR vs. main
+          CHANGED=$(git diff --name-only origin/main...HEAD -- "$MIGRATION_DIR" 2>/dev/null || \
+                    git diff --name-only HEAD~1...HEAD -- "$MIGRATION_DIR" 2>/dev/null || \
+                    echo "")
+          if [ -z "$CHANGED" ]; then
+            echo "✅ No migration files changed"
+            exit 0
+          fi
+          echo "Checking migrations: $CHANGED"
+          FAILED=0
+          for file in $CHANGED; do
+            if [ ! -f "$file" ]; then continue; fi
+            # Flag destructive DDL that must be reviewed
+            if grep -iE '^\s*(DROP\s+TABLE|TRUNCATE\s+TABLE|DROP\s+COLUMN|DROP\s+SCHEMA)' "$file"; then
+              echo "❌ DESTRUCTIVE DDL detected in $file — add a '-- REVIEWED: intentional' comment to proceed"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            echo "Destructive migration detected. Verify intent and add '-- REVIEWED: intentional' to suppress."
+            exit 1
+          fi
+          echo "✅ No unreviewed destructive DDL in migration files"
+
   # E2E is intentionally NOT in any deploy job's `needs` list — it provides signal but
   # never blocks a release (browser E2E can be environment-flaky). Promote it to a gate
   # once it has proven stable over time.
@@ -149,7 +200,7 @@ jobs:
   deploy-api:
     name: Deploy API → Render (production)
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
+    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Render production deploy hook
@@ -165,7 +216,7 @@ jobs:
   deploy-worker:
     name: Deploy Worker → Cloudflare
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
+    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
@@ -177,14 +228,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter snippet build
-      - name: Debug CF token
-        run: |
-          echo "Token length: ${#CLOUDFLARE_API_TOKEN}"
-          echo "Account ID length: ${#CLOUDFLARE_ACCOUNT_ID}"
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "❌ TOKEN IS EMPTY"; else echo "✅ TOKEN IS SET"; fi
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Deploy Worker
         working-directory: apps/worker
         run: |
@@ -202,7 +245,7 @@ jobs:
   deploy-dashboard:
     name: Deploy Dashboard → Cloudflare Pages (production)
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation]
+    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4

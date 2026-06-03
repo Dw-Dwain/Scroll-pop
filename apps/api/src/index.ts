@@ -85,7 +85,7 @@ async function bootstrap() {
   await app.register(rateLimit, {
     max: 200,
     timeWindow: '1 minute',
-    keyGenerator: (req) => req.headers['x-tenant-id'] as string ?? req.ip,
+    keyGenerator: (req) => req.ip,
   });
 
   // Clerk auth
@@ -96,6 +96,20 @@ async function bootstrap() {
 
   // Tenant context (decodes Clerk JWT → req.tenantId, req.userId)
   await app.register(tenantContextPlugin);
+
+  // Security response headers on every response (lightweight, no extra dep).
+  // nosniff blocks MIME confusion on the served snippet JS + JSON; frame/referrer/HSTS
+  // harden against clickjacking, referrer leakage, and protocol downgrade.
+  app.addHook('onSend', async (_request, reply, payload) => {
+    void reply.header('X-Content-Type-Options', 'nosniff');
+    void reply.header('X-Frame-Options', 'DENY');
+    void reply.header('Referrer-Policy', 'no-referrer');
+    void reply.header('X-DNS-Prefetch-Control', 'off');
+    if (!isDev) {
+      void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    return payload;
+  });
 
   // Webhooks (no auth — use signature verification)
   await app.register(webhookRoutes, { prefix: '/api/v1/webhooks' });
@@ -366,12 +380,76 @@ async function bootstrap() {
   // floods from scrapers or misconfigured snippets hitting the API directly.
   // Keyed by IP (not tenant — the request has no auth header).
   // The Cloudflare Worker already throttles edge traffic; this is the direct-API guard.
+  // ── Event field validation helpers ───────────────────────────────────────────
+  const ALLOWED_EVENT_TYPES = new Set([
+    'impression', 'view', 'click', 'dismiss', 'conversion',
+    'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
+    'email_capture', 'sms_capture', 'discount_redeemed',
+    'checkout_started', 'purchase_completed', 'trigger_fired',
+  ]);
+  const ALLOWED_DEVICES = new Set(['mobile', 'desktop', 'tablet']);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // Max impressions counted per (campaign, client-IP) per minute. Real visitors generate ~1
+  // per session (frequency-capped); anything above this is a flood, so we neither store it nor
+  // count it toward the billing/view cap. This bounds quota-exhaustion abuse: forging a 2M-view
+  // tenant over its limit would require thousands of distinct IPs, each capped here AND by the
+  // global 500/min IP limit. Tune if a legitimate high-traffic single-egress customer trips it.
+  const IMPRESSION_PER_IP_PER_MIN = 120;
+
+  function sanitizeEventUrl(url: unknown): string | null {
+    if (typeof url !== 'string' || url.length > 2048) return null;
+    try {
+      const p = new URL(url);
+      return (p.protocol === 'https:' || p.protocol === 'http:') ? url : null;
+    } catch { return null; }
+  }
+
+  // Resolve the real client IP. Only trust the forwarded CF-Connecting-IP header when the
+  // request actually came from our Worker (proven by INTERNAL_SECRET) — otherwise a direct
+  // caller to the public API could spoof the header to evade per-IP limits. Falls back to the
+  // unspoofable socket IP for direct callers.
+  function realClientIp(req: { headers: Record<string, unknown>; ip: string }): string {
+    const fromWorker = req.headers['x-internal-secret'] === process.env['INTERNAL_SECRET'];
+    if (fromWorker) {
+      const fwd = req.headers['x-cf-connecting-ip'];
+      if (typeof fwd === 'string' && fwd) return fwd;
+    }
+    return req.ip;
+  }
+
+  // In-process cache of campaignId → {tenantId, siteId}. Eliminates a per-event DB lookup on the
+  // hot ingest path (the API is always-warm on Render). Short TTL so deletes/moves propagate.
+  const campaignMetaCache = new Map<string, { tenantId: string; siteId: string; exp: number }>();
+  async function resolveCampaignMeta(campaignId: string): Promise<{ tenantId: string; siteId: string } | null> {
+    const now = Date.now();
+    const hit = campaignMetaCache.get(campaignId);
+    if (hit && hit.exp > now) return { tenantId: hit.tenantId, siteId: hit.siteId };
+    const campaign = await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId) });
+    if (!campaign) return null;
+    campaignMetaCache.set(campaignId, { tenantId: campaign.tenantId, siteId: campaign.siteId, exp: now + 300_000 });
+    if (campaignMetaCache.size > 5000) campaignMetaCache.clear(); // bound memory
+    return { tenantId: campaign.tenantId, siteId: campaign.siteId };
+  }
+
+  // Per-(campaign, IP) impression flood gate. Returns false once the per-minute cap is exceeded.
+  // Fails OPEN (allows) if Redis is unavailable — the billing counter needs Redis anyway.
+  async function impressionWithinIpQuota(campaignId: string, ip: string): Promise<boolean> {
+    if (!redis) return true;
+    try {
+      const k = `sp_imp_gate:${campaignId}:${ip}`;
+      const n = await redis.incr(k);
+      if (n === 1) await redis.expire(k, 60);
+      return typeof n !== 'number' || n <= IMPRESSION_PER_IP_PER_MIN;
+    } catch { return true; }
+  }
+
   app.post<{ Body: { events?: any[] } }>('/e', {
     config: {
       rateLimit: {
         max: 500,
         timeWindow: '1 minute',
-        keyGenerator: (req) => req.ip,
+        keyGenerator: (req) => realClientIp(req as any),
         errorResponseBuilder: (_req, context) => ({
           error: {
             code: 'RATE_LIMITED',
@@ -381,6 +459,7 @@ async function bootstrap() {
       },
     },
   }, async (request, reply) => {
+    const clientIp = realClientIp(request as any);
     const payload = request.body;
     if (payload && Array.isArray(payload.events)) {
       for (const rawEvt of payload.events) {
@@ -391,30 +470,50 @@ async function bootstrap() {
         } = rawEvt;
         if (!campaignId || !eventType) continue;
 
+        // Validate and sanitize fields before insert
+        if (!ALLOWED_EVENT_TYPES.has(eventType)) continue;
+        const safeDevice = typeof device === 'string' && ALLOWED_DEVICES.has(device) ? device : null;
+        const safePageUrl = sanitizeEventUrl(pageUrl);
+        const safeReferrer = typeof referrer === 'string' && referrer.length <= 2048 ? referrer : null;
+        // Visitor/session IDs must be UUIDs (the snippet emits crypto.randomUUID()). Reject
+        // arbitrary strings so attackers can't inflate unique-visitor counts with junk IDs.
+        const safeVisitorId = typeof visitorId === 'string' && UUID_RE.test(visitorId) ? visitorId : null;
+        const safeSessionId = typeof sessionId === 'string' && UUID_RE.test(sessionId) ? sessionId : null;
+        const safeRevenueCents = revenueCents != null
+          ? Math.min(Math.max(0, Math.round(Number(revenueCents))), 1_000_000)
+          : null;
+        const safeScrollDepth = scrollDepthPct != null
+          ? Math.min(Math.max(0, Math.round(Number(scrollDepthPct))), 100)
+          : null;
+
         try {
-          const campaign = await db.query.campaigns.findFirst({
-            where: eq(campaigns.id, campaignId),
-          });
+          const campaign = await resolveCampaignMeta(campaignId);
 
           if (campaign) {
+            // Impression flood gate: drop impressions that exceed the per-IP-per-campaign cap so
+            // forged floods can neither poison analytics nor burn the tenant's monthly view quota.
+            if (eventType === 'impression' && !(await impressionWithinIpQuota(campaignId, clientIp))) {
+              continue;
+            }
+
             await db.insert(events).values({
               tenantId: campaign.tenantId,
               siteId: campaign.siteId,
               campaignId,
               eventType,
               affiliateSlotId: affiliateSlotId || null,
-              visitorId: visitorId || null,
-              sessionId: sessionId || null,
-              device: device || null,
-              pageUrl: pageUrl || null,
-              referrer: referrer || null,
+              visitorId: safeVisitorId,
+              sessionId: safeSessionId,
+              device: safeDevice,
+              pageUrl: safePageUrl,
+              referrer: safeReferrer,
               country: country || null,
               metadata: metadata ?? meta ?? {},
-              scrollDepthPct: scrollDepthPct != null ? Number(scrollDepthPct) : null,
+              scrollDepthPct: safeScrollDepth,
               trafficSource: trafficSource || null,
               abVariantId: abVariantId || null,
               shopifyOrderId: shopifyOrderId || null,
-              revenueCents: revenueCents != null ? Number(revenueCents) : null,
+              revenueCents: safeRevenueCents,
             });
 
             // Increment monthly view counter in Redis for edge enforcement.
@@ -468,7 +567,7 @@ async function bootstrap() {
   });
 
   // Health check
-  app.get('/health', async () => ({ ok: true, ts: Date.now() }));
+  app.get('/health', async () => ({ ok: true }));
 
   // Ensure this month's (and next month's) events partition exists before serving.
   // Prevents the recurring "analytics silently dies at month rollover" outage on Neon,

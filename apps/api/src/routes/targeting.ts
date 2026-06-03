@@ -4,6 +4,24 @@ import { db } from '../db/client.js';
 import { targetingRules, campaigns } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
+// Validate url_regex patterns for ReDoS safety.
+// Rejects patterns with nested quantifiers that cause catastrophic backtracking,
+// e.g. (a+)+, (a*b+)*, ([a-z]+)+ etc.
+function validateRegexPattern(pattern: unknown): string | null {
+  if (typeof pattern !== 'string') return 'Pattern must be a string';
+  if (pattern.length === 0 || pattern.length > 100) return 'Pattern must be 1–100 characters';
+  try {
+    new RegExp(pattern);
+  } catch {
+    return 'Invalid regular expression';
+  }
+  // Block nested quantifiers: a group followed by + or * that itself contains + or *
+  if (/\([^()]*[+*][^()]*\)[+*{]/.test(pattern)) {
+    return 'Pattern contains nested quantifiers that may cause ReDoS';
+  }
+  return null;
+}
+
 const CreateTargetingBody = z.object({
   kind: z.enum(['url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor', 'geo', 'session_page_views', 'utm', 'ab_test']),
   operator: z.enum(['include', 'exclude']).default('include'),
@@ -56,6 +74,11 @@ export const targetingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const body = CreateTargetingBody.parse(request.body);
 
+    if (body.kind === 'url_regex') {
+      const err = validateRegexPattern((body.value as Record<string, unknown>)['pattern']);
+      if (err) return reply.code(400).send({ error: { code: 'INVALID_REGEX', message: err } });
+    }
+
     const [rule] = await db
       .insert(targetingRules)
       .values({
@@ -81,6 +104,13 @@ export const targetingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = z.array(CreateTargetingBody).parse(request.body);
+
+    for (const rule of body) {
+      if (rule.kind === 'url_regex') {
+        const err = validateRegexPattern((rule.value as Record<string, unknown>)['pattern']);
+        if (err) return reply.code(400).send({ error: { code: 'INVALID_REGEX', message: err } });
+      }
+    }
 
     await db.delete(targetingRules).where(and(eq(targetingRules.campaignId, request.params.id), eq(targetingRules.tenantId, request.tenantId)));
 

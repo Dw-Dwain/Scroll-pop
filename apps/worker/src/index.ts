@@ -9,6 +9,7 @@
  * No business logic here — that lives in apps/api.
  */
 
+import * as Sentry from '@sentry/cloudflare';
 import snippetCode from './p.txt';
 
 export interface Env {
@@ -18,6 +19,7 @@ export interface Env {
   REDIS_URL: string;
   REDIS_TOKEN: string;
   INTERNAL_SECRET: string;
+  SENTRY_DSN?: string;
 }
 
 const CORS_HEADERS = {
@@ -26,7 +28,12 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-export default {
+export default Sentry.withSentry(
+  (env: Env) => ({
+    dsn: env.SENTRY_DSN ?? '',
+    tracesSampleRate: 0,
+  }),
+{
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
@@ -40,8 +47,9 @@ export default {
       return new Response(snippetCode, {
         headers: {
           'Content-Type': 'application/javascript',
+          'X-Content-Type-Options': 'nosniff',
           ...CORS_HEADERS,
-          'Cache-Control': 'public, max-age=3600'
+          'Cache-Control': 'public, max-age=300'
         }
       });
     }
@@ -58,7 +66,7 @@ export default {
 
     return new Response('Not Found', { status: 404 });
   },
-};
+});
 
 // ─── Config Handler ───────────────────────────────────────────────────────────
 
@@ -77,7 +85,7 @@ async function handleConfig(
     });
   }
 
-  const kvKey = `config:${publicKey}`;
+  const kvKey = `config:v2:${publicKey}`;
 
   // Try KV cache first (only when a KV namespace is bound)
   if (env.SCROLLPOP_CONFIG) {
@@ -271,8 +279,11 @@ async function handleIngest(
     colo: cf?.['colo'] ?? null,
   }));
 
-  // Forward events to production Fastify backend for real-time DB persistence
-  ctx.waitUntil(forwardEventsToApi(env, enrichedEvents));
+  // Forward events to production Fastify backend for real-time DB persistence.
+  // Pass the real visitor IP so the API can apply per-client rate limiting + abuse gating;
+  // the INTERNAL_SECRET header proves the IP came from us (the API won't trust it otherwise).
+  const clientIp = request.headers.get('CF-Connecting-IP') ?? '';
+  ctx.waitUntil(forwardEventsToApi(env, enrichedEvents, clientIp));
 
   return new Response(JSON.stringify({ received: enrichedEvents.length }), {
     status: 200,
@@ -280,7 +291,7 @@ async function handleIngest(
   });
 }
 
-async function forwardEventsToApi(env: Env, events: unknown[]): Promise<void> {
+async function forwardEventsToApi(env: Env, events: unknown[], clientIp: string): Promise<void> {
   if (!env.API_ORIGIN) {
     console.warn('API_ORIGIN not configured — events cannot be forwarded');
     return;
@@ -296,7 +307,11 @@ async function forwardEventsToApi(env: Env, events: unknown[]): Promise<void> {
     const url = `${env.API_ORIGIN}/e`;
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': env.INTERNAL_SECRET,
+        'X-CF-Connecting-IP': clientIp,
+      },
       body: JSON.stringify({ events }),
       signal: controller.signal,
     });

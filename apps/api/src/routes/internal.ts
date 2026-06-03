@@ -14,7 +14,7 @@ import { redis } from '../index.js';
  */
 
 function assertInternalSecret(request: FastifyRequest, reply: FastifyReply): boolean {
-  const secret = process.env['INTERNAL_SECRET'] || process.env['API_SECRET'];
+  const secret = process.env['INTERNAL_SECRET'];
   const provided = request.headers['x-internal-secret'] as string | undefined;
 
   if (!secret || provided !== secret) {
@@ -207,7 +207,8 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send({ purged: false, reason: 'CF not configured' });
       }
 
-      const kvKey = `config:${request.params.publicKey}`;
+      // Must match the key the Worker writes/reads in apps/worker/src/index.ts.
+      const kvKey = `config:v2:${request.params.publicKey}`;
       const cfUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvNamespaceId}/values/${encodeURIComponent(kvKey)}`;
 
       try {

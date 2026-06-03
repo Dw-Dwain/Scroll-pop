@@ -7,11 +7,13 @@
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "size-check": "node -e \"const fs=require('fs');const zlib=require('zlib');const buf=fs.readFileSync('dist/p.js');zlib.gzip(buf,(e,r)=>{if(e)throw e;const kb=(r.length/1024).toFixed(2);console.log('Snippet gzipped size:',kb,'KB (',r.length,'bytes)');if(r.length>10240){console.error('FAIL: snippet exceeds 10 KB gzip limit');process.exit(1);}console.log('PASS');});\"",
     "lint": "echo 'no linter for snippet'"
   },
   "devDependencies": {
     "esbuild": "^0.21.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
   }
 }

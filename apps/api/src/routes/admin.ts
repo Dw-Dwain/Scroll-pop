@@ -16,27 +16,44 @@ import { users, tenants, tenantMembers, sites, campaigns } from '../db/schema.js
 import { eq, sql, isNull, and, like } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
 
-const ADMIN_EMAIL = (process.env['ADMIN_EMAIL'] ?? 'dwain3991@gmail.com').toLowerCase();
+const ADMIN_EMAIL = process.env['ADMIN_EMAIL']?.toLowerCase() ?? '';
 
 // Only the exact platform-owner email gets super-admin access.
 // novatise.com users are a client agency — they get unlimited plan limits,
 // but they do NOT have access to the admin console.
 function isAdminUser(email: string): boolean {
-  return email.toLowerCase() === ADMIN_EMAIL;
+  return ADMIN_EMAIL !== '' && email.toLowerCase() === ADMIN_EMAIL;
 }
 
 /** Rejects the request if the calling user is not the super admin. */
 async function assertSuperAdmin(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const user = await db.query.users.findFirst({
     where: eq(users.id, request.userId),
-    columns: { email: true },
+    columns: { email: true, clerkUserId: true },
   });
 
-  if (!user || !isAdminUser(user.email)) {
+  // Super-admin requires BOTH the email match AND that the email is verified & primary in Clerk.
+  // This closes the path where an unverified/secondary admin-looking email could grant console access.
+  let verified = false;
+  if (user && isAdminUser(user.email)) {
+    try {
+      const cu = await clerkClient.users.getUser(user.clerkUserId);
+      const primary =
+        cu.emailAddresses.find((e) => e.id === cu.primaryEmailAddressId) ?? cu.emailAddresses[0];
+      verified =
+        !!primary &&
+        primary.verification?.status === 'verified' &&
+        primary.emailAddress.toLowerCase() === ADMIN_EMAIL;
+    } catch {
+      verified = false;
+    }
+  }
+
+  if (!verified) {
     await reply.code(403).send({
       error: {
         code: 'FORBIDDEN',
-        message: `Super-admin access required. Authenticated as: ${user?.email ?? 'unknown'}`,
+        message: 'Super-admin access required.',
       },
     });
     return false;
