@@ -1289,11 +1289,11 @@ processor DPA (roles, sub-processors, SCCs, breach notice, TOMs, annexes) for se
 to customers who request one ("available on request" is already stated on the site +
 dashboard privacy pages). **Engineering draft — needs attorney review before use;**
 all `[BRACKETED]` fields must be filled.
-⚠️ **Follow-up flagged:** the Security page (`site-plan/src/components/LegalView.tsx`
-~L194) claims **"EU data stays in EU regions (Frankfurt)"** — this is **inaccurate**:
-the Neon DB is in `ap-southeast-1` (Asia-Pacific). The DPA template states the correct
-region; the public Security page copy still needs reconciling (false data-residency
-claim = compliance risk).
+✅ **Security-page accuracy reconciled (Jun 2 2026):** `LegalView.tsx` corrected —
+"EU data stays in EU regions (Frankfurt)" → accurate "hosted in Asia-Pacific
+(Singapore); transfers covered by SCCs"; "Neon/Supabase" → "Neon" (Supabase not used
+in prod); "deployed on Fly.io" → "deployed on Render" (Fly unused). Now consistent
+with the actual stack + the sub-processor list + the DPA template.
 
 | # | Severity | Item |
 |---|---|---|
