@@ -44,12 +44,18 @@ export type BuilderElement = z.infer<typeof BuilderElementSchema>;
 
 // ─── Design Config ────────────────────────────────────────────────────────────
 
+// Require http(s) scheme on affiliate and design URLs — blocks javascript:, data:, etc.
+const safeUrl = z.string().url().refine(
+  (u) => /^https?:\/\//i.test(u),
+  { message: 'URL must use http or https protocol' },
+);
+
 export const AffiliateSlotSchema = z.object({
   id: z.string().uuid(),
   product_name: z.string().min(1).max(200),
-  product_url: z.string().url(),
-  image_url: z.string().url(),
-  click_tracker_url: z.string().url(),
+  product_url: safeUrl,
+  image_url: safeUrl,
+  click_tracker_url: safeUrl,
   cta_text: z.string().min(1).max(100),
   weight: z.number().int().min(1).max(100).default(1),
   coupon: z.string().max(50).optional(),
@@ -64,7 +70,7 @@ export const DesignConfigSchema = z.object({
   position: z.enum(['center', 'bottom-left', 'bottom-right', 'top', 'bottom']).default('center'),
   size: z.enum(['sm', 'md', 'lg']).default('md'),
   backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#ffffff'),
-  backgroundImage: z.string().url().optional(),
+  backgroundImage: safeUrl.optional(),
   textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#111111'),
   accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#6366f1'),
   borderRadius: z.number().int().min(0).max(32).default(12),

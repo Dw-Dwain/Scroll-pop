@@ -53,8 +53,11 @@ async function bustTenantCache(tenantId: string): Promise<void> {
       where: eq(sites.tenantId, tenantId),
       columns: { publicKey: true },
     });
+    // Key must match what the API actually writes to Redis (the local /c/ config route
+    // uses `sp_config:`). The production edge cache lives in Cloudflare KV and is purged
+    // separately via the internal /cache/:publicKey endpoint.
     await Promise.allSettled(
-      tenantSites.map((s) => redis!.del(`config:${s.publicKey}`))
+      tenantSites.map((s) => redis!.del(`sp_config:${s.publicKey}`))
     );
   } catch { /* non-fatal */ }
 }

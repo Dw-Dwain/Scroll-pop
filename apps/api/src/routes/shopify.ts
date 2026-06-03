@@ -26,6 +26,7 @@ import { db } from '../db/client.js';
 import { shopifyInstallations, sites, tenants, events } from '../db/schema.js';
 import { eq, and, isNull, gte, desc } from 'drizzle-orm';
 import { redis } from '../index.js';
+import { encryptToken, decryptToken } from '../lib/token-crypto.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -312,7 +313,8 @@ export const shopifyRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: { code: 'SITE_ERROR', message: 'Failed to create site record' } });
     }
 
-    // 9. Upsert shopify_installations record
+    // 9. Upsert shopify_installations record (token encrypted at rest)
+    const encryptedToken = encryptToken(accessToken);
     const existing = await db.query.shopifyInstallations.findFirst({
       where: eq(shopifyInstallations.shop, shop),
     });
@@ -323,7 +325,7 @@ export const shopifyRoutes: FastifyPluginAsync = async (fastify) => {
         .set({
           tenantId,
           siteId: site.id,
-          accessToken,
+          accessToken: encryptedToken,
           scope,
           uninstalledAt: null,
           nonce,
@@ -338,7 +340,7 @@ export const shopifyRoutes: FastifyPluginAsync = async (fastify) => {
         tenantId,
         siteId: site.id,
         shop,
-        accessToken,
+        accessToken: encryptedToken,
         scope,
         nonce,
         installedAt: new Date(),
@@ -444,9 +446,10 @@ export const shopifyRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Installation not found' } });
     }
 
-    // Remove script tag from Shopify
+    // Remove script tag from Shopify (decrypt token for API call)
     if (installation.scriptTagId) {
-      await shopifyRequest(body.shop, installation.accessToken, 'DELETE', `/script_tags/${installation.scriptTagId}.json`).catch(() => {});
+      const token = decryptToken(installation.accessToken);
+      await shopifyRequest(body.shop, token, 'DELETE', `/script_tags/${installation.scriptTagId}.json`).catch(() => {});
     }
 
     // Soft-delete: mark as uninstalled

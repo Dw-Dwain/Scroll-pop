@@ -296,13 +296,42 @@ Optional longer body explaining why (not what — the diff shows what).
 |----------|------------|
 | API vars (`DATABASE_URL`, `CLERK_SECRET_KEY`, etc.) | Render → service → Environment |
 | Dashboard vars (`VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`) | Cloudflare Pages → Settings → Environment variables |
-| Worker secrets (`INTERNAL_SECRET`, `REDIS_URL`) | Cloudflare → Workers → scrollpop-worker → Settings |
+| Worker secrets (`INTERNAL_SECRET`, `REDIS_URL`, `SENTRY_DSN`) | Cloudflare → Workers → scrollpop-worker → Settings |
 | Shopify extension | `npx shopify app deploy` (Shopify CLI) |
 
 > ⚠️ `VITE_*` vars are baked at **build time**. After changing one, trigger a
 > manual redeploy: Deployments → `...` → Retry deployment.
 
 **Clerk publishable key (both envs):** `pk_live_Y2xlcmsuc2Nyb2xscG9wLm9ubGluZSQ`
+
+### Required secrets checklist (Render → Environment)
+
+All of these must be set for a valid production deployment:
+
+```
+DATABASE_URL          DIRECT_DATABASE_URL   REDIS_URL             REDIS_TOKEN
+CLERK_SECRET_KEY      CLERK_WEBHOOK_SECRET  STRIPE_SECRET_KEY     STRIPE_WEBHOOK_SECRET
+SHOPIFY_API_KEY       SHOPIFY_API_SECRET    SHOPIFY_ENCRYPTION_KEY
+CLOUDFLARE_API_TOKEN  CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_KV_NAMESPACE_ID
+ADMIN_EMAIL           INTERNAL_SECRET       SENTRY_DSN
+```
+
+Generate `SHOPIFY_ENCRYPTION_KEY` (one-time, store in password manager):
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+### Secret rotation schedule
+
+Rotate these secrets every 90 days (add a reminder to your calendar):
+- `INTERNAL_SECRET` — shared between Render API and Cloudflare Worker; must be updated in both simultaneously
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`
+- GitHub Personal Access Tokens (single-use; revoke immediately after use: https://github.com/settings/tokens)
+
+After rotating `INTERNAL_SECRET`:
+1. Update in Render → Environment → `INTERNAL_SECRET`
+2. Update in Cloudflare Worker → `wrangler secret put INTERNAL_SECRET`
+3. Deploy both (Render auto-deploys; re-run `pnpm run deploy` for Worker)
 
 ---
 
@@ -313,6 +342,43 @@ Tokens used in Claude sessions are **single-use** — revoke immediately after u
 
 Never commit tokens. The `.gitignore` excludes `.env*` but not raw tokens in
 comments — always use environment variables.
+
+---
+
+## Repository security hygiene (GitHub settings — do once, verify quarterly)
+
+These are manual GitHub UI steps — they cannot be automated in code:
+
+### `Dw-Dwain/Scroll-pop`
+- [ ] Enable 2FA on the `Dw-Dwain` account (Settings → Password and authentication)
+- [ ] Confirm branch protection is enabled on `main` (Settings → Branches → main):
+  - Require status checks: `lint`, `typecheck`, `test`, `snippet-size-check`, `no-history-manipulation`, `migration-safety`
+  - Require pull request before merging
+
+### `dwain-coder/Scroll-pop`
+- [ ] Enable 2FA on the `dwain-coder` account
+- [ ] **Disable force-push on `main`** (Settings → Branches → main → Allow force pushes → OFF)
+  - `--force-with-lease` is safe for the sync script; `allow_force_pushes` is not needed
+- [ ] Enable Render's deploy confirmation (Render Dashboard → Service → Settings → Deploy confirmation)
+
+---
+
+## Database migrations — safety rules
+
+Every migration file (`apps/api/drizzle/migrations/*.sql`) must follow these rules:
+
+1. **Use `IF NOT EXISTS` / `ADD VALUE IF NOT EXISTS`** for all additive DDL (already standard)
+2. **Include a DOWN comment** at the top of each file with the reversal SQL:
+   ```sql
+   -- DOWN: ALTER TABLE foo DROP COLUMN IF EXISTS bar;
+   ```
+3. **Destructive DDL** (`DROP TABLE`, `DROP COLUMN`, `TRUNCATE`) triggers a CI gate (`migration-safety` job).
+   Add `-- REVIEWED: intentional` on the same line to acknowledge:
+   ```sql
+   DROP TABLE old_table; -- REVIEWED: intentional — table replaced by new_table in 0012
+   ```
+4. The `preDeployCommand` on Render runs `drizzle-kit migrate` automatically before each deploy.
+   If it fails, Render aborts and the old instance stays live.
 
 ---
 

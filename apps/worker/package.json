@@ -13,7 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@scrollpop/shared": "workspace:*"
+    "@scrollpop/shared": "workspace:*",
+    "@sentry/cloudflare": "^9.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",

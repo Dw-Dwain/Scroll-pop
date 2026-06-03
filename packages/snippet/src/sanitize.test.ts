@@ -1,0 +1,128 @@
+import { describe, it, expect } from 'vitest';
+import {
+  escapeHtml, safeHref, safeCssColor, safeCssUrl, safeCssInt,
+  cssNum, cssFont, cssAlign, cssWeight, cssLen, isSafeRegex,
+} from './sanitize.js';
+
+describe('escapeHtml', () => {
+  it('escapes all HTML-significant characters', () => {
+    expect(escapeHtml('<img src=x onerror=alert(1)>')).toBe('&lt;img src=x onerror=alert(1)&gt;');
+    expect(escapeHtml(`"'&<>`)).toBe('&quot;&#039;&amp;&lt;&gt;');
+  });
+  it('handles null/undefined', () => {
+    expect(escapeHtml(null)).toBe('');
+    expect(escapeHtml(undefined)).toBe('');
+  });
+});
+
+describe('safeHref', () => {
+  it('allows http(s)', () => {
+    expect(safeHref('https://example.com/x?a=1')).toBe('https://example.com/x?a=1');
+    expect(safeHref('http://example.com')).toBe('http://example.com');
+  });
+  it('blocks javascript: and data: and other schemes', () => {
+    expect(safeHref('javascript:alert(document.cookie)')).toBe('#');
+    expect(safeHref('JaVaScRiPt:alert(1)')).toBe('#');
+    expect(safeHref('data:text/html,<script>alert(1)</script>')).toBe('#');
+    expect(safeHref('vbscript:msgbox(1)')).toBe('#');
+  });
+  it('blocks empty / malformed', () => {
+    expect(safeHref('')).toBe('#');
+    expect(safeHref(null)).toBe('#');
+    expect(safeHref('not a url')).toBe('#');
+  });
+});
+
+describe('safeCssColor', () => {
+  it('allows hex colors', () => {
+    expect(safeCssColor('#fff', 'X')).toBe('#fff');
+    expect(safeCssColor('#6366f1', 'X')).toBe('#6366f1');
+  });
+  it('rejects injection attempts', () => {
+    expect(safeCssColor('red;}</style><script>alert(1)</script>', '#000')).toBe('#000');
+    expect(safeCssColor('#fff;background:url(//evil)', '#000')).toBe('#000');
+    expect(safeCssColor('expression(alert(1))', '#000')).toBe('#000');
+  });
+});
+
+describe('safeCssUrl', () => {
+  it('allows clean http(s) urls', () => {
+    expect(safeCssUrl('https://cdn.example.com/a.png')).toBe('https://cdn.example.com/a.png');
+  });
+  it('blocks url()-breakout and non-http schemes', () => {
+    expect(safeCssUrl('https://x/a.png");background:url("//evil')).toBe('');
+    expect(safeCssUrl('javascript:alert(1)')).toBe('');
+    expect(safeCssUrl("https://x/a.png')")).toBe('');
+  });
+});
+
+describe('cssNum', () => {
+  it('passes finite numbers, falls back otherwise', () => {
+    expect(cssNum(42, 0)).toBe(42);
+    expect(cssNum('50', 0)).toBe(50);
+    expect(cssNum('10px;}</style>', 99)).toBe(99);
+    expect(cssNum(undefined, 7)).toBe(7);
+    expect(cssNum(NaN, 7)).toBe(7);
+  });
+});
+
+describe('cssFont', () => {
+  it('keeps valid font names', () => {
+    expect(cssFont('Inter, sans-serif')).toBe('Inter, sans-serif');
+  });
+  it('strips style/attribute breakout characters', () => {
+    expect(cssFont('a;}</style><img src=x onerror=alert(1)>')).not.toContain('<');
+    expect(cssFont('a"onmouseover="alert(1)')).not.toContain('}');
+    expect(cssFont('x;color:red')).toBe('xcolorred');
+    expect(cssFont(123)).toBe('inherit');
+  });
+});
+
+describe('cssAlign / cssWeight', () => {
+  it('whitelists alignment', () => {
+    expect(cssAlign('center', 'left')).toBe('center');
+    expect(cssAlign('center;}</style>', 'left')).toBe('left');
+  });
+  it('whitelists weight', () => {
+    expect(cssWeight('700', '400')).toBe('700');
+    expect(cssWeight('bold', '400')).toBe('bold');
+    expect(cssWeight('700;}<x>', '400')).toBe('400');
+  });
+});
+
+describe('cssLen', () => {
+  it('numbers become px', () => {
+    expect(cssLen(12, '0')).toBe('12px');
+  });
+  it('allows safe length strings', () => {
+    expect(cssLen('8px 12px', '0')).toBe('8px 12px');
+    expect(cssLen('1.5rem', '0')).toBe('1.5rem');
+  });
+  it('rejects css-breaking strings', () => {
+    expect(cssLen('12px;}</style>', '0')).toBe('0');
+    expect(cssLen('url(//evil)', '0')).toBe('0');
+    expect(cssLen('12px"onload="x', '0')).toBe('0');
+  });
+});
+
+describe('safeCssInt', () => {
+  it('clamps to range', () => {
+    expect(safeCssInt(12, 0, 32, 8)).toBe(12);
+    expect(safeCssInt(999, 0, 32, 8)).toBe(8);
+    expect(safeCssInt('8;}', 0, 32, 8)).toBe(8);
+  });
+});
+
+describe('isSafeRegex', () => {
+  it('allows simple patterns', () => {
+    expect(isSafeRegex('^/products/.*')).toBe(true);
+    expect(isSafeRegex('/blog/')).toBe(true);
+  });
+  it('rejects nested-quantifier ReDoS patterns', () => {
+    expect(isSafeRegex('(a+)+$')).toBe(false);
+    expect(isSafeRegex('([a-z]+)*')).toBe(false);
+  });
+  it('rejects over-length patterns', () => {
+    expect(isSafeRegex('a'.repeat(101))).toBe(false);
+  });
+});

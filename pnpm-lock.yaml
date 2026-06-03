@@ -49,7 +49,7 @@ importers:
         version: 1.38.0
       drizzle-orm:
         specifier: ^0.32.0
-        version: 0.32.2(@cloudflare/workers-types@4.20260523.1)(@types/react@19.2.15)(@types/sql.js@1.4.11)(postgres@3.4.9)(react@19.2.6)(sql.js@1.14.1)
+        version: 0.32.2(@cloudflare/workers-types@4.20260523.1)(@opentelemetry/api@1.9.1)(@types/react@19.2.15)(@types/sql.js@1.4.11)(postgres@3.4.9)(react@19.2.6)(sql.js@1.14.1)
       fastify:
         specifier: ^5.0.0
         version: 5.8.5
@@ -189,7 +189,7 @@ importers:
         version: 2.4.3
       drizzle-orm:
         specifier: ^0.32.0
-        version: 0.32.2(@cloudflare/workers-types@4.20260523.1)(@types/react@19.2.15)(@types/sql.js@1.4.11)(postgres@3.4.9)(react@19.2.6)(sql.js@1.14.1)
+        version: 0.32.2(@cloudflare/workers-types@4.20260523.1)(@opentelemetry/api@1.9.1)(@types/react@19.2.15)(@types/sql.js@1.4.11)(postgres@3.4.9)(react@19.2.6)(sql.js@1.14.1)
       electron-updater:
         specifier: ^6.3.0
         version: 6.8.3
@@ -236,6 +236,9 @@ importers:
       '@scrollpop/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@sentry/cloudflare':
+        specifier: ^9.0.0
+        version: 9.47.1(@cloudflare/workers-types@4.20260523.1)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20240925.0
@@ -280,6 +283,9 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.19.19)(lightningcss@1.32.0)
 
   packages/wp-plugin: {}
 
@@ -1964,6 +1970,10 @@ packages:
     engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
     deprecated: This functionality has been moved to @npmcli/fs
 
+  '@opentelemetry/api@1.9.1':
+    resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
+    engines: {node: '>=8.0.0'}
+
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
@@ -2155,6 +2165,19 @@ packages:
     resolution: {integrity: sha512-QVTUovf40zgTqlFVrKA1uXMVvU2QWEFWfAH8Wdc48IxLvrJMQVMBRjuQyUpzZCDkakImib9eVazbWlC6ksWtJw==}
     cpu: [x64]
     os: [win32]
+
+  '@sentry/cloudflare@9.47.1':
+    resolution: {integrity: sha512-k22rStK6PCNKBGp8eDBz2vmT/ksKoDDqiF2dwK2KSzngc1B0DSl5S4THdRB+gdkEcJOH0zbCKR/s9EsazbQmJQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@cloudflare/workers-types': ^4.x
+    peerDependenciesMeta:
+      '@cloudflare/workers-types':
+        optional: true
+
+  '@sentry/core@9.47.1':
+    resolution: {integrity: sha512-KX62+qIt4xgy8eHKHiikfhz2p5fOciXd0Cl+dNzhgPFq8klq4MGMNaf148GB3M/vBqP4nw/eFvRMAayFCgdRQw==}
+    engines: {node: '>=18'}
 
   '@shopify/cli@3.94.3':
     resolution: {integrity: sha512-J9KJeKZHxlI9XrVaTWdrS0Yzea/tqXrdRWOfj5UtLDXFmTcv2yFeT7qwy5QrtwrgV4DQqFmNiQ6SRzcTctKT/g==}
@@ -6240,6 +6263,8 @@ snapshots:
       mkdirp: 1.0.4
       rimraf: 3.0.2
 
+  '@opentelemetry/api@1.9.1': {}
+
   '@pinojs/redact@0.4.0': {}
 
   '@pkgjs/parseargs@0.11.0':
@@ -6380,6 +6405,15 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.60.4':
     optional: true
+
+  '@sentry/cloudflare@9.47.1(@cloudflare/workers-types@4.20260523.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@sentry/core': 9.47.1
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20260523.1
+
+  '@sentry/core@9.47.1': {}
 
   '@shopify/cli@3.94.3':
     dependencies:
@@ -7318,9 +7352,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.32.2(@cloudflare/workers-types@4.20260523.1)(@types/react@19.2.15)(@types/sql.js@1.4.11)(postgres@3.4.9)(react@19.2.6)(sql.js@1.14.1):
+  drizzle-orm@0.32.2(@cloudflare/workers-types@4.20260523.1)(@opentelemetry/api@1.9.1)(@types/react@19.2.15)(@types/sql.js@1.4.11)(postgres@3.4.9)(react@19.2.6)(sql.js@1.14.1):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260523.1
+      '@opentelemetry/api': 1.9.1
       '@types/react': 19.2.15
       '@types/sql.js': 1.4.11
       postgres: 3.4.9

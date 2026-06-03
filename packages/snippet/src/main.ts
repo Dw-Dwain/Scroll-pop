@@ -13,6 +13,11 @@
  * 5. Beacon events
  */
 
+import {
+  escapeHtml, safeHref, safeCssColor, safeCssUrl, safeCssInt,
+  cssNum, cssFont, cssAlign, cssWeight, cssLen, isSafeRegex,
+} from './sanitize.js';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AffiliateSlot {
@@ -277,7 +282,7 @@ function evaluateRule(rule: TargetingRule): boolean {
     case 'url_regex': {
       try {
         const pattern = (value['pattern'] as string) || '';
-        if (pattern.length > 100) return false; // Enforce max-length constraint to mitigate ReDoS
+        if (!isSafeRegex(pattern)) return false;
         return new RegExp(pattern).test(url);
       } catch {
         return false;
@@ -590,24 +595,33 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
   let usedEmailId = false;
   let usedCtaId = false;
   const out: string[] = [];
+
+  // Sanitize design-level CSS values used as fallbacks for element colors
+  const cssAccent = safeCssColor(design.accentColor, '#6366f1');
+  const cssText   = safeCssColor(design.textColor, '#111111');
+  const elColor   = (raw: unknown, fb: string) => safeCssColor(raw, fb);
+  const elBgColor = (raw: unknown, fb: string) => safeCssColor(raw, fb);
+  const elBorderR = (raw: unknown, fb: number) => safeCssInt(raw, 0, 999, fb);
+
   for (const el of els) {
-    const ff = el.fontFamily || 'inherit';
-    const pos = `position:absolute;left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;z-index:${el.zIndex || 1};opacity:${el.opacity ?? 1};box-sizing:border-box;overflow:hidden;`;
-    
+    const ff = cssFont(el.fontFamily);
+    const op = Math.min(Math.max(0, cssNum(el.opacity, 1)), 1);
+    const pos = `position:absolute;left:${cssNum(el.x, 0)}%;top:${cssNum(el.y, 0)}%;width:${cssNum(el.w, 100)}%;height:${cssNum(el.h, 10)}%;z-index:${cssNum(el.zIndex, 1)};opacity:${op};box-sizing:border-box;overflow:hidden;`;
+
     // Support Option A: inject macros into raw text fields
     const content = el.content ? injectMacros(el.content) : '';
 
     switch (el.type) {
       case 'heading':
-        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:${el.align || 'center'};color:${el.color || '#111827'};font-size:${el.fontSize || 24}px;font-weight:${el.fontWeight || '700'};font-family:${ff};line-height:1.2;">${escapeHtml(content)}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:${cssAlign(el.align, 'center')};color:${elColor(el.color, '#111827')};font-size:${cssNum(el.fontSize, 24)}px;font-weight:${cssWeight(el.fontWeight, '700')};font-family:${ff};line-height:1.2;">${escapeHtml(content)}</div>`);
         break;
       case 'text':
-        out.push(`<div style="${pos}display:flex;align-items:center;text-align:${el.align || 'left'};color:${el.color || '#4B5563'};font-size:${el.fontSize || 13}px;font-weight:${el.fontWeight || '400'};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${el.backgroundColor};` : ''}${el.borderRadius ? `border-radius:${el.borderRadius}px;` : ''}${el.padding ? `padding:${el.padding}px;` : ''}">${escapeHtml(content)}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;text-align:${cssAlign(el.align, 'left')};color:${elColor(el.color, '#4B5563')};font-size:${cssNum(el.fontSize, 13)}px;font-weight:${cssWeight(el.fontWeight, '400')};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${elBgColor(el.backgroundColor, 'transparent')};` : ''}${el.borderRadius ? `border-radius:${elBorderR(el.borderRadius, 0)}px;` : ''}${el.padding ? `padding:${cssLen(el.padding, '0')};` : ''}">${escapeHtml(content)}</div>`);
         break;
       case 'button': {
         const isSubmit = hasInput && !usedCtaId;
         usedCtaId = true;
-        const style = `${pos}display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;background:${el.backgroundColor || design.accentColor || '#6366f1'};color:${el.color || '#fff'};border-radius:${el.borderRadius ?? 8}px;font-size:${el.fontSize || 14}px;font-weight:700;font-family:${ff};border:${el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || 'transparent'}` : 'none'};`;
+        const style = `${pos}display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;background:${elBgColor(el.backgroundColor, cssAccent)};color:${elColor(el.color, '#fff')};border-radius:${elBorderR(el.borderRadius, 8)}px;font-size:${cssNum(el.fontSize, 14)}px;font-weight:700;font-family:${ff};border:${el.borderWidth ? `${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, 'transparent')}` : 'none'};`;
         if (isSubmit) {
           out.push(`<button type="button" id="cta-submit-btn" style="${style}">${escapeHtml(content || 'Submit')}</button>`);
         } else {
@@ -615,7 +629,7 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
           if (smartProduct && smartProduct.title) {
              rawHref = withKeyword(rawHref, smartProduct.title);
           }
-          const href = injectMacros(rawHref);
+          const href = safeHref(injectMacros(rawHref));
           out.push(`<a id="cta-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" style="${style}">${escapeHtml(content || 'Continue')}</a>`);
         }
         break;
@@ -625,29 +639,29 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
         const idAttr = !usedEmailId ? ' id="email-input"' : '';
         usedEmailId = true;
         const ph = el.extraProps?.placeholder || el.content || 'Your email address…';
-        out.push(`<input${idAttr} type="email" placeholder="${escapeHtml(injectMacros(ph))}" required style="${pos}padding:0 12px;font-size:13px;color:#1f2937;background:#fff;border:${el.borderWidth ?? 1}px solid ${el.borderColor || '#E4E4E7'};border-radius:${el.borderRadius ?? 8}px;outline:none;">`);
+        out.push(`<input${idAttr} type="email" placeholder="${escapeHtml(injectMacros(ph))}" required style="${pos}padding:0 12px;font-size:13px;color:#1f2937;background:#fff;border:${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, '#E4E4E7')};border-radius:${elBorderR(el.borderRadius, 8)}px;outline:none;">`);
         break;
       }
       case 'image': {
-        const imgSrc = (smartProduct && smartProduct.image) ? smartProduct.image : content;
-        out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${el.borderRadius ?? 8}px;">`);
+        const imgSrc = safeHref((smartProduct && smartProduct.image) ? smartProduct.image : content);
+        out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${elBorderR(el.borderRadius, 8)}px;">`);
         break;
       }
       case 'close':
-        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:${el.color || design.textColor || '#374151'};font-size:${el.fontSize || 16}px;">${escapeHtml(content || '✕')}</button>`);
+        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:${elColor(el.color, cssText)};font-size:${cssNum(el.fontSize, 16)}px;">${escapeHtml(content || '✕')}</button>`);
         break;
       case 'shape':
-        out.push(`<div style="${pos}background:${el.backgroundColor || '#000'};border-radius:${el.content === 'circle' ? '9999px' : `${el.borderRadius ?? 0}px`};border:${el.borderWidth ? `${el.borderWidth}px solid ${el.borderColor || 'transparent'}` : 'none'};"></div>`);
+        out.push(`<div style="${pos}background:${elBgColor(el.backgroundColor, '#000')};border-radius:${el.content === 'circle' ? '9999px' : `${elBorderR(el.borderRadius, 0)}px`};border:${el.borderWidth ? `${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, 'transparent')}` : 'none'};"></div>`);
         break;
       case 'divider':
-        out.push(`<div style="${pos}display:flex;align-items:center;"><div style="width:100%;border-top:${el.borderWidth ?? 1}px solid ${el.borderColor || el.color || '#e5e7eb'};"></div></div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;"><div style="width:100%;border-top:${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor || el.color, '#e5e7eb')};"></div></div>`);
         break;
       case 'badge':
       case 'urgency':
-        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;background:${el.backgroundColor || design.accentColor || '#6366f1'};color:${el.color || '#fff'};border-radius:9999px;font-size:${el.fontSize || 11}px;font-weight:700;font-family:${ff};padding:0 8px;">${escapeHtml(content)}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;background:${elBgColor(el.backgroundColor, cssAccent)};color:${elColor(el.color, '#fff')};border-radius:9999px;font-size:${cssNum(el.fontSize, 11)}px;font-weight:700;font-family:${ff};padding:0 8px;">${escapeHtml(content)}</div>`);
         break;
       default:
-        if (content) out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:center;color:${el.color || design.textColor || '#111'};font-size:${el.fontSize || 13}px;font-family:${ff};">${escapeHtml(content)}</div>`);
+        if (content) out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:center;color:${elColor(el.color, cssText)};font-size:${cssNum(el.fontSize, 13)}px;font-family:${ff};">${escapeHtml(content)}</div>`);
     }
   }
   return out.join('');
@@ -702,8 +716,8 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
     case 'md': width = '480px'; break;
     case 'lg': width = '600px'; break;
   }
-  // Element mode: match the editor's canvas box width.
-  if (elementMode && mainStep.width) width = `${mainStep.width}px`;
+  // Element mode: match the editor's canvas box width (sanitized to a number).
+  if (elementMode && mainStep.width) width = `${cssNum(mainStep.width, 480)}px`;
 
   const positionStyles = getPositionStyles(design);
 
@@ -711,28 +725,39 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
 
   const add = (...args: string[]) => htmlChunks.push(...args);
 
+  // Sanitize design config values before injecting into CSS
+  const cssBackground = safeCssColor(design.backgroundColor, '#ffffff');
+  const cssText       = safeCssColor(design.textColor, '#111111');
+  const cssAccent     = safeCssColor(design.accentColor, '#6366f1');
+  const cssBgImage    = safeCssUrl(design.backgroundImage);
+  const cssBorderR    = safeCssInt(design.borderRadius, 0, 32, 12);
+  const cssOverlayOp  = Math.min(Math.max(0, Number(design.overlayOpacity ?? 0.5)), 1);
+  const cssMargin     = cssLen(design.margin, '0px');
+  const cssPadding    = cssLen(design.padding, '24px');
+  const cssGap        = cssLen(design.gap, '12px');
+
   // Build style tag
   htmlChunks.push(`
 <style>
 :host{all:initial;font-family:system-ui,sans-serif;}
-${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,${design.overlayOpacity ?? 0.5});animation:sp-fade-in .2s ease;}` : ''}
-.popup{position:fixed;z-index:2147483647;background:${design.backgroundColor};${design.backgroundImage ? `background-image:url(${design.backgroundImage});background-size:cover;background-position:center;` : ''}color:${design.textColor};border-radius:${design.borderRadius}px;box-shadow:${getShadowCSS(design.boxShadow)};${design.boxShadow === 'glass' ? 'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' : ''}margin:${design.margin ?? '0px'};width:${width};max-width:calc(100vw - 32px);${positionStyles}animation:${getAnimation(design.animation)};overflow:hidden;}
-.popup-inner{padding:${design.padding ?? '24px'};display:flex;flex-direction:column;gap:${design.gap ?? '12px'};}
-.close-btn{position:absolute;${design.closeButtonPosition === 'top-right' ? 'top:12px;right:12px;' : 'top:12px;left:12px;'}background:none;border:none;cursor:pointer;font-size:18px;color:${design.textColor};opacity:.6;padding:4px 8px;border-radius:4px;z-index:50;}
+${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,${cssOverlayOp});animation:sp-fade-in .2s ease;}` : ''}
+.popup{position:fixed;z-index:2147483647;background:${cssBackground};${cssBgImage ? `background-image:url("${cssBgImage}");background-size:cover;background-position:center;` : ''}color:${cssText};border-radius:${cssBorderR}px;box-shadow:${getShadowCSS(design.boxShadow)};${design.boxShadow === 'glass' ? 'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' : ''}margin:${cssMargin};width:${width};max-width:calc(100vw - 32px);${positionStyles}animation:${getAnimation(design.animation)};overflow:hidden;}
+.popup-inner{padding:${cssPadding};display:flex;flex-direction:column;gap:${cssGap};}
+.close-btn{position:absolute;${design.closeButtonPosition === 'top-right' ? 'top:12px;right:12px;' : 'top:12px;left:12px;'}background:none;border:none;cursor:pointer;font-size:18px;color:${cssText};opacity:.6;padding:4px 8px;border-radius:4px;z-index:50;}
 .close-btn:hover{opacity:1;background:rgba(0,0,0,.1);}
 .headline{font-size:20px;font-weight:700;margin:0;line-height:1.3;}
 .subheadline{font-size:14px;opacity:.8;margin:0;}
 .body-text{font-size:14px;margin:0;line-height:1.5;}
 .product-image{width:100%;border-radius:8px;margin:0;display:block;}
 .email-input{width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1px solid #d1d5db;font-size:14px;color:#1f2937;background:#fff;outline:none;}
-.email-input:focus{border-color:${design.accentColor};}
-.cta-btn{display:inline-block;width:100%;text-align:center;border:none;cursor:pointer;background:${design.accentColor};color:#fff;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px;text-decoration:none;box-sizing:border-box;transition:opacity .15s;}
+.email-input:focus{border-color:${cssAccent};}
+.cta-btn{display:inline-block;width:100%;text-align:center;border:none;cursor:pointer;background:${cssAccent};color:#fff;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px;text-decoration:none;box-sizing:border-box;transition:opacity .15s;}
 .cta-btn:hover{opacity:.9;}
-.cta-link{color:${design.accentColor};text-decoration:underline;font-size:14px;cursor:pointer;}
+.cta-link{color:${cssAccent};text-decoration:underline;font-size:14px;cursor:pointer;}
 .dismiss-text{text-align:center;margin-top:4px;font-size:12px;opacity:.6;cursor:pointer;}
 .dismiss-text:hover{opacity:1;}
 .powered-by{text-align:center;margin-top:4px;font-size:10px;opacity:.4;}
-.success-coupon-box{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed ${design.accentColor};border-radius:8px;padding:12px;background:rgba(99,102,241,.05);font-size:18px;font-weight:800;font-family:monospace;letter-spacing:2px;text-align:center;cursor:pointer;transition:background .2s;}
+.success-coupon-box{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed ${cssAccent};border-radius:8px;padding:12px;background:rgba(99,102,241,.05);font-size:18px;font-weight:800;font-family:monospace;letter-spacing:2px;text-align:center;cursor:pointer;transition:background .2s;}
 .success-coupon-box:hover{background:rgba(99,102,241,.1);}
 .success-icon{width:44px;height:44px;background:#d1fae5;color:#065f46;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px auto;font-size:20px;}
 </style>
@@ -742,7 +767,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   const isTeaserLeft = design.position === 'bottom-left' || design.position === 'top';
   htmlChunks.push(`
 <style>
-.teaser-badge{position:fixed;z-index:2147483647;${isTeaserLeft ? 'left:20px;' : 'right:20px;'}bottom:20px;background:${design.accentColor};color:#fff;padding:10px 18px;border-radius:9999px;font-weight:700;font-size:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);cursor:pointer;display:none;align-items:center;gap:6px;transition:transform .2s,opacity .2s;}
+.teaser-badge{position:fixed;z-index:2147483647;${isTeaserLeft ? 'left:20px;' : 'right:20px;'}bottom:20px;background:${cssAccent};color:#fff;padding:10px 18px;border-radius:9999px;font-weight:700;font-size:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);cursor:pointer;display:none;align-items:center;gap:6px;transition:transform .2s,opacity .2s;}
 .teaser-badge:hover{transform:scale(1.05);}
 @keyframes sp-fade-in{from{opacity:0}to{opacity:1}}
 @keyframes sp-slide-up{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
@@ -768,7 +793,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
   // ─── Element mode: render the builder's positioned elements ─────────────────
   if (elementMode) {
-    htmlChunks.push(`<div class="popup-inner" id="popup-view-main" style="padding:0;position:relative;height:${mainStep.height || 520}px;display:block;">`);
+    htmlChunks.push(`<div class="popup-inner" id="popup-view-main" style="padding:0;position:relative;height:${cssNum(mainStep.height, 520)}px;display:block;">`);
     htmlChunks.push(buildElementsHTML(mainStep, design, slot, smartProduct));
     htmlChunks.push('</div>');
   } else {
@@ -822,13 +847,13 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       // Plain Clickout affiliate button
       if (design.ctaStyle === 'button') {
         htmlChunks.push('<a class="cta-btn" href="');
-        htmlChunks.push(escapeHtml(trackerUrl));
+        htmlChunks.push(escapeHtml(safeHref(trackerUrl)));
         htmlChunks.push('" target="_blank" rel="noopener" id="cta-link">');
         htmlChunks.push(escapeHtml(btnText));
         htmlChunks.push('</a>');
       } else {
         htmlChunks.push('<a class="cta-link" href="');
-        htmlChunks.push(escapeHtml(trackerUrl));
+        htmlChunks.push(escapeHtml(safeHref(trackerUrl)));
         htmlChunks.push('" target="_blank" rel="noopener" id="cta-link">');
         htmlChunks.push(escapeHtml(btnText));
         htmlChunks.push('</a>');
@@ -913,7 +938,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       <div class="success-coupon-box" id="success-coupon-box" title="Click to copy voucher code">
         <span>${escapeHtml(couponTxt)}</span>
       </div>
-      <a class="cta-btn" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top: 10px;">
+      <a class="cta-btn" href="${escapeHtml(safeHref(trackerUrl))}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top: 10px;">
         SHOP WITH VOUCHER CODE
       </a>
       ${sitePlan === 'free' ? '<p class="powered-by" style="margin-top: 6px;">Powered by ScrollPop</p>' : ''}
@@ -1115,16 +1140,6 @@ function getDevice(): 'mobile' | 'desktop' | 'tablet' {
   if (/iPad|Tablet/i.test(ua)) return 'tablet';
   if (/Mobi|Android|iPhone/i.test(ua)) return 'mobile';
   return 'desktop';
-}
-
-function escapeHtml(str: string | undefined | null): string {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
