@@ -1,7 +1,7 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 1, 2026 · v0.1.2-beta
+> Last updated: June 4, 2026 · v0.1.2-beta
 
 ---
 
@@ -1189,11 +1189,7 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 - `api.scrollpop.online` custom domain (API still at `scroll-pop.onrender.com`)
 - Clerk Organizations / team UI — personal accounts only; org-based path dormant
 - `scrollpop.online` marketing site
-- ✅ **Email notifications (Resend)** — DONE (Jun 4 2026). `emitNotification` now fans out to an
-  email channel (`apps/api/src/lib/email.ts`, `fetch`-based, no `resend` npm dep) alongside the
-  in-app channel, reusing the same per-type prefs + a new `notif_channels_email` toggle. Wired
-  for the existing emitters (campaign status, 80%/95% view-cap, conversion milestones). DORMANT
-  until `RESEND_API_KEY` + `RESEND_FROM` (a Resend-verified sender) are set in Render.
+- ✅ **Email notifications (Resend)** — DONE (Jun 4 2026). See the Jun 3–4 session log + §25 T1/T2.
 - ✅ **Campaign scheduling (start/end dates)** — DONE (Jun 3 2026). Optional run window
   per campaign, evaluated in the **visitor's local time** (datetime-local strings, no
   timezone). Stored in the design config (`design.config.schedule = { startsAt, endsAt }`)
@@ -1224,9 +1220,7 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
   A/B testing item (v2 #6), which supersedes the simple % gate anyway. The dashboard still
   has the % slider but it won't gate until #6.
 - Webhook / outbound HTTP on conversion events
-- ✅ **Campaign duplication via UI** — DONE (Jun 4 2026). `POST /api/v1/campaigns/:id/duplicate`
-  clones the campaign + design + triggers + targeting + frequency as a new **draft** (events not
-  copied); dashboard Campaigns card → ⋯ → "Duplicate".
+- ✅ **Campaign duplication via UI** — DONE (Jun 4 2026). See the Jun 3–4 session log.
 - Bulk campaign operations
 - Team invitations UI (Clerk org invitations exist but no dashboard wrapper)
 - Shopify App Store submission (App Embed Block needed first)
@@ -1869,6 +1863,77 @@ requires a **verified** Clerk primary email matching `ADMIN_EMAIL` for any `/adm
 ### Admin Clerk sync
 `POST /admin/sync` + `DELETE /admin/tenants/:id` added. Refresh button in admin panel
 now calls sync first (cleans stale Clerk-deleted users) then refetches. staleTime = 0.
+
+---
+
+## Session Log — June 3–4, 2026
+
+Theme: pre-launch hardening — observability, transactional email, and bug fixes, all shipped
+**dependency-free** (no new npm packages, so the pnpm lockfile / `--frozen-lockfile` CI stay
+intact) and **dormant until keys are set** (nothing breaks before configuration).
+
+### Observability & email (env-gated, dormant)
+- **Sentry — API** (`apps/api/src/lib/sentry.ts`, new): a `fetch`-based Sentry *envelope* client
+  (no `@sentry/node`). Parses `SENTRY_DSN`; reports from the global error handler (500-class only —
+  4xx/validation excluded) and from `uncaughtException` / `unhandledRejection`. No-op without DSN.
+- **Sentry — dashboard** (`apps/dashboard/src/lib/observability.ts`, new): loads the Sentry CDN
+  loader, deriving the loader URL's public key from `VITE_SENTRY_DSN`; sets `window.sentryOnLoad`
+  to `init` with `tracesSampleRate:0` (free error-only tier). No-op without DSN.
+- **PostHog — dashboard** (same file): loads `array.js` from the region asset host via the official
+  `_i` queue, gated on `VITE_POSTHOG_KEY` (+ optional `VITE_POSTHOG_HOST`, default US). No npm dep
+  (sidesteps the pnpm v11 block that forced `posthog-js` out earlier).
+- `initObservability()` is called once in `main.tsx` before render.
+- **CSP** (`apps/dashboard/public/_headers`): added `js.sentry-cdn.com` (script-src) and
+  `*.sentry.io` (connect-src) to the report-only policy so promotion to enforcing won't break it.
+  PostHog (`*.posthog.com`) was already allowlisted.
+- **Resend email** (`apps/api/src/lib/email.ts`, new): `fetch`-based Resend client (no `resend`
+  npm dep). `emitNotification` now fans out to email alongside in-app — resolves the tenant
+  **owner's** email, honors the per-type pref + a new `notif_channels_email` channel toggle, and
+  is DORMANT until `RESEND_API_KEY` + `RESEND_FROM` (a Resend-verified sender) are set. Covers the
+  existing emitters: campaign status, 80%/95% view-cap, conversion milestones.
+
+### Bug fixes
+- **B3** (`tenant-context.ts`): the personal + Novatise tenant lookups now filter
+  `isNull(deletedAt)` and **revive on conflict** (`onConflictDoUpdate` clearing `deletedAt`), so a
+  soft-deleted tenant is restored on the owner's next sign-in instead of dangling or 500-ing on the
+  unique `clerkOrgId` constraint. (The org-path already filtered `deletedAt`.)
+- **B4** (`apps/worker/src/index.ts`): clarified that the live event path is Worker `/e` → API
+  `/e` (the Redis `sp_events` queue in older docs is not the live path), so the real loss point was
+  `forwardEventsToApi`. Added **1 retry + 500 ms backoff** (each attempt keeps its 10 s timeout;
+  a 4xx is permanent → no retry). A transient origin blip (e.g. a redeploy) no longer silently
+  drops an event batch.
+
+### Features
+- **Campaign duplication**: `POST /api/v1/campaigns/:id/duplicate` (tenant-scoped) clones the
+  campaign + design + triggers + targeting + frequency as a new **draft** (events/analytics not
+  copied). Dashboard: Campaigns card → ⋯ → **Duplicate** (Refine `useCreate`, refetches on success).
+- **WordPress plugin `.zip`**: build artifact produced at `packages/wp-plugin/dist/scrollpop-wp.zip`
+  (folder `scrollpop/` at the zip root → extracts to `wp-content/plugins/scrollpop`). **Still needs
+  uploading** to the GitHub release asset / R2 path the dashboard links to (T8).
+
+### Marketing / compliance
+- **CMP2/CMP3**: softened the last absolute "Google-compliant" claim (footer → "triggers that avoid
+  the popup tricks Google penalizes"). The compare table + FAQ were already qualified in a prior pass.
+
+### Deferred (consciously, not forgotten)
+- **Affiliate multi-slot weight editor (#9)**: needs a slot-management UI that doesn't exist yet
+  (the wizard creates a single slot at `weight:100`). It's the larger #9 build (product-card
+  template + builder block + snippet render under the 10 KB gzip gate + weight UI), not a quick add.
+  Schema foundation (`weight` / `price` / `short_description`) is already in `AffiliateSlotSchema`.
+
+### Verification & deploy
+- Local gates green: `lint` (0 errors / 427 warnings baseline), `typecheck` (all packages),
+  `test` (all suites). No snippet changes → size/no-history gates unaffected.
+- Merged to `main` and synced **both** repos (`Dw-Dwain` → CF Worker + Pages; `dwain-coder` →
+  Render API) at commit `3808519`.
+
+### Manual follow-ups (owner)
+- Paste keys to activate: `SENTRY_DSN` (Render) + `VITE_SENTRY_DSN` (CF Pages/CI); `VITE_POSTHOG_KEY`
+  (+ `VITE_POSTHOG_HOST` if EU); `RESEND_API_KEY` + `RESEND_FROM` (Render, after verifying the
+  `scrollpop.online` sender domain in Resend). `VITE_*` vars bake at build → redeploy after setting.
+- Upload `scrollpop-wp.zip` to the release/R2 path (T8).
+- **Rotate the GitHub PATs** embedded in the git remote URLs (single-use per CONTRIBUTING):
+  https://github.com/settings/tokens
 
 ---
 
