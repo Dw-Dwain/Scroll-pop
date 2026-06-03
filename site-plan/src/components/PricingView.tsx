@@ -27,7 +27,7 @@ export default function PricingView() {
       ],
       cta: 'Start Free',
       popular: false,
-      href: DASHBOARD_URL,
+      href: `${DASHBOARD_URL}/sign-up`,
     },
     {
       id: 'starter',
@@ -46,7 +46,7 @@ export default function PricingView() {
       ],
       cta: 'Start Starter',
       popular: true,
-      href: DASHBOARD_URL,
+      href: `${DASHBOARD_URL}/sign-up`,
     },
     {
       id: 'growth',
@@ -66,7 +66,7 @@ export default function PricingView() {
       ],
       cta: 'Start Growth',
       popular: false,
-      href: DASHBOARD_URL,
+      href: `${DASHBOARD_URL}/sign-up`,
     },
     {
       id: 'scale',
@@ -84,7 +84,7 @@ export default function PricingView() {
       ],
       cta: 'Start Scale',
       popular: false,
-      href: DASHBOARD_URL,
+      href: `${DASHBOARD_URL}/sign-up`,
     },
     {
       id: 'agency',
@@ -103,7 +103,7 @@ export default function PricingView() {
       ],
       cta: 'Start Agency',
       popular: false,
-      href: DASHBOARD_URL,
+      href: `${DASHBOARD_URL}/sign-up`,
     },
   ];
 

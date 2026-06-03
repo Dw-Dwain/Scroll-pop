@@ -86,7 +86,7 @@ export default function Header({ activePage, onPageChange, onTriggerDemoPopup }:
             Sign In
           </a>
           <a
-            href={DASHBOARD_URL}
+            href={`${DASHBOARD_URL}/sign-up`}
             className="h-11 px-6 rounded-full bg-white text-black text-xs font-bold uppercase tracking-widest transition-all duration-300 hover:bg-opacity-90 hover:-translate-y-0.5 active:translate-y-0 shadow-xl cursor-pointer whitespace-nowrap flex items-center justify-center"
           >
             Start Free →
@@ -132,7 +132,7 @@ export default function Header({ activePage, onPageChange, onTriggerDemoPopup }:
                   Sign In
                 </a>
                 <a
-                  href={DASHBOARD_URL}
+                  href={`${DASHBOARD_URL}/sign-up`}
                   className="w-full h-11 font-bold tracking-widest rounded-full bg-white text-black hover:bg-opacity-95 transition-all text-xs uppercase shadow-xl flex items-center justify-center"
                 >
                   Start Free — No Card Needed

@@ -41,7 +41,7 @@ export default function Footer({ onPageChange, onTriggerDemoPopup }: FooterProps
             Scroll-triggered affiliate popup campaigns for WordPress and Shopify. Visual builder, real analytics, Google-compliant triggers. Free to start.
           </p>
           <a
-            href={DASHBOARD_URL}
+            href={`${DASHBOARD_URL}/sign-up`}
             className="w-fit h-10 px-6 rounded-full bg-white text-black text-xs font-bold uppercase tracking-widest hover:bg-white/90 transition-all shadow-xl flex items-center justify-center"
           >
             Start Free →
@@ -103,7 +103,7 @@ export default function Footer({ onPageChange, onTriggerDemoPopup }: FooterProps
               <a href={`${DASHBOARD_URL}/sign-in`} className="hover:text-white transition-colors">Sign In</a>
             </li>
             <li>
-              <a href={DASHBOARD_URL} className="hover:text-white transition-colors">Create Account</a>
+              <a href={`${DASHBOARD_URL}/sign-up`} className="hover:text-white transition-colors">Create Account</a>
             </li>
             <li className="text-[12px] bg-white/5 border border-white/10 p-2.5 rounded text-white/50 flex items-center gap-2 max-w-[160px]">
               <Shield className="h-3.5 w-3.5 text-white/70 flex-shrink-0" />

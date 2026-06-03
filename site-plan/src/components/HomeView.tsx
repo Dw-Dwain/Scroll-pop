@@ -84,7 +84,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10 font-sans">
             <a
-              href={DASHBOARD_URL}
+              href={`${DASHBOARD_URL}/sign-up`}
               className="w-full sm:w-auto h-12 md:h-14 px-10 bg-neutral-950 text-white rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl hover:bg-neutral-800 transition-all flex items-center justify-center gap-2"
             >
               <span>Start Free — No Card Needed</span> <ArrowRight className="h-4 w-4" />
@@ -474,7 +474,7 @@ export default function HomeView({ onPageChange, onTriggerDemoPopup, selectedTem
               className="w-full h-12 border border-neutral-250 rounded-full px-5 bg-white text-neutral-800 placeholder-neutral-400 focus:outline-hidden focus:border-neutral-450 transition-colors"
             />
             <a
-              href={DASHBOARD_URL}
+              href={`${DASHBOARD_URL}/sign-up`}
               className="w-full sm:w-auto h-12 px-8 bg-neutral-950 hover:bg-neutral-800 text-white font-mono uppercase tracking-wider font-bold rounded-full whitespace-nowrap cursor-pointer transition-all shadow-xl flex items-center justify-center"
             >
               Start Free →

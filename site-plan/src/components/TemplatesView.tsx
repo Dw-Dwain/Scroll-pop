@@ -241,7 +241,7 @@ function TemplateCard({ t }: { t: Template }) {
           <p className="text-xs text-neutral-600 font-light mt-1 leading-relaxed">{t.description}</p>
         </div>
         <a
-          href={DASHBOARD_URL}
+          href={`${DASHBOARD_URL}/sign-up`}
           className="w-full h-9 font-mono text-[11px] font-bold uppercase tracking-wider rounded border border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
         >
           Use This Template <ExternalLink className="h-3 w-3" />
@@ -265,7 +265,7 @@ export default function TemplatesView() {
           Eight ready-to-launch popup types — every one fully editable in the visual builder. Pick one, match your brand, go live in minutes.
         </p>
         <a
-          href={DASHBOARD_URL}
+          href={`${DASHBOARD_URL}/sign-up`}
           className="inline-flex items-center gap-2 mt-8 h-12 px-8 bg-neutral-950 text-white rounded-full text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-xl"
         >
           Browse All Templates in the Dashboard →
@@ -289,7 +289,7 @@ export default function TemplatesView() {
           </p>
         </div>
         <a
-          href={DASHBOARD_URL}
+          href={`${DASHBOARD_URL}/sign-up`}
           className="h-12 px-8 bg-neutral-950 text-white rounded font-mono text-xs font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors cursor-pointer flex items-center gap-2 shadow-lg whitespace-nowrap"
         >
           Start Building Free <ArrowRight className="h-4 w-4" />

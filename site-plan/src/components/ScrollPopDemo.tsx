@@ -221,7 +221,7 @@ export default function ScrollPopDemo() {
             <div className="mt-auto pt-4 border-t border-[#E9E4D9]">
               <p className="text-xs text-neutral-500 mb-3">Build this in the visual editor — free to start.</p>
               <a
-                href={DASHBOARD_URL}
+                href={`${DASHBOARD_URL}/sign-up`}
                 className="w-full h-10 bg-[#1A1A1A] text-white rounded-lg text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all"
               >
                 Start Building Free <ArrowRight className="h-3.5 w-3.5" />
@@ -241,7 +241,7 @@ export default function ScrollPopDemo() {
               </p>
             </div>
             <a
-              href={DASHBOARD_URL}
+              href={`${DASHBOARD_URL}/sign-up`}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C05621] hover:bg-[#a84d1e] text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all"
             >
               Create Free Account <ArrowRight className="h-3.5 w-3.5" />
