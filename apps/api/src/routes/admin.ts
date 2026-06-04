@@ -13,7 +13,7 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
 import { users, tenants, tenantMembers, sites, campaigns, adminAuditLog } from '../db/schema.js';
-import { eq, sql, isNull, and, like } from 'drizzle-orm';
+import { eq, sql, isNull, and, like, inArray } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
 
 const ADMIN_EMAIL = process.env['ADMIN_EMAIL']?.toLowerCase() ?? '';
@@ -122,21 +122,35 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .where(isNull(tenants.deletedAt))
       .orderBy(tenants.createdAt);
 
-    // Attach the owner email for each tenant
-    const enriched = await Promise.all(
-      rows.map(async (t) => {
-        const member = await db.query.tenantMembers.findFirst({
-          where: eq(tenantMembers.tenantId, t.id),
-          columns: { userId: true },
-        });
-        if (!member) return { ...t, email: null };
-        const u = await db.query.users.findFirst({
-          where: eq(users.id, member.userId),
-          columns: { email: true, name: true },
-        });
-        return { ...t, email: u?.email ?? null, ownerName: u?.name ?? null };
-      })
-    );
+    // Attach the owner email/name for each tenant in ONE join (was 2 queries per tenant —
+    // an N+1 that made the admin console slower with every tenant. CTO-AUDIT P2-8).
+    const tenantIds = rows.map((t) => t.id);
+    const members = tenantIds.length
+      ? await db
+          .select({
+            tenantId: tenantMembers.tenantId,
+            role: tenantMembers.role,
+            email: users.email,
+            name: users.name,
+          })
+          .from(tenantMembers)
+          .innerJoin(users, eq(users.id, tenantMembers.userId))
+          .where(inArray(tenantMembers.tenantId, tenantIds))
+      : [];
+
+    // Prefer the owner; fall back to any member (matches the prior arbitrary-first behaviour).
+    const ownerByTenant = new Map<string, { email: string | null; name: string | null }>();
+    for (const m of members) {
+      const existing = ownerByTenant.get(m.tenantId);
+      if (!existing || m.role === 'owner') {
+        ownerByTenant.set(m.tenantId, { email: m.email, name: m.name });
+      }
+    }
+
+    const enriched = rows.map((t) => {
+      const o = ownerByTenant.get(t.id);
+      return { ...t, email: o?.email ?? null, ownerName: o?.name ?? null };
+    });
 
     return reply.send({ data: enriched });
   });

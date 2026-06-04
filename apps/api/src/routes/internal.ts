@@ -1,10 +1,21 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from '../db/schema.js';
-import { eq, and, isNull, sql, gte } from 'drizzle-orm';
+import { eq, and, isNull, sql, gte, inArray } from 'drizzle-orm';
 import type { SiteConfigPayload } from '@scrollpop/shared';
 import crypto from 'node:crypto';
 import { redis } from '../index.js';
+
+/** Group rows by their campaignId into a Map for O(1) per-campaign assembly. */
+function groupByCampaignId<T extends { campaignId: string }>(rows: T[]): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const arr = m.get(r.campaignId);
+    if (arr) arr.push(r);
+    else m.set(r.campaignId, [r]);
+  }
+  return m;
+}
 
 /**
  * Internal routes — called by the Cloudflare Worker, NOT authenticated via Clerk.
@@ -110,59 +121,42 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
         ),
       });
 
-      // For each campaign, fetch design + triggers + targeting + frequency
-      const campaignConfigs = await Promise.all(
-        activeCampaigns.map(async (campaign) => {
-          const [design, campaignTriggers, targeting, freq] = await Promise.all([
-            db.query.designs.findFirst({
-              where: and(
-                eq(designs.campaignId, campaign.id),
-                eq(designs.tenantId, campaign.tenantId)
-              ),
-            }),
-            db.query.triggers.findMany({
-              where: and(
-                eq(triggers.campaignId, campaign.id),
-                eq(triggers.tenantId, campaign.tenantId)
-              ),
-            }),
-            db.query.targetingRules.findMany({
-              where: and(
-                eq(targetingRules.campaignId, campaign.id),
-                eq(targetingRules.tenantId, campaign.tenantId)
-              ),
-            }),
-            db.query.frequencyRules.findFirst({
-              where: and(
-                eq(frequencyRules.campaignId, campaign.id),
-                eq(frequencyRules.tenantId, campaign.tenantId)
-              ),
-            }),
-          ]);
+      // Batch-fetch design + triggers + targeting + frequency for ALL active campaigns in 4
+      // queries total. This was previously 4 queries PER campaign (an N+1 that scaled with
+      // campaign count on every KV cache miss). All campaigns belong to this site's tenant.
+      // CTO-AUDIT Phase 3 / P1-4.
+      const campaignIds = activeCampaigns.map((c) => c.id);
+      let validCampaigns: SiteConfigPayload['campaigns'] = [];
 
-          if (!design) return null;
+      if (campaignIds.length > 0) {
+        const tid = site.tenantId;
+        const [allDesigns, allTriggers, allTargeting, allFreq] = await Promise.all([
+          db.query.designs.findMany({ where: and(inArray(designs.campaignId, campaignIds), eq(designs.tenantId, tid)) }),
+          db.query.triggers.findMany({ where: and(inArray(triggers.campaignId, campaignIds), eq(triggers.tenantId, tid)) }),
+          db.query.targetingRules.findMany({ where: and(inArray(targetingRules.campaignId, campaignIds), eq(targetingRules.tenantId, tid)) }),
+          db.query.frequencyRules.findMany({ where: and(inArray(frequencyRules.campaignId, campaignIds), eq(frequencyRules.tenantId, tid)) }),
+        ]);
 
-          return {
-            id: campaign.id,
-            design: design.config,
-            triggers: campaignTriggers.map((t) => ({
-              id: t.id,
-              type: t.type,
-              params: t.params,
-            })),
-            targeting: targeting.map((r) => ({
-              id: r.id,
-              kind: r.kind,
-              operator: r.operator,
-              value: r.value,
-            })),
-            frequency: { frequency: freq?.frequency ?? 'once_per_session' },
-            affiliateSlots: design.affiliateSlots,
-          };
-        })
-      );
+        const designByCampaign = new Map(allDesigns.map((d) => [d.campaignId, d]));
+        const freqByCampaign = new Map(allFreq.map((f) => [f.campaignId, f]));
+        const triggersByCampaign = groupByCampaignId(allTriggers);
+        const targetingByCampaign = groupByCampaignId(allTargeting);
 
-      const validCampaigns = campaignConfigs.filter(Boolean);
+        validCampaigns = activeCampaigns
+          .map((campaign) => {
+            const design = designByCampaign.get(campaign.id);
+            if (!design) return null;
+            return {
+              id: campaign.id,
+              design: design.config,
+              triggers: (triggersByCampaign.get(campaign.id) ?? []).map((t) => ({ id: t.id, type: t.type, params: t.params })),
+              targeting: (targetingByCampaign.get(campaign.id) ?? []).map((r) => ({ id: r.id, kind: r.kind, operator: r.operator, value: r.value })),
+              frequency: { frequency: freqByCampaign.get(campaign.id)?.frequency ?? 'once_per_session' },
+              affiliateSlots: design.affiliateSlots,
+            };
+          })
+          .filter(Boolean) as SiteConfigPayload['campaigns'];
+      }
 
       // Generate a version hash for cache-busting
       const version = crypto
