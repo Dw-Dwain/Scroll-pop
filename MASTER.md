@@ -10,6 +10,8 @@
 - PostHog product analytics — live (`VITE_POSTHOG_KEY` set, CDN loaded in dashboard)
 - Resend transactional email — domain verified, API key set, emails firing on campaign events
 - WordPress plugin zip — hosted on Cloudflare R2 (`scrollpop-assets` bucket), dashboard URL updated
+- R2 snippet CDN — `p.js` in R2, Worker serves from it, `SNIPPET_CDN_URL` updated to `https://cdn.scrollpop.online`
+- Render Pre-Deploy Command — `pnpm --filter @scrollpop/api exec drizzle-kit migrate` set; migrations auto-apply on every deploy
 - GitHub PATs rotated
 - All observability/email code is dependency-free and was already merged at `8c859a8`
 
@@ -340,7 +342,7 @@ marketing-claim softening is tracked in §25 (CMP2/CMP3).
 | `SHOPIFY_API_KEY` | 37618fc8e087622a64ac244a2edd49f1 |
 | `SHOPIFY_API_SECRET` | From Shopify Partners — rotatable via Partners dashboard |
 | `SHOPIFY_SCOPES` | read_products,write_script_tags |
-| `SNIPPET_CDN_URL` | https://scroll-pop.onrender.com (temp — update when R2 live) |
+| `SNIPPET_CDN_URL` | https://cdn.scrollpop.online ✅ updated Jun 4 2026 |
 | `SENTRY_DSN` | ✅ Set (Jun 4 2026) |
 | `RESEND_API_KEY` | ✅ Set (Jun 4 2026) |
 | `RESEND_FROM` | `ScrollPop <notifications@scrollpop.online>` ✅ Set (Jun 4 2026) |
@@ -1220,7 +1222,7 @@ Toggle in Settings → Feature Flags panel. Flags are per-browser, not per-accou
 
 #### Infrastructure
 - **`api.scrollpop.online` custom domain** — API still at `scroll-pop.onrender.com`
-- **R2 snippet CDN fully live** — bucket + `p.js` uploaded (Jun 4); Worker serves from R2; `cdn.scrollpop.online` custom domain on bucket still needed; `SNIPPET_CDN_URL` on Render not yet updated
+- ✅ **R2 snippet CDN** — `scrollpop-assets` bucket live; `p.js` uploaded; Worker serves from R2 with bundled fallback; CI auto-uploads on every snippet build; `SNIPPET_CDN_URL` on Render updated to `https://cdn.scrollpop.online` — Jun 4 2026
 - **Render Pre-Deploy Command** — set to `pnpm --filter @scrollpop/api exec drizzle-kit migrate` to auto-apply migrations on deploy
 
 #### Shopify
@@ -1620,7 +1622,7 @@ A record of every step taken to go from code to live production. Useful if you e
 
 ### What's Still Pending
 - [ ] **Stripe** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs → billing UI goes live
-- [ ] **R2 snippet CDN** — upload `p.js` to `scrollpop-assets` bucket, point `cdn.scrollpop.online` custom domain at it, update `SNIPPET_CDN_URL` on Render
+- [x] **R2 snippet CDN** — `p.js` in `scrollpop-assets`, Worker serves from R2, `SNIPPET_CDN_URL` = `https://cdn.scrollpop.online` — Jun 4 2026
 - [ ] **`api.scrollpop.online`** custom domain (Cloudflare DNS → Render)
 - [ ] **Render Pre-Deploy Command** — auto-apply DB migrations (prevents migration-drift outage from recurring — see §25)
 
