@@ -12,10 +12,10 @@
 | Category | Total | Done | Remaining |
 |---|---|---|---|
 | P0 Launch blockers | 5 | 2 | 3 |
-| P1 High priority | 18 | 7 | 11 |
-| P2 Medium priority | 19 | 10 | 9 |
+| P1 High priority | 18 | 8 | 10 |
+| P2 Medium priority | 19 | 11 | 8 |
 | P3 Low priority | 12 | 1 | 11 |
-| **Total** | **54** | **20** | **34** |
+| **Total** | **54** | **22** | **32** |
 
 > **Security sprint (Jun 4 2026)** — `feature/security-phase4-5`: closed all CTO-AUDIT
 > Phase 4 findings + Phase 5 scenarios. Done: P0-1, P0-5, P1-1, P1-2, P1-3, P1-17, P2-1,
@@ -75,7 +75,7 @@ Core product gaps vs. Promolayer and high-severity technical issues.
 | P1-10 | ⬜ | Feature | **Real A/B testing** — Proper variant allocation (weighted random assignment per visitor, sticky via localStorage), win condition detection, statistical significance indicator. | ✅ full A/B/N + control groups | Must be lazy-loaded or snippet exceeds 10 KB gate. Design as a separate module. |
 | P1-11 | ⬜ | Feature | **Countdown timers** — Present in every popup competitor. Standard FOMO/urgency tool. Absent from all ScrollPop popup types. | ✅ native | Add `countdown` element type to the block builder. Snippet renderer handles `Date.now()` countdown display. |
 | P1-12 | ⬜ | Feature | **Gamified popups (spin-to-win)** — Removed Jun 3 2026 because the editor had no entry point. Promolayer claims 300% more submissions vs standard. | ✅ claims 3× conversion | Must be lazy-loaded (separate JS chunk, fetched only when a gamified campaign renders) to protect the 10 KB gate. Build editor entry point + snippet lazy-loader together. |
-| P1-13 | ⬜ | Feature | **Shopify App Embed Block** — Current Shopify integration uses Script Tag. App Embed Block is the modern approach: no theme code edits, faster, required for App Store approval. | ✅ (implied by listing) | Required before Shopify App Store submission. |
+| P1-13 | ✅ | Feature | **Shopify App Embed Block** — Already built: `packages/shopify-app-embed/blocks/scrollpop.liquid` is a complete `head`-target embed with a public-key setting; Shopify CLI installed; dashboard has the install UI (Sites → App Embed Block tab). Code-complete; only needs `npx shopify app deploy` to the Partner app (ops step). | `packages/shopify-app-embed/` | Done (code). Deploy to Partner app when ready; then P1-14 (App Store submission). |
 | P1-14 | ⬜ | Feature | **Shopify App Store submission** — 4.9★ Promolayer listing with 61 reviews is an inbound discovery channel ScrollPop has no equivalent of. All Shopify operators find tools via the App Store. | ✅ 4.9★ 61 reviews | Requires App Embed Block (P1-13) first. |
 | P1-15 | ⬜ | UX | **New user onboarding** — A new user lands on a blank Dashboard with empty KPI tiles and no prompt. No guided onboarding, no empty-state CTAs, no setup checklist. | ✅ implied by 25K sites | Add empty state to Dashboard: "Add your first site →", "Create your first campaign →". Consider a setup checklist widget. |
 | P1-16 | ⬜ | UX | **Billing upgrade throws 500** — `POST /billing/checkout` requires `STRIPE_PRICE_*` env vars not yet set. Any user clicking upgrade sees a server error. | `billing.ts:54–60` | Blocked by P0-2. Once Stripe is configured this resolves automatically, but add a graceful "Billing not yet available" state for pre-launch. |
@@ -105,7 +105,7 @@ Real issues, not blocking launch, should be addressed in the first growth sprint
 |---|---|---|---|---|---|
 | P2-7 | ✅ | Performance | **No `tenantId` index within TimescaleDB partitions** — Analytics queries do full-chunk scans within each partition. Will degrade with tenant count. | `analytics.ts` | `CREATE INDEX CONCURRENTLY ON events(tenant_id, ts DESC)` on the Neon production DB. |
 | P2-8 | ✅ | Performance | **Admin tenant list N+1** — Two additional DB queries per tenant row to fetch owner email. | `admin.ts:95` | Rewrite with a single JOIN: `SELECT t.*, u.email, u.name FROM tenants t JOIN tenant_members tm ON ... JOIN users u ON ...`. |
-| P2-9 | ⬜ | Performance | **In-process purge-deleted.ts causes latency spikes** — Hourly in-process job runs async DB deletes on the same pod serving API requests. | `db/purge-deleted.ts` | Move to a separate Render Cron Job (free tier) or a pg_cron job in Neon. Decouples cleanup from request serving. |
+| P2-9 | ✅ | Performance | **In-process purge-deleted.ts causes latency spikes** — Hardened in-process (chosen for safety: no extra service = no extra secret surface; destructive logic stays in one reviewed code path). Now bounded to 100 entities/statement, campaign+site deletes split, jittered start, backstopped by the 30s statement_timeout. Backlogs drain over hourly passes. | `db/purge-deleted.ts` | Done (in-process hardened). Revisit a dedicated cron only if event volume makes hourly bounded passes insufficient. |
 | P2-10 | ⬜ | Performance | **Campaign export 100K rows in-memory** — No streaming. A large export holds a DB connection and loads everything into memory before responding. | `campaigns.ts:236` | Stream the response using a cursor-paginated query and Node.js `Readable` piped to the reply. |
 | P2-11 | ✅ | Performance | **No query timeouts on Drizzle queries** — A slow analytics query can hold a connection indefinitely. | `db/client.ts` | Set `statement_timeout` on the postgres client: `postgres(url, { connection: { statement_timeout: 30000 } })`. |
 
