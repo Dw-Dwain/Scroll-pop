@@ -262,6 +262,7 @@ jobs:
         env:
           VITE_API_URL: 'https://scroll-pop.onrender.com'
           VITE_CLERK_PUBLISHABLE_KEY: 'pk_live_Y2xlcmsuc2Nyb2xscG9wLm9ubGluZSQ'
+          VITE_SENTRY_DSN: 'https://272c6d34c52f23066f09d938eb7cc194@o4511502643167232.ingest.us.sentry.io/4511505632657408'
           VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
           VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
       - name: Deploy to Cloudflare Pages (production)
