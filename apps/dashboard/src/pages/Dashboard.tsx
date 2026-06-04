@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, MousePointerClick, Percent, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe } from 'lucide-react';
+import { Eye, MousePointerClick, Percent, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
 
 interface DashboardProps {
@@ -256,6 +256,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const activeCampaigns = campaignsData?.data?.filter((c: any) => c.status === 'active') ?? [];
 
+  // Setup checklist — shown until the operator has done the core 4 steps.
+  const hasSite      = (sitesData?.data?.length ?? 0) > 0;
+  const hasVerified  = sitesData?.data?.some((s: any) => !!s.verifiedAt) ?? false;
+  const hasCampaign  = (campaignsData?.data?.length ?? 0) > 0;
+  const hasLive      = activeCampaigns.length > 0;
+  const setupDone    = hasSite && hasVerified && hasCampaign && hasLive;
+
+  const steps = [
+    { done: hasSite,     label: 'Connect a site',              sub: 'Add your domain so we can generate your snippet.',                         path: '/sites',          cta: 'Add site' },
+    { done: hasVerified, label: 'Install the snippet',         sub: 'Paste the snippet on your site — or install the WordPress plugin.',        path: '/sites',          cta: 'Install snippet' },
+    { done: hasCampaign, label: 'Create your first campaign',  sub: 'Build a popup and choose your triggers.',                                  path: '/campaigns/new',  cta: 'Create campaign' },
+    { done: hasLive,     label: 'Launch and go live',          sub: 'Activate a campaign — your popup starts serving immediately.',             path: '/campaigns',      cta: 'Launch campaign' },
+  ];
+
   return (
     <div style={{ width: '100%' }}>
       {/* Page header */}
@@ -289,6 +303,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </button>
         </div>
       </div>
+
+      {/* Setup checklist — shown until all 4 steps are complete */}
+      {!setupDone && sitesData && campaignsData && (
+        <div style={{ marginBottom: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Get started</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '1px 8px' }}>
+                {steps.filter(s => s.done).length}/{steps.length} done
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Your popup goes live once all steps are complete</div>
+          </div>
+          {steps.map((step, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 16px',
+                borderBottom: i < steps.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                opacity: step.done ? 0.5 : 1,
+              }}
+            >
+              {step.done
+                ? <CheckCircle2 size={18} style={{ color: 'var(--status-success)', flexShrink: 0 }} />
+                : <Circle size={18} style={{ color: 'var(--border-default)', flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: step.done ? 400 : 500, color: step.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: step.done ? 'line-through' : 'none' }}>
+                  {step.label}
+                </div>
+                {!step.done && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{step.sub}</div>}
+              </div>
+              {!step.done && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onNavigate(step.path)}
+                  style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  {step.cta}<ChevronRight size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* No-site onboarding banner */}
       {sitesData && sitesData.data?.length === 0 && (
