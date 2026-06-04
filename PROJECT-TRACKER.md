@@ -11,11 +11,16 @@
 
 | Category | Total | Done | Remaining |
 |---|---|---|---|
-| P0 Launch blockers | 5 | 0 | 5 |
-| P1 High priority | 18 | 0 | 18 |
-| P2 Medium priority | 19 | 0 | 19 |
-| P3 Low priority | 12 | 0 | 12 |
-| **Total** | **54** | **0** | **54** |
+| P0 Launch blockers | 5 | 2 | 3 |
+| P1 High priority | 18 | 5 | 13 |
+| P2 Medium priority | 19 | 5 | 14 |
+| P3 Low priority | 12 | 1 | 11 |
+| **Total** | **54** | **13** | **41** |
+
+> **Security sprint (Jun 4 2026)** — `feature/security-phase4-5`: closed all CTO-AUDIT
+> Phase 4 findings + Phase 5 scenarios. Done this sprint: P0-1, P0-5, P1-1, P1-2, P1-3,
+> P1-17, P2-1, P2-3, P2-4, P2-19, P3-8. Found already-implemented during the sprint:
+> P1-5 (Neon pool `max:10`), P2-5 (Shopify token encryption via `token-crypto.ts`).
 
 ---
 
@@ -25,11 +30,11 @@ Nothing ships without these.
 
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
-| P0-1 | ⬜ | Bug | **Stripe webhook rawBody bug** — `JSON.stringify(request.body)` used for signature verification instead of raw bytes. All plan changes (upgrade, downgrade, cancel) silently fail with 400. | `webhooks.ts:227` | Register `@fastify/rawbody`. Use `request.rawBody` in both Stripe and Clerk webhook handlers. Test before setting live Stripe keys. |
+| P0-1 | ✅ | Bug | **Stripe webhook rawBody bug** — `JSON.stringify(request.body)` used for signature verification instead of raw bytes. All plan changes (upgrade, downgrade, cancel) silently fail with 400. | `webhooks.ts:227` | Register `@fastify/rawbody`. Use `request.rawBody` in both Stripe and Clerk webhook handlers. Test before setting live Stripe keys. |
 | P0-2 | ⬜ | Config | **Stripe billing not activated** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and 4 price IDs (`STRIPE_PRICE_STARTER/GROWTH/SCALE/AGENCY`) not set. No revenue possible. | Render env vars | Fix P0-1 first, then set keys and test end-to-end checkout → webhook → plan update. |
 | P0-3 | ⬜ | Feature | **No email lead storage** — Popup form submissions fire an `email_capture` event but no lead data is persisted in a retrievable format. No dashboard UI exists to view submissions. This is the core use case for most popup operators. Will cause immediate churn. | `schema.ts` (no leads table) | Create `leads` table (tenantId, campaignId, email, name, metadata, createdAt). API endpoint to list/export. Dashboard UI. |
 | P0-4 | ⬜ | Bug | **A/B testing passthrough deceives users** — The campaign design editor shows a live percentage slider. The `ab_test` targeting kind in the snippet is `return true` (passthrough). Users who discover this will request refunds. | `packages/snippet/src/main.ts` | Either implement real A/B allocation or remove the slider and label Experiments as "coming soon". |
-| P0-5 | ⬜ | Bug | **Campaign activate/pause does not bust KV cache** — Two TODO comments in code confirm this is unfinished. Pausing a campaign leaves it live for up to 60 seconds. Activating a campaign may not propagate. | `campaigns.ts:281`, `campaigns.ts:313` | Call `DELETE /api/v1/internal/cache/:publicKey` for the site's public key on every activate/pause/status change. |
+| P0-5 | ✅ | Bug | **Campaign activate/pause does not bust KV cache** — Two TODO comments in code confirm this is unfinished. Pausing a campaign leaves it live for up to 60 seconds. Activating a campaign may not propagate. | `campaigns.ts:281`, `campaigns.ts:313` | Call `DELETE /api/v1/internal/cache/:publicKey` for the site's public key on every activate/pause/status change. |
 
 ---
 
@@ -41,16 +46,16 @@ Core product gaps vs. Promolayer and high-severity technical issues.
 
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
-| P1-1 | ⬜ | Security | **Cross-tenant event injection** — The `/e` ingest endpoint resolves `campaignId` without scoping to the requesting tenant. Any authenticated or unauthenticated caller who knows a campaign UUID can inject click/dismiss/conversion events into another tenant's analytics. | `index.ts:474` | Validate that inbound `campaignId` belongs to a site whose public key is in the request context, or require the public key in the event payload and verify it server-side. |
-| P1-2 | ⬜ | Security | **Stripe checkout open redirect** — `successUrl` and `cancelUrl` accept any valid URL. Attacker can craft a Stripe checkout link that redirects victims to a phishing site after payment. | `billing.ts:63` | Validate `successUrl` and `cancelUrl` against an allowlist of known dashboard origins before passing to Stripe. |
-| P1-3 | ⬜ | Security | **Distributed bot view quota exhaustion** — A botnet with 100+ IPs (each under the 120 imp/min gate) can exhaust a free tenant's 1,000 monthly views in seconds, disabling their popups for the month. | `index.ts:480` | Validate that the impression's `pageUrl` origin matches the site's registered domain before counting against the quota. Reject impressions from unknown origins. |
+| P1-1 | ✅ | Security | **Cross-tenant event injection** — The `/e` ingest endpoint resolves `campaignId` without scoping to the requesting tenant. Any authenticated or unauthenticated caller who knows a campaign UUID can inject click/dismiss/conversion events into another tenant's analytics. | `index.ts:474` | Validate that inbound `campaignId` belongs to a site whose public key is in the request context, or require the public key in the event payload and verify it server-side. |
+| P1-2 | ✅ | Security | **Stripe checkout open redirect** — `successUrl` and `cancelUrl` accept any valid URL. Attacker can craft a Stripe checkout link that redirects victims to a phishing site after payment. | `billing.ts:63` | Validate `successUrl` and `cancelUrl` against an allowlist of known dashboard origins before passing to Stripe. |
+| P1-3 | ✅ | Security | **Distributed bot view quota exhaustion** — A botnet with 100+ IPs (each under the 120 imp/min gate) can exhaust a free tenant's 1,000 monthly views in seconds, disabling their popups for the month. | `index.ts:480` | Validate that the impression's `pageUrl` origin matches the site's registered domain before counting against the quota. Reject impressions from unknown origins. |
 
 ### Performance
 
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
 | P1-4 | ⬜ | Performance | **N+1 in production config route** — For each active campaign, 4 separate DB calls are issued (design, triggers, targeting, frequency). A site with 10 campaigns = 40 DB round trips per KV miss. The local dev route already has the correct batched pattern using `inArray`. | `internal.ts:114–163` | Replace per-campaign queries with 4 batched `inArray` queries grouped by `campaignId`, identical to the fix already in `index.ts` local `/c/` route. |
-| P1-5 | ⬜ | Performance | **No connection pool size limit on Neon client** — Default `postgres()` settings. Under concurrent load, connections to Neon's pooler can exceed plan limits causing 500s across all API routes. | `db/client.ts` | Set `max: 10` (or appropriate for Neon plan) on the `postgres()` client. Monitor connection count in Neon console. |
+| P1-5 | ✅ | Performance | **No connection pool size limit on Neon client** — Already implemented: `db/client.ts` sets `max: 10, idle_timeout: 20, connect_timeout: 10`. Audit finding was stale. | `db/client.ts` | Done. Monitor connection count in Neon console as customers grow. |
 | P1-6 | ⬜ | Performance | **`campaignMetaCache` thundering herd** — When cache hits 5,000 entries all are evicted simultaneously. Every concurrent request then hits the DB. | `index.ts:416` | Replace with an LRU with individual entry TTLs. Or move campaign meta lookups to a Redis hash with per-key TTL. |
 
 ### Features vs. Promolayer
@@ -67,7 +72,7 @@ Core product gaps vs. Promolayer and high-severity technical issues.
 | P1-14 | ⬜ | Feature | **Shopify App Store submission** — 4.9★ Promolayer listing with 61 reviews is an inbound discovery channel ScrollPop has no equivalent of. All Shopify operators find tools via the App Store. | ✅ 4.9★ 61 reviews | Requires App Embed Block (P1-13) first. |
 | P1-15 | ⬜ | UX | **New user onboarding** — A new user lands on a blank Dashboard with empty KPI tiles and no prompt. No guided onboarding, no empty-state CTAs, no setup checklist. | ✅ implied by 25K sites | Add empty state to Dashboard: "Add your first site →", "Create your first campaign →". Consider a setup checklist widget. |
 | P1-16 | ⬜ | UX | **Billing upgrade throws 500** — `POST /billing/checkout` requires `STRIPE_PRICE_*` env vars not yet set. Any user clicking upgrade sees a server error. | `billing.ts:54–60` | Blocked by P0-2. Once Stripe is configured this resolves automatically, but add a graceful "Billing not yet available" state for pre-launch. |
-| P1-17 | ⬜ | Security | **Incomplete ReDoS protection in url_regex** — `isSafeRegex()` catches simple nested quantifier patterns but not alternation-based ReDoS (e.g. `([a-zA-Z]+)*`). A malicious operator can cause snippet to hang in visitor browsers. | `sanitize.ts:93` | Replace with a battle-tested ReDoS-safe validator (`safe-regex2` or equivalent). Add it as a zero-dep vendored check or run the regex with a `performance.now()` wall-clock timeout. |
+| P1-17 | ✅ | Security | **Incomplete ReDoS protection in url_regex** — `isSafeRegex()` catches simple nested quantifier patterns but not alternation-based ReDoS (e.g. `([a-zA-Z]+)*`). A malicious operator can cause snippet to hang in visitor browsers. | `sanitize.ts:93` | Replace with a battle-tested ReDoS-safe validator (`safe-regex2` or equivalent). Add it as a zero-dep vendored check or run the regex with a `performance.now()` wall-clock timeout. |
 | P1-18 | ⬜ | Debt | **No API route integration tests** — Zero tests for route-level behaviour, tenant isolation (IDOR scenarios), or webhook signature verification paths. The sanitizer and E2E suites cover the ends but nothing in between. | `apps/api` | Add Vitest integration tests for: tenant isolation on campaigns/sites/analytics, event injection rejection, webhook 400 on bad signature, billing checkout validation. |
 
 ---
@@ -80,11 +85,11 @@ Real issues, not blocking launch, should be addressed in the first growth sprint
 
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
-| P2-1 | ⬜ | Security | **No CSP header on API responses** | `index.ts:104` | Add `Content-Security-Policy: default-src 'none'` — API serves only JSON, so this is safe and adds defence in depth. |
+| P2-1 | ✅ | Security | **No CSP header on API responses** | `index.ts:104` | Add `Content-Security-Policy: default-src 'none'` — API serves only JSON, so this is safe and adds defence in depth. |
 | P2-2 | ⬜ | Security | **Internal secret IP spoofing** — If `INTERNAL_SECRET` is ever leaked, an attacker can set `X-CF-Connecting-IP` to any value and bypass per-IP rate limits. | `index.ts:397` | Add rate of change monitoring on INTERNAL_SECRET usage; document rotation procedure clearly in MASTER.md. Rotate quarterly. |
-| P2-3 | ⬜ | Security | **Client-controlled country field in event payload** — Direct POST to `/e` (not via Worker) accepts any `country` value, skewing geo analytics. | `index.ts:495` | Only trust the `country` field when the request arrives from the Worker (proven by INTERNAL_SECRET). Otherwise set `country: null` and rely on the Worker's `CF-IPCountry` enrichment. |
-| P2-4 | ⬜ | Security | **No audit log for admin operations** — Plan changes, tenant deletions, and sync operations leave no persistent record. | `admin.ts` | Write an `admin_audit_log` table row on every admin action: `who`, `action`, `target_tenant_id`, `before`, `after`, `ts`. |
-| P2-5 | ⬜ | Security | **Shopify access tokens stored in plaintext** | `schema.ts:183` | Encrypt at rest using AES-256-GCM with `token-crypto.ts` (already exists in the codebase). Decrypt on use. |
+| P2-3 | ✅ | Security | **Client-controlled country field in event payload** — Direct POST to `/e` (not via Worker) accepts any `country` value, skewing geo analytics. | `index.ts:495` | Only trust the `country` field when the request arrives from the Worker (proven by INTERNAL_SECRET). Otherwise set `country: null` and rely on the Worker's `CF-IPCountry` enrichment. |
+| P2-4 | ✅ | Security | **No audit log for admin operations** — Plan changes, tenant deletions, and sync operations leave no persistent record. | `admin.ts` | Write an `admin_audit_log` table row on every admin action: `who`, `action`, `target_tenant_id`, `before`, `after`, `ts`. |
+| P2-5 | ✅ | Security | **Shopify access tokens stored in plaintext** — Already implemented: `shopify.ts` encrypts via `encryptToken()` on store and `decryptToken()` on use (AES-256-GCM, `token-crypto.ts`). Audit finding was stale. Requires `SHOPIFY_ENCRYPTION_KEY` set in Render. | `schema.ts:183`, `token-crypto.ts` | Done. Ensure `SHOPIFY_ENCRYPTION_KEY` is set in production. |
 | P2-6 | ⬜ | Security | **Admin sync limited to 500 Clerk users** — Stale/deleted users past the 500-user limit will not be cleaned up. | `admin.ts:178` | Paginate using Clerk's offset/cursor: loop until `clerkResponse.data.length < limit`. |
 
 ### Performance
@@ -108,7 +113,7 @@ Real issues, not blocking launch, should be addressed in the first growth sprint
 | P2-16 | ⬜ | UX | **Agency multi-tenant: all Novatise emails share one tenant** — No way to segregate data per client within the shared org. | N/A | Long-term: Clerk Organizations with per-client workspaces. Short-term: document the limitation in the agency onboarding. |
 | P2-17 | ⬜ | Feature | **Team invitations UI** — Clerk org invitations exist but there is no dashboard wrapper. Settings page has no invite flow. | ❓ | Wrap Clerk's `inviteToOrganization` in a Settings → Team section: enter email, select role, send. List pending invitations. |
 | P2-18 | ⬜ | Infra | **`api.scrollpop.online` custom domain** — API still served from `scroll-pop.onrender.com`. All internal references use the Render URL. | N/A | Add Cloudflare DNS CNAME → Render. Update `API_BASE_URL`, `SNIPPET_EDGE_URL` references. Cleaner and removes Render vendor lock-in from URLs. |
-| P2-19 | ⬜ | Security | **No rate limit on admin routes** | `admin.ts` | Add a dedicated lower rate limit (e.g. 20 req/min) on all `/api/v1/admin/*` routes. |
+| P2-19 | ✅ | Security | **No rate limit on admin routes** | `admin.ts` | Add a dedicated lower rate limit (e.g. 20 req/min) on all `/api/v1/admin/*` routes. |
 
 ---
 
@@ -125,7 +130,7 @@ Real issues but low urgency. Address during maintenance windows.
 | P3-5 | ⬜ | Feature | **`scrollpop.online` marketing site** — No separate marketing site exists. Operators cannot find ScrollPop without a direct link. | ✅ Promolayer has full site | Separate Cloudflare Pages project. Exists as `site-plan/` in repo — needs deploying and content. |
 | P3-6 | ⬜ | Infra | **Render Pre-Deploy Command already set** — Migration drift prevention is in place. Document in runbook what to do if it fails. | MASTER.md §27 | Add a "Pre-deploy command failed" runbook entry: manual migration steps, rollback procedure. |
 | P3-7 | ⬜ | Scale | **`resolveCampaignMeta` cache is instance-local** — On 2+ Render instances, each has a cold cache. DB queries spike per instance on cold start. | `index.ts:408` | Move campaign meta cache to a Redis hash: `HGETALL sp_campaign_meta:{campaignId}` with 5-minute TTL. |
-| P3-8 | ⬜ | Scale | **Admin Clerk sync not paginated** — At >500 Clerk users, stale users past the limit won't be cleaned up. | `admin.ts:178` | Paginate with Clerk's cursor until response is empty. |
+| P3-8 | ✅ | Scale | **Admin Clerk sync not paginated** — At >500 Clerk users, stale users past the limit won't be cleaned up. | `admin.ts:178` | Paginate with Clerk's cursor until response is empty. |
 | P3-9 | ⬜ | Feature | **Coupon validation on `/e` ingest** — `discount_redeemed` event type exists but there is no server-side validation that a coupon code is valid before accepting the event. | `index.ts` | Look up coupon against `coupons` table on `discount_redeemed` event type. Mark redeemed. |
 | P3-10 | ⬜ | Feature | **Mobile-specific trigger overrides** — Promolayer calls out explicit mobile trigger customization. ScrollPop handles device targeting but has no per-device trigger param overrides. | Promolayer marketing | Allow different scroll % or dwell time thresholds for mobile vs desktop in the trigger config. |
 | P3-11 | ⬜ | Debt | **`ensure-notifications.ts` and `ensure-partitions.ts` run a DB call on every cold start** — Adds latency to every new Render instance spin-up. | `index.ts:560,563` | Move to a startup probe that only runs the check once per deploy (cache a flag in Redis). Or convert to a proper migration. |

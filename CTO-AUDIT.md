@@ -194,6 +194,13 @@ The `postgres()` client uses default settings. Under concurrent Render requests,
 
 ## Phase 4 — Security Audit
 
+> **🛡️ Remediation update (Jun 4 2026 — `feature/security-phase4-5`):** All Phase 4 findings
+> and Phase 5 scenarios have been addressed. Findings 1, 2, 3, 4, 6, 7, 8, 9, 11, 12 fixed in
+> code; Findings 5 (internal-secret IP spoof) is inherent/operational (rotation schedule in
+> CONTRIBUTING); Finding 10 (sync pagination) fixed. During the sprint, two findings were found
+> already-implemented and stale in this audit: Shopify token encryption (Scenario 7 — via
+> `token-crypto.ts`) and the Neon connection pool (`max:10`). Live status: `PROJECT-TRACKER.md`.
+
 ### Authentication & Authorization
 
 **Finding 1 — HIGH: Stripe webhook uses re-serialized body for signature verification**

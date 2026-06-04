@@ -12,6 +12,7 @@
 - WordPress plugin zip — hosted on Cloudflare R2 (`scrollpop-assets` bucket), dashboard URL updated
 - R2 snippet CDN — `p.js` in R2, Worker serves from it, `SNIPPET_CDN_URL` updated to `https://cdn.scrollpop.online`
 - Render Pre-Deploy Command — `pnpm --filter @scrollpop/api exec drizzle-kit migrate` set; migrations auto-apply on every deploy
+- Security sprint (`feature/security-phase4-5`) — all CTO-AUDIT Phase 4 + Phase 5 findings closed: webhook raw-body signature fix, activate/pause cache bust, cross-tenant event-origin gate, Stripe redirect allowlist, hardened ReDoS guard, geo-spoof gate, admin audit log (migration 0007), strict API CSP, admin rate limit, paginated Clerk sync. See `CTO-AUDIT.md` + `PROJECT-TRACKER.md`
 - GitHub PATs rotated
 - All observability/email code is dependency-free and was already merged at `8c859a8`
 
@@ -31,6 +32,7 @@
 - **Jun 3 2026** — Campaign scheduling, deleted-data 24h-purge lifecycle, Playwright E2E suite, gamified popup types removed (~1.8 KB reclaimed), B5 resolved, dev/showcase content audit.
 - **Jun 4 2026 (session 1)** — Sentry/PostHog/Resend wired dependency-free + dormant; B3 (tenant revive) + B4 (Worker event retry) fixed; campaign duplication (API+UI); WP plugin zip artifact built. Merged at `8c859a8`.
 - **Jun 4 2026 (session 2)** — All 3 integrations activated: Sentry live (both projects), PostHog live, Resend domain verified + email flowing. WP zip uploaded to R2 (`scrollpop-assets`), dashboard URL updated. GitHub PATs rotated. Commits `6f1ccea` + `b46a5b7` + `f059c8f` pushed to both repos.
+- **Jun 4 2026 (session 3)** — CTO due-diligence audit (`CTO-AUDIT.md`) + project tracker (`PROJECT-TRACKER.md`) created. Security sprint on `feature/security-phase4-5`: closed all Phase 4/5 findings (13 tracker items, +2 found already-done). New: `admin_audit_log` (migration 0007 + self-heal), `lib/cache-purge.ts`, `lib/token-crypto.ts` already present. All 5 CI gates green. **Migration 0007 auto-applies via Render preDeploy + boot self-heal.**
 
 ---
 
