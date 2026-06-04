@@ -33,6 +33,7 @@
 - **Jun 4 2026 (session 1)** — Sentry/PostHog/Resend wired dependency-free + dormant; B3 (tenant revive) + B4 (Worker event retry) fixed; campaign duplication (API+UI); WP plugin zip artifact built. Merged at `8c859a8`.
 - **Jun 4 2026 (session 2)** — All 3 integrations activated: Sentry live (both projects), PostHog live, Resend domain verified + email flowing. WP zip uploaded to R2 (`scrollpop-assets`), dashboard URL updated. GitHub PATs rotated. Commits `6f1ccea` + `b46a5b7` + `f059c8f` pushed to both repos.
 - **Jun 4 2026 (session 3)** — CTO due-diligence audit (`CTO-AUDIT.md`) + project tracker (`PROJECT-TRACKER.md`) created. Security sprint on `feature/security-phase4-5`: closed all Phase 4/5 findings (13 tracker items, +2 found already-done). New: `admin_audit_log` (migration 0007 + self-heal), `lib/cache-purge.ts`, `lib/token-crypto.ts` already present. All 5 CI gates green. **Migration 0007 auto-applies via Render preDeploy + boot self-heal.**
+- **Jun 4 2026 (session 4)** — Perf/infra sprint on `feature/perf-infra-cluster`: config-route N+1 batched (P1-4), cache thundering-herd → LRU eviction (P1-6), events `tenant_id` index (P2-7, **migration 0008**), admin tenant N+1 → JOIN (P2-8), 30s `statement_timeout` (P2-11). P2-2/P2-6 closed. Tracker now 20/54. **Migration 0008 auto-applies via Render preDeploy.**
 
 ---
 

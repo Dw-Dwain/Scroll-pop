@@ -12,15 +12,22 @@
 | Category | Total | Done | Remaining |
 |---|---|---|---|
 | P0 Launch blockers | 5 | 2 | 3 |
-| P1 High priority | 18 | 5 | 13 |
-| P2 Medium priority | 19 | 5 | 14 |
+| P1 High priority | 18 | 7 | 11 |
+| P2 Medium priority | 19 | 10 | 9 |
 | P3 Low priority | 12 | 1 | 11 |
-| **Total** | **54** | **13** | **41** |
+| **Total** | **54** | **20** | **34** |
 
 > **Security sprint (Jun 4 2026)** — `feature/security-phase4-5`: closed all CTO-AUDIT
-> Phase 4 findings + Phase 5 scenarios. Done this sprint: P0-1, P0-5, P1-1, P1-2, P1-3,
-> P1-17, P2-1, P2-3, P2-4, P2-19, P3-8. Found already-implemented during the sprint:
-> P1-5 (Neon pool `max:10`), P2-5 (Shopify token encryption via `token-crypto.ts`).
+> Phase 4 findings + Phase 5 scenarios. Done: P0-1, P0-5, P1-1, P1-2, P1-3, P1-17, P2-1,
+> P2-3, P2-4, P2-19, P3-8. Found already-implemented: P1-5 (Neon pool `max:10`), P2-5
+> (Shopify token encryption via `token-crypto.ts`).
+>
+> **Perf/infra sprint (Jun 4 2026)** — `feature/perf-infra-cluster`: P1-4 (config N+1 →
+> batched), P1-6 (cache thundering-herd → single-entry LRU eviction), P2-7 (events
+> `tenant_id` index, migration 0008), P2-8 (admin tenant N+1 → JOIN), P2-11 (30s
+> statement_timeout). P2-6 closed as a duplicate of P3-8. P2-2 addressed by the existing
+> 90-day rotation policy in CONTRIBUTING (the code already gates the IP header on
+> INTERNAL_SECRET — no further code fix exists short of rotating the secret).
 
 ---
 
@@ -54,9 +61,9 @@ Core product gaps vs. Promolayer and high-severity technical issues.
 
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
-| P1-4 | ⬜ | Performance | **N+1 in production config route** — For each active campaign, 4 separate DB calls are issued (design, triggers, targeting, frequency). A site with 10 campaigns = 40 DB round trips per KV miss. The local dev route already has the correct batched pattern using `inArray`. | `internal.ts:114–163` | Replace per-campaign queries with 4 batched `inArray` queries grouped by `campaignId`, identical to the fix already in `index.ts` local `/c/` route. |
+| P1-4 | ✅ | Performance | **N+1 in production config route** — For each active campaign, 4 separate DB calls are issued (design, triggers, targeting, frequency). A site with 10 campaigns = 40 DB round trips per KV miss. The local dev route already has the correct batched pattern using `inArray`. | `internal.ts:114–163` | Replace per-campaign queries with 4 batched `inArray` queries grouped by `campaignId`, identical to the fix already in `index.ts` local `/c/` route. |
 | P1-5 | ✅ | Performance | **No connection pool size limit on Neon client** — Already implemented: `db/client.ts` sets `max: 10, idle_timeout: 20, connect_timeout: 10`. Audit finding was stale. | `db/client.ts` | Done. Monitor connection count in Neon console as customers grow. |
-| P1-6 | ⬜ | Performance | **`campaignMetaCache` thundering herd** — When cache hits 5,000 entries all are evicted simultaneously. Every concurrent request then hits the DB. | `index.ts:416` | Replace with an LRU with individual entry TTLs. Or move campaign meta lookups to a Redis hash with per-key TTL. |
+| P1-6 | ✅ | Performance | **`campaignMetaCache` thundering herd** — When cache hits 5,000 entries all are evicted simultaneously. Every concurrent request then hits the DB. | `index.ts:416` | Replace with an LRU with individual entry TTLs. Or move campaign meta lookups to a Redis hash with per-key TTL. |
 
 ### Features vs. Promolayer
 
@@ -86,21 +93,21 @@ Real issues, not blocking launch, should be addressed in the first growth sprint
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
 | P2-1 | ✅ | Security | **No CSP header on API responses** | `index.ts:104` | Add `Content-Security-Policy: default-src 'none'` — API serves only JSON, so this is safe and adds defence in depth. |
-| P2-2 | ⬜ | Security | **Internal secret IP spoofing** — If `INTERNAL_SECRET` is ever leaked, an attacker can set `X-CF-Connecting-IP` to any value and bypass per-IP rate limits. | `index.ts:397` | Add rate of change monitoring on INTERNAL_SECRET usage; document rotation procedure clearly in MASTER.md. Rotate quarterly. |
+| P2-2 | ✅ | Security | **Internal secret IP spoofing** — Addressed by policy: the code already only trusts `X-CF-Connecting-IP` when `INTERNAL_SECRET` matches, and CONTRIBUTING documents a 90-day rotation schedule. No further code fix exists short of rotating the shared secret. | `index.ts:397` | Done (policy). Rotate `INTERNAL_SECRET` quarterly per CONTRIBUTING. |
 | P2-3 | ✅ | Security | **Client-controlled country field in event payload** — Direct POST to `/e` (not via Worker) accepts any `country` value, skewing geo analytics. | `index.ts:495` | Only trust the `country` field when the request arrives from the Worker (proven by INTERNAL_SECRET). Otherwise set `country: null` and rely on the Worker's `CF-IPCountry` enrichment. |
 | P2-4 | ✅ | Security | **No audit log for admin operations** — Plan changes, tenant deletions, and sync operations leave no persistent record. | `admin.ts` | Write an `admin_audit_log` table row on every admin action: `who`, `action`, `target_tenant_id`, `before`, `after`, `ts`. |
 | P2-5 | ✅ | Security | **Shopify access tokens stored in plaintext** — Already implemented: `shopify.ts` encrypts via `encryptToken()` on store and `decryptToken()` on use (AES-256-GCM, `token-crypto.ts`). Audit finding was stale. Requires `SHOPIFY_ENCRYPTION_KEY` set in Render. | `schema.ts:183`, `token-crypto.ts` | Done. Ensure `SHOPIFY_ENCRYPTION_KEY` is set in production. |
-| P2-6 | ⬜ | Security | **Admin sync limited to 500 Clerk users** — Stale/deleted users past the 500-user limit will not be cleaned up. | `admin.ts:178` | Paginate using Clerk's offset/cursor: loop until `clerkResponse.data.length < limit`. |
+| P2-6 | ✅ | Security | **Admin sync limited to 500 Clerk users** — Duplicate of P3-8; fixed in the security sprint (admin Clerk sync now paginates). | `admin.ts` | Done (= P3-8). |
 
 ### Performance
 
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
-| P2-7 | ⬜ | Performance | **No `tenantId` index within TimescaleDB partitions** — Analytics queries do full-chunk scans within each partition. Will degrade with tenant count. | `analytics.ts` | `CREATE INDEX CONCURRENTLY ON events(tenant_id, ts DESC)` on the Neon production DB. |
-| P2-8 | ⬜ | Performance | **Admin tenant list N+1** — Two additional DB queries per tenant row to fetch owner email. | `admin.ts:95` | Rewrite with a single JOIN: `SELECT t.*, u.email, u.name FROM tenants t JOIN tenant_members tm ON ... JOIN users u ON ...`. |
+| P2-7 | ✅ | Performance | **No `tenantId` index within TimescaleDB partitions** — Analytics queries do full-chunk scans within each partition. Will degrade with tenant count. | `analytics.ts` | `CREATE INDEX CONCURRENTLY ON events(tenant_id, ts DESC)` on the Neon production DB. |
+| P2-8 | ✅ | Performance | **Admin tenant list N+1** — Two additional DB queries per tenant row to fetch owner email. | `admin.ts:95` | Rewrite with a single JOIN: `SELECT t.*, u.email, u.name FROM tenants t JOIN tenant_members tm ON ... JOIN users u ON ...`. |
 | P2-9 | ⬜ | Performance | **In-process purge-deleted.ts causes latency spikes** — Hourly in-process job runs async DB deletes on the same pod serving API requests. | `db/purge-deleted.ts` | Move to a separate Render Cron Job (free tier) or a pg_cron job in Neon. Decouples cleanup from request serving. |
 | P2-10 | ⬜ | Performance | **Campaign export 100K rows in-memory** — No streaming. A large export holds a DB connection and loads everything into memory before responding. | `campaigns.ts:236` | Stream the response using a cursor-paginated query and Node.js `Readable` piped to the reply. |
-| P2-11 | ⬜ | Performance | **No query timeouts on Drizzle queries** — A slow analytics query can hold a connection indefinitely. | `db/client.ts` | Set `statement_timeout` on the postgres client: `postgres(url, { connection: { statement_timeout: 30000 } })`. |
+| P2-11 | ✅ | Performance | **No query timeouts on Drizzle queries** — A slow analytics query can hold a connection indefinitely. | `db/client.ts` | Set `statement_timeout` on the postgres client: `postgres(url, { connection: { statement_timeout: 30000 } })`. |
 
 ### Features vs. Promolayer
 

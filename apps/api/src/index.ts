@@ -435,7 +435,14 @@ async function bootstrap() {
       wpSiteUrl: site?.wpSiteUrl ?? null,
     };
     campaignMetaCache.set(campaignId, { ...meta, exp: now + 300_000 });
-    if (campaignMetaCache.size > 5000) campaignMetaCache.clear(); // bound memory
+    // Bound memory by evicting the oldest entries one at a time, NOT clearing the whole map.
+    // A full clear caused a thundering herd — every concurrent request then re-hit the DB at
+    // once. Map iterates in insertion order, so the first key is the oldest. CTO-AUDIT P1-6.
+    while (campaignMetaCache.size > 5000) {
+      const oldest = campaignMetaCache.keys().next().value;
+      if (oldest === undefined) break;
+      campaignMetaCache.delete(oldest);
+    }
     return meta;
   }
 
