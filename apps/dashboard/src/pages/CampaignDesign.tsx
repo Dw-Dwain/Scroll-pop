@@ -620,12 +620,18 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
           label: 'Email Address'
         };
         break;
-      case 'countdown':
-        baseNewElem.w = 40;
-        baseNewElem.h = 15;
-        baseNewElem.content = '599';
-        baseNewElem.extraProps = { targetSeconds: 599 };
+      case 'countdown': {
+        // content = ISO datetime 30 minutes from now (the snippet counts down to this target).
+        // The operator edits content in the right-panel to set a different target date/time.
+        const thirtyMin = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        baseNewElem.w = 50;
+        baseNewElem.h = 14;
+        baseNewElem.content = thirtyMin;
+        baseNewElem.color = '#B91C1C';
+        baseNewElem.fontSize = 32;
+        baseNewElem.fontWeight = '700';
         break;
+      }
       case 'image':
         baseNewElem.w = 40;
         baseNewElem.h = 40;

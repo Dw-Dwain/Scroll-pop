@@ -596,6 +596,14 @@ export function detectSmartProduct() {
 // are absolutely positioned with x/y/w/h as percentages of a width×height box).
 // IDs are reused (email-input / cta-submit-btn / cta-link / close-btn) so the
 // existing interaction wiring applies without change.
+// Formats milliseconds remaining into HH:MM:SS (or MM:SS when < 1 hour).
+function fmtCountdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${p(h)}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
+}
+
 function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any): string {
   const els = [...(step.elements || [])].sort((a: any, b: any) => (a.zIndex || 0) - (b.zIndex || 0));
   const hasInput = els.some((e: any) => e.type === 'input' || e.type === 'phoneinput');
@@ -667,6 +675,16 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
       case 'urgency':
         out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;background:${elBgColor(el.backgroundColor, cssAccent)};color:${elColor(el.color, '#fff')};border-radius:9999px;font-size:${cssNum(el.fontSize, 11)}px;font-weight:700;font-family:${ff};padding:0 8px;">${escapeHtml(content)}</div>`);
         break;
+      case 'countdown': {
+        // el.content = ISO datetime string (target) OR a number of minutes from now.
+        // Renders the initial value immediately; renderPopup starts the live tick after innerHTML is set.
+        // content: ISO datetime string (target date) OR plain number treated as seconds remaining.
+        const parsedDate = Date.parse(el.content || '');
+        const targetMs = parsedDate ? parsedDate : (Date.now() + cssNum(Number(el.content), 600) * 1_000);
+        const cdId = `__sp_cd_${String(el.id).replace(/[^a-z0-9]/gi, '_')}`;
+        out.push(`<div id="${cdId}" style="${pos}display:flex;align-items:center;justify-content:center;font-family:${ff || 'monospace'};font-size:${cssNum(el.fontSize, 32)}px;font-weight:${cssWeight(el.fontWeight, '700')};color:${elColor(el.color, '#B91C1C')};background:${elBgColor(el.backgroundColor, 'transparent')};border-radius:${elBorderR(el.borderRadius, 0)}px;letter-spacing:0.04em;">${escapeHtml(fmtCountdown(targetMs - Date.now()))}</div>`);
+        break;
+      }
       default:
         if (content) out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:center;color:${elColor(el.color, cssText)};font-size:${cssNum(el.fontSize, 13)}px;font-family:${ff};">${escapeHtml(content)}</div>`);
     }
@@ -918,6 +936,24 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   }
 
   shadow.innerHTML = htmlChunks.join('');
+
+  // Start countdown timers for any countdown elements in the main step.
+  // Each countdown element renders its initial value in buildElementsHTML and then
+  // ticks live once per second until it reaches zero (P1-11).
+  if (elementMode && mainStep?.elements) {
+    for (const el of mainStep.elements as any[]) {
+      if (el.type !== 'countdown') continue;
+      const cdId = `__sp_cd_${String(el.id).replace(/[^a-z0-9]/gi, '_')}`;
+      const cdEl = shadow.getElementById(cdId);
+      if (!cdEl) continue;
+      const targetMs = Date.parse(el.content || '') || (Date.now() + cssNum(Number(el.content), 10) * 60_000);
+      const iv = setInterval(() => {
+        const rem = targetMs - Date.now();
+        cdEl.textContent = fmtCountdown(rem);
+        if (rem <= 0) clearInterval(iv);
+      }, 1000);
+    }
+  }
 
   // Grab compiled Elements references inside closed Shadow DOM
   const popupCard = shadow.getElementById('popup-card');
