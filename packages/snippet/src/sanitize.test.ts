@@ -114,15 +114,35 @@ describe('safeCssInt', () => {
 });
 
 describe('isSafeRegex', () => {
-  it('allows simple patterns', () => {
+  it('allows simple URL-matching patterns', () => {
     expect(isSafeRegex('^/products/.*')).toBe(true);
     expect(isSafeRegex('/blog/')).toBe(true);
+    expect(isSafeRegex('^https://example\\.com/blog/\\d+')).toBe(true);
+    expect(isSafeRegex('/products/[a-z0-9-]+')).toBe(true);
   });
   it('rejects nested-quantifier ReDoS patterns', () => {
     expect(isSafeRegex('(a+)+$')).toBe(false);
     expect(isSafeRegex('([a-z]+)*')).toBe(false);
+    expect(isSafeRegex('(a*)*')).toBe(false);
+    expect(isSafeRegex('([a-z]+){5}')).toBe(false);
+  });
+  it('rejects quantified-alternation ReDoS patterns', () => {
+    expect(isSafeRegex('(a|b)+')).toBe(false);
+    expect(isSafeRegex('(foo|foobar)*')).toBe(false);
+    expect(isSafeRegex('(x|y){3}')).toBe(false);
+  });
+  it('rejects absurdly large bounded repetitions', () => {
+    expect(isSafeRegex('a{1001}')).toBe(false);
+    expect(isSafeRegex('a{0,5000}')).toBe(false);
+  });
+  it('rejects patterns that do not compile', () => {
+    expect(isSafeRegex('(unclosed')).toBe(false);
+    expect(isSafeRegex('[z-a]')).toBe(false);
   });
   it('rejects over-length patterns', () => {
-    expect(isSafeRegex('a'.repeat(101))).toBe(false);
+    expect(isSafeRegex('a'.repeat(201))).toBe(false);
+  });
+  it('rejects non-string input', () => {
+    expect(isSafeRegex(undefined as unknown as string)).toBe(false);
   });
 });

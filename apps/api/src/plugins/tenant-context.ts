@@ -96,7 +96,11 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
       // This prevents the dev-mode bypass from silently activating on production
       // if NODE_ENV is unset or misconfigured.
       const dbUrl = process.env['DATABASE_URL'] ?? '';
-      const isLocalDb = dbUrl === '' || dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+      // Defence-in-depth (CTO-AUDIT Phase 4, Finding 9): a managed-provider host can NEVER be
+      // treated as local, even if the URL somehow also contains "localhost". The bypass only
+      // engages for a genuinely local Postgres.
+      const looksRemote = /neon\.tech|supabase|amazonaws|render\.com|\.cloud\b/i.test(dbUrl);
+      const isLocalDb = !looksRemote && (dbUrl === '' || dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'));
       if (!isLocalDb) {
         throw new Error(
           'FATAL: dev-mode auth bypass is active but DATABASE_URL points to a remote database. ' +

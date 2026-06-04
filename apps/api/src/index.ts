@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { db } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
+import { ensureAuditLogSchema } from './db/ensure-audit-log.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from './db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -106,6 +107,10 @@ async function bootstrap() {
     void reply.header('X-Frame-Options', 'DENY');
     void reply.header('Referrer-Policy', 'no-referrer');
     void reply.header('X-DNS-Prefetch-Control', 'off');
+    // The API only ever serves JSON + the snippet JS bundle (never an HTML document of its
+    // own), so a maximally strict CSP adds defence-in-depth with zero functional cost
+    // (CTO-AUDIT Phase 4, Finding 11 / P2-1).
+    void reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
     if (!isDev) {
       void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }
@@ -403,18 +408,60 @@ async function bootstrap() {
     return req.ip;
   }
 
-  // In-process cache of campaignId → {tenantId, siteId}. Eliminates a per-event DB lookup on the
-  // hot ingest path (the API is always-warm on Render). Short TTL so deletes/moves propagate.
-  const campaignMetaCache = new Map<string, { tenantId: string; siteId: string; exp: number }>();
-  async function resolveCampaignMeta(campaignId: string): Promise<{ tenantId: string; siteId: string } | null> {
+  // In-process cache of campaignId → {tenant, site, site domains}. Eliminates a per-event DB
+  // lookup on the hot ingest path (the API is always-warm on Render). Short TTL so deletes/moves
+  // propagate. The site domains are carried so the ingest path can verify an event's origin.
+  type CampaignMeta = {
+    tenantId: string; siteId: string;
+    domain: string | null; shopifyShop: string | null; wpSiteUrl: string | null;
+  };
+  const campaignMetaCache = new Map<string, CampaignMeta & { exp: number }>();
+  async function resolveCampaignMeta(campaignId: string): Promise<CampaignMeta | null> {
     const now = Date.now();
     const hit = campaignMetaCache.get(campaignId);
-    if (hit && hit.exp > now) return { tenantId: hit.tenantId, siteId: hit.siteId };
+    if (hit && hit.exp > now) return hit;
     const campaign = await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId) });
     if (!campaign) return null;
-    campaignMetaCache.set(campaignId, { tenantId: campaign.tenantId, siteId: campaign.siteId, exp: now + 300_000 });
+    const site = await db.query.sites.findFirst({
+      where: eq(sites.id, campaign.siteId),
+      columns: { domain: true, shopifyShop: true, wpSiteUrl: true },
+    });
+    const meta: CampaignMeta = {
+      tenantId: campaign.tenantId,
+      siteId: campaign.siteId,
+      domain: site?.domain ?? null,
+      shopifyShop: site?.shopifyShop ?? null,
+      wpSiteUrl: site?.wpSiteUrl ?? null,
+    };
+    campaignMetaCache.set(campaignId, { ...meta, exp: now + 300_000 });
     if (campaignMetaCache.size > 5000) campaignMetaCache.clear(); // bound memory
-    return { tenantId: campaign.tenantId, siteId: campaign.siteId };
+    return meta;
+  }
+
+  // Origin allow-check: an event's pageUrl must plausibly originate from the campaign's own site.
+  // The campaign UUID is visible to anyone in the served config, so without this a third party
+  // could forge impressions/conversions to poison another tenant's analytics or burn their
+  // monthly view quota (CTO-AUDIT Phase 4 Finding 3 / Phase 5 Scenarios 1, 2, 10 — P1-1, P1-3).
+  // Fails OPEN when the site has no known domain or the URL is missing/unparseable, so legitimate
+  // traffic is never dropped; the per-IP flood gate stays the primary quota control. Matching is
+  // on the registrable (last-two-label) domain so www/locale subdomains pass.
+  function registrableDomain(host: string): string {
+    const labels = host.toLowerCase().replace(/^www\./, '').split('.').filter(Boolean);
+    return labels.length <= 2 ? labels.join('.') : labels.slice(-2).join('.');
+  }
+  function eventOriginAllowed(pageUrl: string | null, meta: CampaignMeta): boolean {
+    if (!pageUrl) return true;
+    let host: string;
+    try { host = new URL(pageUrl).hostname; } catch { return true; }
+    const candidates = [meta.domain, meta.shopifyShop, meta.wpSiteUrl]
+      .map((c) => {
+        if (!c) return null;
+        try { return c.includes('://') ? new URL(c).hostname : c; } catch { return c; }
+      })
+      .filter((c): c is string => !!c);
+    if (candidates.length === 0) return true; // no known domain — fail open
+    const target = registrableDomain(host);
+    return candidates.some((c) => registrableDomain(c) === target);
   }
 
   // Per-(campaign, IP) impression flood gate. Returns false once the per-minute cap is exceeded.
@@ -445,6 +492,9 @@ async function bootstrap() {
     },
   }, async (request, reply) => {
     const clientIp = realClientIp(request as any);
+    // Only the Cloudflare Worker (proven by INTERNAL_SECRET) is trusted to supply the
+    // visitor's country — a direct caller could otherwise forge geo analytics (P2-3).
+    const fromWorker = request.headers['x-internal-secret'] === process.env['INTERNAL_SECRET'];
     const payload = request.body;
     if (payload && Array.isArray(payload.events)) {
       for (const rawEvt of payload.events) {
@@ -475,6 +525,14 @@ async function bootstrap() {
           const campaign = await resolveCampaignMeta(campaignId);
 
           if (campaign) {
+            // Origin gate: drop impressions/conversions whose page origin doesn't match the
+            // campaign's own site. Blocks cross-tenant analytics poisoning + quota-burn from
+            // forged events (the campaign UUID is public in the served config). Fails open.
+            if ((eventType === 'impression' || eventType === 'conversion') &&
+                !eventOriginAllowed(safePageUrl, campaign)) {
+              continue;
+            }
+
             // Impression flood gate: drop impressions that exceed the per-IP-per-campaign cap so
             // forged floods can neither poison analytics nor burn the tenant's monthly view quota.
             if (eventType === 'impression' && !(await impressionWithinIpQuota(campaignId, clientIp))) {
@@ -492,7 +550,7 @@ async function bootstrap() {
               device: safeDevice,
               pageUrl: safePageUrl,
               referrer: safeReferrer,
-              country: country || null,
+              country: fromWorker ? (country || null) : null,
               metadata: metadata ?? meta ?? {},
               scrollDepthPct: safeScrollDepth,
               trafficSource: trafficSource || null,
@@ -561,6 +619,9 @@ async function bootstrap() {
   // Ensure notifications schema (migration 0006) so notification_prefs / notifications
   // exist before serving — prevents tenant-lookup 500s if the migration wasn't applied.
   await ensureNotificationsSchema(app.log);
+  // Ensure admin_audit_log schema (migration 0007) so audit writes never fail on a prod DB
+  // that hasn't had the migration applied yet.
+  await ensureAuditLogSchema(app.log);
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });

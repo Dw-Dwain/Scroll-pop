@@ -71,23 +71,38 @@ function getPlanFromStripePrice(priceId: string): 'starter' | 'growth' | 'scale'
 }
 
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
+  // Capture the raw request bytes for signature verification. Both Svix (Clerk) and
+  // Stripe sign the EXACT raw payload — re-serializing a parsed object with
+  // JSON.stringify() changes whitespace/key-order/unicode-escaping and makes every
+  // signature check fail. This parser keeps request.body as the parsed object (handlers
+  // rely on it) AND attaches the untouched buffer as request.rawBody.
+  // (CTO-AUDIT Phase 4, Finding 1 / P0-1. Encapsulated to this plugin scope.)
+  fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+    try {
+      const parsed = JSON.parse((body as Buffer).toString('utf8'));
+      (req as unknown as { rawBody: Buffer }).rawBody = body as Buffer;
+      done(null, parsed);
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
+
   // POST /api/v1/webhooks/clerk
-  fastify.post('/clerk', {
-    config: { rawBody: true },
-  }, async (request, reply) => {
+  fastify.post('/clerk', async (request, reply) => {
     const webhookSecret = process.env['CLERK_WEBHOOK_SECRET'];
     if (!webhookSecret) {
       fastify.log.warn('CLERK_WEBHOOK_SECRET not set — skipping webhook verification');
       return reply.code(400).send({ error: { code: 'CONFIG_ERROR', message: 'Webhook secret not configured' } });
     }
 
-    // Verify Svix signature
+    // Verify Svix signature against the RAW request bytes (not a re-serialized object).
     const wh = new Webhook(webhookSecret);
+    const rawBody = (request as unknown as { rawBody?: Buffer }).rawBody;
     let evt: ClerkOrganizationEvent | ClerkMembershipEvent | ClerkUserEvent;
 
     try {
       evt = wh.verify(
-        JSON.stringify(request.body),
+        (rawBody ?? Buffer.from(JSON.stringify(request.body))).toString('utf8'),
         {
           'svix-id': request.headers['svix-id'] as string,
           'svix-timestamp': request.headers['svix-timestamp'] as string,
@@ -210,9 +225,7 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/v1/webhooks/stripe
-  fastify.post('/stripe', {
-    config: { rawBody: true },
-  }, async (request, reply) => {
+  fastify.post('/stripe', async (request, reply) => {
     const webhookSecret = process.env['STRIPE_WEBHOOK_SECRET'];
     const stripeKey = process.env['STRIPE_SECRET_KEY'];
 
@@ -223,9 +236,12 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
     const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
     let event: Stripe.Event;
 
+    // Stripe requires the exact raw payload bytes for signature verification.
+    const rawBody = (request as unknown as { rawBody?: Buffer }).rawBody;
+
     try {
       event = stripe.webhooks.constructEvent(
-        JSON.stringify(request.body),
+        rawBody ?? Buffer.from(JSON.stringify(request.body)),
         request.headers['stripe-signature'] as string,
         webhookSecret
       );

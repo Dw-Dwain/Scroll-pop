@@ -89,9 +89,42 @@ export function cssLen(val: unknown, fallback: string): string {
   return fallback;
 }
 
-/** Reject url_regex patterns with nested quantifiers that cause catastrophic backtracking (ReDoS). */
+/**
+ * Reject operator-supplied url_regex patterns that can cause catastrophic backtracking
+ * (ReDoS) when evaluated against a visitor's URL in the snippet. These patterns run in
+ * every visitor's browser, so a malicious targeting rule could hang the host page.
+ *
+ * This is a conservative allow-by-default check: it rejects the known dangerous shapes
+ * (quantified groups whose body is itself quantified or contains alternation, and huge
+ * bounded repetitions) plus anything that doesn't compile. Legitimate URL-matching
+ * patterns (`^https://example\.com/blog/.*`, `/products/\d+`) are unaffected.
+ * See CTO-AUDIT Phase 4, Finding 6 / P1-17.
+ */
 export function isSafeRegex(pattern: string): boolean {
-  if (pattern.length > 100) return false;
-  if (/\([^()]*[+*][^()]*\)[+*{]/.test(pattern)) return false;
+  if (typeof pattern !== 'string') return false;
+  if (pattern.length > 200) return false;
+
+  // 1. Nested quantifiers: a quantified group whose body also contains a quantifier,
+  //    e.g. (a+)+, (a*)*, ([a-z]+){5} — the classic exponential-backtracking shape.
+  if (/\([^()]*[+*?][^()]*\)\s*[+*{]/.test(pattern)) return false;
+
+  // 2. Quantified group containing alternation, e.g. (a|b)+, (foo|foobar)* — overlapping
+  //    alternatives backtrack catastrophically. Conservatively reject all such shapes.
+  if (/\([^()]*\|[^()]*\)\s*[+*{]/.test(pattern)) return false;
+
+  // 3. Absurdly large bounded repetitions {n,m} — cheap CPU/memory blowup even without nesting.
+  for (const r of pattern.match(/\{\s*(\d+)\s*(?:,\s*(\d+)\s*)?\}/g) ?? []) {
+    const m = /\{\s*(\d+)\s*(?:,\s*(\d+)\s*)?\}/.exec(r);
+    const upper = m?.[2] ? parseInt(m[2], 10) : m?.[1] ? parseInt(m[1], 10) : 0;
+    if (upper > 1000) return false;
+  }
+
+  // 4. Must actually compile — a malformed pattern should never reach a live RegExp.
+  try {
+    new RegExp(pattern);
+  } catch {
+    return false;
+  }
+
   return true;
 }

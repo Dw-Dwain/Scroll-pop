@@ -13,10 +13,38 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: '2024-06-20' });
 }
 
+// Allowlist the post-checkout redirect targets. Stripe will redirect the paying user to
+// success_url / cancel_url — accepting an arbitrary URL lets an authenticated attacker craft
+// a checkout link that lands victims on a phishing site (CTO-AUDIT Phase 4, Finding 4 / P1-2).
+const isDev = process.env['NODE_ENV'] !== 'production';
+const ALLOWED_REDIRECT_ORIGINS = new Set(
+  [
+    process.env['DASHBOARD_URL'],
+    'https://dashboard.scrollpop.online',
+    'https://scrollpop-dashboard.pages.dev',
+    ...(isDev ? ['http://localhost:5173', 'http://localhost:3000'] : []),
+  ].filter((o): o is string => Boolean(o)),
+);
+// Cloudflare Pages preview deploys: <hash>.scrollpop-dashboard.pages.dev
+const PAGES_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.scrollpop-dashboard\.pages\.dev$/;
+
+function isAllowedRedirect(url: string): boolean {
+  try {
+    const origin = new URL(url).origin;
+    return ALLOWED_REDIRECT_ORIGINS.has(origin) || PAGES_PREVIEW_RE.test(origin);
+  } catch {
+    return false;
+  }
+}
+
+const redirectUrl = z.string().url().refine(isAllowedRedirect, {
+  message: 'URL origin is not an allowed ScrollPop dashboard origin',
+});
+
 const CheckoutBody = z.object({
   plan: z.enum(['starter', 'growth', 'scale', 'agency']),
-  successUrl: z.string().url(),
-  cancelUrl: z.string().url(),
+  successUrl: redirectUrl,
+  cancelUrl: redirectUrl,
 });
 
 export const billingRoutes: FastifyPluginAsync = async (fastify) => {
@@ -74,7 +102,7 @@ export const billingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /api/v1/billing/portal — create Stripe Customer Portal session
   fastify.post('/billing/portal', async (request, reply) => {
-    const body = z.object({ returnUrl: z.string().url() }).parse(request.body);
+    const body = z.object({ returnUrl: redirectUrl }).parse(request.body);
     const stripe = getStripe();
 
     const tenant = await db.query.tenants.findFirst({

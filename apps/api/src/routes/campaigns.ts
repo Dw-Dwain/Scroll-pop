@@ -4,6 +4,7 @@ import { db } from '../db/client.js';
 import { campaigns, sites, designs, events, triggers, targetingRules, frequencyRules } from '../db/schema.js';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { emitNotification } from './notifications.js';
+import { purgeSiteConfigCache } from '../lib/cache-purge.js';
 
 const CreateCampaignBody = z.object({
   siteId: z.string().uuid(),
@@ -19,6 +20,20 @@ const UpdateCampaignBody = z.object({
 });
 
 export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
+  // Invalidate a campaign's site edge-config cache so status changes propagate immediately
+  // instead of lingering for the 60s cache TTL (CTO-AUDIT Phase 4, Finding 2 / P0-5).
+  async function purgeCampaignSiteCache(siteId: string): Promise<void> {
+    try {
+      const site = await db.query.sites.findFirst({
+        where: eq(sites.id, siteId),
+        columns: { publicKey: true },
+      });
+      if (site?.publicKey) await purgeSiteConfigCache(site.publicKey);
+    } catch {
+      /* best-effort — the 60s TTL is the fallback */
+    }
+  }
+
   // GET /api/v1/campaigns
   fastify.get<{ Querystring: { siteId?: string; status?: string } }>(
     '/campaigns',
@@ -140,6 +155,8 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     if (!deleted) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
+    // Bust the edge config cache so a deleted active campaign stops serving immediately.
+    void purgeCampaignSiteCache(deleted.siteId);
     return reply.code(200).send({ data: deleted });
   });
 
@@ -277,7 +294,8 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       href: `/campaigns/detail/${updated.id}`,
     });
 
-    // TODO: Publish config to Cloudflare KV (Step 5)
+    // Bust the edge config cache so the newly-active campaign serves immediately.
+    void purgeCampaignSiteCache(updated.siteId);
     return reply.send({ data: updated });
   };
 
@@ -309,7 +327,8 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       href: `/campaigns/detail/${updated.id}`,
     });
 
-    // TODO: Update KV cache (Step 5)
+    // Bust the edge config cache so the popup stops serving immediately, not after the TTL.
+    void purgeCampaignSiteCache(updated.siteId);
     return reply.send({ data: updated });
   };
 

@@ -12,11 +12,42 @@
 
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
-import { users, tenants, tenantMembers, sites, campaigns } from '../db/schema.js';
+import { users, tenants, tenantMembers, sites, campaigns, adminAuditLog } from '../db/schema.js';
 import { eq, sql, isNull, and, like } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
 
 const ADMIN_EMAIL = process.env['ADMIN_EMAIL']?.toLowerCase() ?? '';
+
+// Per-route rate limit for the admin console — low enough to blunt brute-force / abuse,
+// generous enough for normal console use (CTO-AUDIT Phase 4, Finding 12 / P2-19).
+const adminRateLimit = { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
+
+/**
+ * Record a super-admin action in the audit log (CTO-AUDIT Phase 4, Finding 8 / P2-4).
+ * Best-effort — a logging failure must never break the privileged action itself.
+ */
+async function writeAudit(
+  request: FastifyRequest,
+  action: string,
+  targetTenantId: string | null,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    const actor = await db.query.users.findFirst({
+      where: eq(users.id, request.userId),
+      columns: { email: true },
+    });
+    await db.insert(adminAuditLog).values({
+      actorUserId: request.userId,
+      actorEmail: actor?.email ?? null,
+      action,
+      targetTenantId,
+      details,
+    });
+  } catch {
+    /* best-effort */
+  }
+}
 
 // Only the exact platform-owner email gets super-admin access.
 // novatise.com users are a client agency — they get unlimited plan limits,
@@ -67,7 +98,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
    * Returns all tenants with basic stats (sites, campaigns, plan).
    * Super-admin only.
    */
-  fastify.get('/admin/tenants', async (request, reply) => {
+  fastify.get('/admin/tenants', adminRateLimit, async (request, reply) => {
     if (!await assertSuperAdmin(request, reply)) return;
 
     const rows = await db
@@ -118,7 +149,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{
     Params: { id: string };
     Body: { plan: string; monthlyViewLimit?: number };
-  }>('/admin/tenants/:id/plan', async (request, reply) => {
+  }>('/admin/tenants/:id/plan', adminRateLimit, async (request, reply) => {
     if (!await assertSuperAdmin(request, reply)) return;
 
     const { plan, monthlyViewLimit } = request.body;
@@ -140,6 +171,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!updated) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Tenant not found' } });
     }
+    await writeAudit(request, 'tenant.plan_change', request.params.id, { plan, monthlyViewLimit });
     return reply.send({ data: updated });
   });
 
@@ -148,7 +180,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
    * Manually soft-delete a tenant (e.g. stale demo/orphaned row).
    * Super-admin only.
    */
-  fastify.delete<{ Params: { id: string } }>('/admin/tenants/:id', async (request, reply) => {
+  fastify.delete<{ Params: { id: string } }>('/admin/tenants/:id', adminRateLimit, async (request, reply) => {
     if (!await assertSuperAdmin(request, reply)) return;
 
     const [updated] = await db
@@ -160,6 +192,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!updated) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Tenant not found or already deleted' } });
     }
+    await writeAudit(request, 'tenant.delete', request.params.id, {});
     return reply.code(204).send();
   });
 
@@ -171,12 +204,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
    *   (they now share the org_novatise tenant instead)
    * Super-admin only.
    */
-  fastify.post('/admin/sync', async (request, reply) => {
+  fastify.post('/admin/sync', adminRateLimit, async (request, reply) => {
     if (!await assertSuperAdmin(request, reply)) return;
 
-    // Fetch all active users from Clerk (up to 500 — enough for any early-stage app)
-    const clerkResponse = await clerkClient.users.getUserList({ limit: 500 });
-    const activeClerkIds = new Set(clerkResponse.data.map((u) => u.id));
+    // Fetch ALL active users from Clerk, paginated — the old single 500-cap call silently
+    // ignored users past the limit, so they'd never be reconciled (CTO-AUDIT Finding 10 / P3-8).
+    const activeClerkIds = new Set<string>();
+    const PAGE = 100;
+    for (let offset = 0; ; offset += PAGE) {
+      const page = await clerkClient.users.getUserList({ limit: PAGE, offset });
+      for (const u of page.data) activeClerkIds.add(u.id);
+      if (page.data.length < PAGE) break;
+    }
 
     const allDbUsers = await db.query.users.findMany({ columns: { id: true, clerkUserId: true, email: true } });
 
@@ -226,6 +265,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     fastify.log.info({ deletedUsers, deletedTenants }, 'Admin Clerk sync completed');
+    await writeAudit(request, 'admin.sync', null, { deletedUsers, deletedTenants });
     return reply.send({ data: { deletedUsers, deletedTenants, message: `Removed ${deletedUsers} stale users and ${deletedTenants} orphaned tenants` } });
   });
 
@@ -233,7 +273,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
    * GET /api/v1/admin/stats
    * Platform-wide counts.  Super-admin only.
    */
-  fastify.get('/admin/stats', async (request, reply) => {
+  fastify.get('/admin/stats', adminRateLimit, async (request, reply) => {
     if (!await assertSuperAdmin(request, reply)) return;
 
     const [tenantsRes, sitesRes, campaignsRes] = await Promise.all([

@@ -97,6 +97,22 @@ export const notifications = pgTable('notifications', {
     .default(sql`NOW()`),
 });
 
+// ─── Admin Audit Log ────────────────────────────────────────────────────────────
+// Records every super-admin action (plan change, tenant delete, sync) so privileged
+// operations are attributable after the fact. See CTO-AUDIT Phase 4, Finding 8.
+
+export const adminAuditLog = pgTable('admin_audit_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  actorUserId: uuid('actor_user_id'),
+  actorEmail: text('actor_email'),
+  action: text('action').notNull(),
+  targetTenantId: uuid('target_tenant_id'),
+  details: jsonb('details').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+});
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export const users = pgTable('users', {
