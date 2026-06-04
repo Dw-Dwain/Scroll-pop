@@ -11,11 +11,11 @@
 
 | Category | Total | Done | Remaining |
 |---|---|---|---|
-| P0 Launch blockers | 5 | 2 | 3 |
-| P1 High priority | 18 | 8 | 10 |
+| P0 Launch blockers | 5 | 3 | 2 |
+| P1 High priority | 18 | 9 | 9 |
 | P2 Medium priority | 19 | 11 | 8 |
 | P3 Low priority | 12 | 1 | 11 |
-| **Total** | **54** | **22** | **32** |
+| **Total** | **54** | **24** | **30** |
 
 > **Security sprint (Jun 4 2026)** — `feature/security-phase4-5`: closed all CTO-AUDIT
 > Phase 4 findings + Phase 5 scenarios. Done: P0-1, P0-5, P1-1, P1-2, P1-3, P1-17, P2-1,
@@ -39,7 +39,7 @@ Nothing ships without these.
 |---|---|---|---|---|---|
 | P0-1 | ✅ | Bug | **Stripe webhook rawBody bug** — `JSON.stringify(request.body)` used for signature verification instead of raw bytes. All plan changes (upgrade, downgrade, cancel) silently fail with 400. | `webhooks.ts:227` | Register `@fastify/rawbody`. Use `request.rawBody` in both Stripe and Clerk webhook handlers. Test before setting live Stripe keys. |
 | P0-2 | ⬜ | Config | **Stripe billing not activated** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and 4 price IDs (`STRIPE_PRICE_STARTER/GROWTH/SCALE/AGENCY`) not set. No revenue possible. | Render env vars | Fix P0-1 first, then set keys and test end-to-end checkout → webhook → plan update. |
-| P0-3 | ⬜ | Feature | **No email lead storage** — Popup form submissions fire an `email_capture` event but no lead data is persisted in a retrievable format. No dashboard UI exists to view submissions. This is the core use case for most popup operators. Will cause immediate churn. | `schema.ts` (no leads table) | Create `leads` table (tenantId, campaignId, email, name, metadata, createdAt). API endpoint to list/export. Dashboard UI. |
+| P0-3 | ✅ | Feature | **No email lead storage** — Popup form submissions fire an `email_capture` event but no lead data is persisted in a retrievable format. No dashboard UI exists to view submissions. This is the core use case for most popup operators. Will cause immediate churn. | `schema.ts` (no leads table) | Create `leads` table (tenantId, campaignId, email, name, metadata, createdAt). API endpoint to list/export. Dashboard UI. |
 | P0-4 | ⬜ | Bug | **A/B testing passthrough deceives users** — The campaign design editor shows a live percentage slider. The `ab_test` targeting kind in the snippet is `return true` (passthrough). Users who discover this will request refunds. | `packages/snippet/src/main.ts` | Either implement real A/B allocation or remove the slider and label Experiments as "coming soon". |
 | P0-5 | ✅ | Bug | **Campaign activate/pause does not bust KV cache** — Two TODO comments in code confirm this is unfinished. Pausing a campaign leaves it live for up to 60 seconds. Activating a campaign may not propagate. | `campaigns.ts:281`, `campaigns.ts:313` | Call `DELETE /api/v1/internal/cache/:publicKey` for the site's public key on every activate/pause/status change. |
 
@@ -69,7 +69,7 @@ Core product gaps vs. Promolayer and high-severity technical issues.
 
 | # | Status | Category | Item | Promolayer | Notes |
 |---|---|---|---|---|---|
-| P1-7 | ⬜ | Feature | **Email lead capture UI** — No dashboard page to view, search, or export captured email leads. Even after P0-3 (storage) is built, users need a UI to access their leads. | ✅ contact database in dashboard | Leads page: list view, search by email/campaign, CSV export, mark read. |
+| P1-7 | ✅ | Feature | **Email lead capture UI** — Built with P0-3: Leads page (`/leads`, nav entry) with list, campaign filter, pagination, CSV export, and per-lead delete (GDPR). Minor follow-ups deferred: free-text email search box. | `apps/dashboard/src/pages/Leads.tsx` | Done. Optional later: email search input. |
 | P1-8 | ⬜ | Feature | **Klaviyo integration** — No way to push captured emails to Klaviyo. This is the most-requested integration for Shopify operators. | ✅ native | Webhook on `email_capture` event → POST to Klaviyo List API with operator's API key stored in tenant settings. |
 | P1-9 | ⬜ | Feature | **Mailchimp integration** | ✅ native | Same pattern as Klaviyo — operator pastes API key + list ID in Settings → Integrations. |
 | P1-10 | ⬜ | Feature | **Real A/B testing** — Proper variant allocation (weighted random assignment per visitor, sticky via localStorage), win condition detection, statistical significance indicator. | ✅ full A/B/N + control groups | Must be lazy-loaded or snippet exceeds 10 KB gate. Design as a separate module. |

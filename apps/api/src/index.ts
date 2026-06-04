@@ -11,8 +11,9 @@ import { db } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
 import { ensureAuditLogSchema } from './db/ensure-audit-log.js';
+import { ensureLeadsSchema } from './db/ensure-leads.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
-import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants } from './db/schema.js';
+import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, leads } from './db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
 // Routes
@@ -27,6 +28,7 @@ import { billingRoutes } from './routes/billing.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { internalRoutes } from './routes/internal.js';
 import { notificationRoutes, emitNotification } from './routes/notifications.js';
+import { leadRoutes } from './routes/leads.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
@@ -137,6 +139,7 @@ async function bootstrap() {
   await app.register(frequencyRoutes, { prefix: '/api/v1' });
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
   await app.register(notificationRoutes, { prefix: '/api/v1' });
+  await app.register(leadRoutes, { prefix: '/api/v1' });
   await app.register(opsRoutes, { prefix: '/api/v1' });
   await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });
@@ -457,6 +460,20 @@ async function bootstrap() {
     const labels = host.toLowerCase().replace(/^www\./, '').split('.').filter(Boolean);
     return labels.length <= 2 ? labels.join('.') : labels.slice(-2).join('.');
   }
+  // Pull a clean, valid email out of a conversion event's metadata for lead capture.
+  // Rejects the snippet's anonymous placeholder and anything malformed. CTO-AUDIT P0-3.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function extractLeadEmail(md: unknown): string | null {
+    if (!md || typeof md !== 'object') return null;
+    const raw = (md as Record<string, unknown>)['email'];
+    if (typeof raw !== 'string') return null;
+    const email = raw.trim().toLowerCase();
+    if (email.length < 3 || email.length > 254) return null;
+    if (email === 'anonymous@scrollpop.online') return null;
+    if (!EMAIL_RE.test(email)) return null;
+    return email;
+  }
+
   function eventOriginAllowed(pageUrl: string | null, meta: CampaignMeta): boolean {
     // Only enforce for platforms where the registered domain reliably equals the serving
     // domain. Shopify storefronts run on custom domains we don't store, donation platforms
@@ -592,6 +609,26 @@ async function bootstrap() {
             // Conversion-milestone notifications.
             if (eventType === 'conversion') {
               void checkConversionMilestone(campaign.tenantId);
+
+              // Lead capture: a conversion may carry the visitor's submitted email in its
+              // metadata. Persist it as a lead, deduped per (tenant, campaign, email).
+              // Best-effort — never break ingest. CTO-AUDIT P0-3.
+              const md = (metadata ?? meta ?? {}) as Record<string, unknown>;
+              const leadEmail = extractLeadEmail(md);
+              if (leadEmail) {
+                const leadName = typeof md['name'] === 'string' ? (md['name'] as string).slice(0, 200) : null;
+                void db.insert(leads).values({
+                  tenantId: campaign.tenantId,
+                  siteId: campaign.siteId,
+                  campaignId,
+                  email: leadEmail,
+                  name: leadName,
+                  visitorId: safeVisitorId,
+                  sessionId: safeSessionId,
+                  source: trafficSource || null,
+                  pageUrl: safePageUrl,
+                }).onConflictDoNothing().catch(() => { /* best-effort */ });
+              }
             }
           }
         } catch (err) {
@@ -635,6 +672,9 @@ async function bootstrap() {
   // Ensure admin_audit_log schema (migration 0007) so audit writes never fail on a prod DB
   // that hasn't had the migration applied yet.
   await ensureAuditLogSchema(app.log);
+  // Ensure leads schema (migration 0009) so lead capture + the Leads page work even if the
+  // migration hasn't been applied to prod by hand yet.
+  await ensureLeadsSchema(app.log);
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });

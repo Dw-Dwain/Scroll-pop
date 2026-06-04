@@ -113,6 +113,27 @@ export const adminAuditLog = pgTable('admin_audit_log', {
     .default(sql`NOW()`),
 });
 
+// ─── Leads ──────────────────────────────────────────────────────────────────────
+// Captured email/form submissions from popups. Populated from the `/e` ingest path when a
+// conversion event carries an email. Tenant-scoped (RLS). See CTO-AUDIT P0-3.
+
+export const leads = pgTable('leads', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  siteId: uuid('site_id'),
+  campaignId: uuid('campaign_id'),
+  email: text('email').notNull(),
+  name: text('name'),
+  fields: jsonb('fields').notNull().default({}),
+  visitorId: text('visitor_id'),
+  sessionId: text('session_id'),
+  source: text('source'),
+  pageUrl: text('page_url'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+});
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export const users = pgTable('users', {

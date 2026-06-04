@@ -94,6 +94,7 @@ import { Dashboard } from './pages/Dashboard';
 import { OpsCenter } from './pages/OpsCenter';
 import { Sites } from './pages/Sites';
 import { Campaigns } from './pages/Campaigns';
+import { Leads } from './pages/Leads';
 import { Journeys } from './pages/Journeys';
 import { Experiments } from './pages/Experiments';
 import { CampaignWizard } from './pages/CampaignWizard';
@@ -199,6 +200,7 @@ const ClerkAppContent: React.FC = () => {
             {currentPath === '/experiments' && EXPERIMENTS_ENABLED ? <Experiments onNavigate={navigate} /> : null}
             {currentPath === '/sites' ? <Sites onNavigate={navigate} /> : null}
             {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
+            {currentPath === '/leads' ? <Leads onNavigate={navigate} /> : null}
             {currentPath === '/campaigns/new' ? <CampaignWizard onNavigate={navigate} /> : null}
             {getCampaignDetailId(currentPath) ? <CampaignDetail campaignId={getCampaignDetailId(currentPath)!} onNavigate={navigate} /> : null}
             {getCampaignDesignId(currentPath) ? <CampaignDesign campaignId={getCampaignDesignId(currentPath)!} onNavigate={navigate} /> : null}
