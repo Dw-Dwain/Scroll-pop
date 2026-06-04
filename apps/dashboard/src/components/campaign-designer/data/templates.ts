@@ -16,7 +16,6 @@ const getDefaultTriggers = () => ({
   utmValue: '',
   startsAt: '',
   endsAt: '',
-  abTestPercent: 100,
 });
 
 // Helper for close button standard element
@@ -49,7 +48,7 @@ interface DynamicTemplateMeta {
   popupType: PopupType;
   position: CanvasPosition;
   /** Layout variant — controls element arrangement inside the popup */
-  layout?: 'split-left' | 'split-right' | 'centered' | 'minimal';
+  layout?: 'split-left' | 'split-right' | 'centered' | 'minimal' | 'product-card' | 'testimonial' | 'bold-type';
   palette: {
     bg: string;
     primary: string;
@@ -518,7 +517,97 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
     position: 'center',
     layout: 'minimal',
     palette: { bg: '#f5f3ff', primary: '#7c3aed', text: '#4c1d95', border: '#ddd6fe', tint: '#ede9fe', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
-  }
+  },
+
+  // ── PRODUCT CARD (affiliate-ready, image + price + rating + CTA) ───────────
+  {
+    id: 'product-deal-tech',
+    name: 'Tech Product Deal Card',
+    category: 'Affiliate',
+    title: 'Top-Rated Pick',
+    subtitle: '★★★★★  4.8 · 2,400+ reviews · Free next-day delivery',
+    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80',
+    btnText: 'VIEW DEAL →',
+    coupon: '',
+    popupType: 'slidein',
+    position: 'bottom-right',
+    layout: 'product-card',
+    palette: { bg: '#FFFFFF', primary: '#0f172a', text: '#111827', border: '#e5e7eb', tint: '#f8fafc', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
+  {
+    id: 'product-deal-fashion',
+    name: 'Fashion Product Card',
+    category: 'Affiliate',
+    title: 'Editor\'s Pick',
+    subtitle: '★★★★★  4.9 · Limited stock · Members save an extra 15%',
+    image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=400&q=80',
+    btnText: 'SHOP NOW →',
+    coupon: '',
+    popupType: 'slidein',
+    position: 'bottom-right',
+    layout: 'product-card',
+    palette: { bg: '#0c0c0c', primary: '#f5f5f5', text: '#ffffff', border: '#222222', tint: '#181818', fontHeading: 'serif', fontBody: 'sans-serif' }
+  },
+
+  // ── TESTIMONIAL (social proof focus, quote + avatar + CTA) ────────────────
+  {
+    id: 'testimonial-ecomm',
+    name: 'Customer Story + Offer',
+    category: 'Social Proof',
+    title: '"Exactly what I needed."',
+    subtitle: '— Sarah K., verified buyer · joined 48,000+ happy customers',
+    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
+    btnText: 'CLAIM 15% OFF',
+    coupon: 'SOCIAL15',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'testimonial',
+    palette: { bg: '#FAFAF9', primary: '#16a34a', text: '#1c1917', border: '#e7e5e4', tint: '#f5f5f4', fontHeading: 'serif', fontBody: 'sans-serif' }
+  },
+  {
+    id: 'testimonial-saas',
+    name: 'SaaS Review + Trial CTA',
+    category: 'SaaS',
+    title: '"Doubled our conversions in 30 days."',
+    subtitle: '— Mark T., Head of Growth @ Techflow · ★★★★★',
+    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+    btnText: 'START FREE TRIAL',
+    coupon: 'TRIAL30',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'testimonial',
+    palette: { bg: '#0f172a', primary: '#6366f1', text: '#f1f5f9', border: '#1e293b', tint: '#1e293b', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
+
+  // ── BOLD TYPE (no image, huge typography dominates, high impact) ──────────
+  {
+    id: 'bold-type-sale',
+    name: 'Bold Type Sale',
+    category: 'Urgency',
+    title: '50% OFF\nENDS\nTONIGHT',
+    subtitle: 'No code needed. Discount applied automatically at checkout.',
+    image: '',
+    btnText: 'SHOP NOW',
+    coupon: 'AUTO50',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'bold-type',
+    palette: { bg: '#000000', primary: '#FF3B30', text: '#FFFFFF', border: '#1a1a1a', tint: '#111111', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
+  {
+    id: 'bold-type-welcome',
+    name: 'Bold Welcome Offer',
+    category: 'Welcome',
+    title: 'WELCOME.\nGET\n10% OFF.',
+    subtitle: 'Your exclusive first-order discount. Applied at checkout automatically.',
+    image: '',
+    btnText: 'START SHOPPING',
+    coupon: 'BOLD10',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'bold-type',
+    palette: { bg: '#FAFAFA', primary: '#111827', text: '#111827', border: '#E5E7EB', tint: '#F9FAFB', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
 ];
 
 // Preserving the 8 premium handcrafted elite assets
@@ -1069,7 +1158,166 @@ const PRESERVATION_CATALOG: Campaign[] = [
       }
     }
   },
-  // 3. Kawaii Japanese Retail (Cute, Pastel, Playful bouncy shapes)
+  // 3. Dark Glassmorphism — frosted dark overlay, single CTA, no email field. Pure affiliate card.
+  {
+    id: 'dark-glass-affiliate',
+    name: 'Dark Glass Affiliate Card',
+    category: 'Affiliate',
+    isActive: true,
+    conversions: 6120,
+    views: 88400,
+    createdAt: '2026-05-22',
+    triggers: getDefaultTriggers(),
+    steps: {
+      teaser: {
+        popupType: 'floating',
+        position: 'bottom-right',
+        width: 148,
+        height: 56,
+        backgroundColor: 'rgba(15,15,15,0.85)',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        overlayColor: 'rgba(0,0,0,0)',
+        animationEntrance: 'slide-up',
+        elements: [
+          { id: 'dg-t-bg', type: 'shape', x: 0, y: 0, w: 100, h: 100, content: 'rect', backgroundColor: 'rgba(20,20,20,0.9)', borderRadius: 14, zIndex: 1 },
+          { id: 'dg-t-pill', type: 'shape', x: 28, y: 10, w: 44, h: 28, content: 'rect', backgroundColor: '#6366f1', borderRadius: 99, zIndex: 2 },
+          { id: 'dg-t-label', type: 'text', x: 5, y: 12, w: 90, h: 20, content: 'DEAL', color: '#FFFFFF', fontSize: 9, fontWeight: '800', align: 'center', zIndex: 3 },
+          { id: 'dg-t-cta', type: 'text', x: 5, y: 52, w: 90, h: 24, content: 'See Price →', color: '#A5B4FC', fontSize: 10, fontWeight: '700', align: 'center', zIndex: 3 },
+        ]
+      },
+      main: {
+        popupType: 'slidein',
+        position: 'bottom-right',
+        width: 340,
+        height: 420,
+        backgroundColor: 'rgba(12,12,14,0.94)',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        boxShadow: '0 40px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08)',
+        overlayColor: 'rgba(0,0,0,0)',
+        animationEntrance: 'slide-up',
+        elements: [
+          getCloseButton(100),
+          { id: 'dg-prod-img', type: 'image', x: 8, y: 6, w: 84, h: 42, content: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80', borderRadius: 14, zIndex: 2 },
+          { id: 'dg-badge-bg', type: 'shape', x: 10, y: 42, w: 24, h: 10, content: 'rect', backgroundColor: '#6366f1', borderRadius: 99, zIndex: 3 },
+          { id: 'dg-badge-txt', type: 'text', x: 10, y: 43, w: 24, h: 8, content: 'DEAL', color: '#FFFFFF', fontSize: 9, fontWeight: '800', align: 'center', zIndex: 4 },
+          { id: 'dg-name', type: 'heading', x: 8, y: 56, w: 84, h: 14, content: 'Your Product Name', color: '#F1F5F9', fontSize: 18, fontWeight: '700', fontFamily: 'sans-serif', align: 'left', zIndex: 3 },
+          { id: 'dg-stars', type: 'text', x: 8, y: 71, w: 60, h: 7, content: '★★★★★  4.8 · 2,341 reviews', color: '#FBBF24', fontSize: 10, fontWeight: '600', align: 'left', zIndex: 3 },
+          { id: 'dg-price', type: 'text', x: 8, y: 80, w: 50, h: 10, content: '$XX.XX  was $XX.XX', color: '#F87171', fontSize: 14, fontWeight: '800', align: 'left', zIndex: 3 },
+          { id: 'dg-btn', type: 'button', x: 8, y: 88, w: 84, h: 9, content: 'See Current Price →', color: '#FFFFFF', backgroundColor: '#6366f1', borderRadius: 10, fontSize: 12, fontWeight: '700', align: 'center', href: '', zIndex: 4 },
+        ]
+      },
+      success: {
+        popupType: 'slidein',
+        position: 'bottom-right',
+        width: 340,
+        height: 260,
+        backgroundColor: 'rgba(12,12,14,0.94)',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        boxShadow: '0 40px 80px rgba(0,0,0,0.7)',
+        overlayColor: 'rgba(0,0,0,0)',
+        animationEntrance: 'slide-up',
+        elements: [
+          getCloseButton(100),
+          { id: 'dg-s-icon', type: 'text', x: 35, y: 12, w: 30, h: 18, content: '🛒', fontSize: 36, color: '#6366f1', align: 'center', zIndex: 2 },
+          { id: 'dg-s-head', type: 'heading', x: 8, y: 36, w: 84, h: 14, content: 'Redirecting to deal...', color: '#F1F5F9', fontSize: 18, fontWeight: '700', align: 'center', zIndex: 3 },
+          { id: 'dg-s-sub', type: 'text', x: 12, y: 52, w: 76, h: 12, content: 'Check current price and availability on the retailer\'s site.', color: '#94A3B8', fontSize: 11, align: 'center', zIndex: 3 },
+          { id: 'dg-s-btn', type: 'button', x: 14, y: 70, w: 72, h: 12, content: 'Go to Deal →', color: '#FFFFFF', backgroundColor: '#6366f1', borderRadius: 10, fontSize: 12, fontWeight: '700', align: 'center', href: '', zIndex: 4 },
+          { id: 'dg-s-disc', type: 'text', x: 8, y: 86, w: 84, h: 8, content: 'We may earn a commission on purchases made through our links.', color: '#475569', fontSize: 7, align: 'center', zIndex: 3 },
+        ]
+      }
+    }
+  },
+
+  // 4. Luxury Brand — high contrast, full-bleed background image, serif, single CTA
+  {
+    id: 'luxury-brand',
+    name: 'Luxury Brand Takeover',
+    category: 'Fashion Editorial',
+    isActive: true,
+    conversions: 2891,
+    views: 38200,
+    createdAt: '2026-05-24',
+    triggers: getDefaultTriggers(),
+    steps: {
+      teaser: {
+        popupType: 'floating',
+        position: 'bottom-left',
+        width: 130,
+        height: 54,
+        backgroundColor: '#000000',
+        borderRadius: 0,
+        borderWidth: 1,
+        borderColor: '#C9A96E',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+        overlayColor: 'rgba(0,0,0,0)',
+        animationEntrance: 'fade',
+        elements: [
+          { id: 'lux-t-bg', type: 'shape', x: 0, y: 0, w: 100, h: 100, content: 'rect', backgroundColor: '#000000', borderRadius: 0, zIndex: 1 },
+          { id: 'lux-t-rule', type: 'shape', x: 10, y: 28, w: 80, h: 1, content: 'rect', backgroundColor: '#C9A96E', zIndex: 2 },
+          { id: 'lux-t-txt', type: 'text', x: 8, y: 10, w: 84, h: 16, content: 'PRIVATE SALE', color: '#C9A96E', fontSize: 9, fontWeight: '700', fontFamily: 'serif', align: 'center', zIndex: 3 },
+          { id: 'lux-t-sub', type: 'text', x: 8, y: 40, w: 84, h: 20, content: '30% OFF · TODAY ONLY', color: '#FFFFFF', fontSize: 8, fontWeight: '400', align: 'center', zIndex: 3 },
+        ]
+      },
+      main: {
+        popupType: 'fullscreen',
+        position: 'center',
+        width: 100,
+        height: 100,
+        backgroundColor: '#0a0705',
+        borderRadius: 0,
+        borderWidth: 0,
+        borderColor: '',
+        boxShadow: 'none',
+        overlayColor: 'rgba(0,0,0,0)',
+        animationEntrance: 'fade',
+        elements: [
+          getCloseButton(100),
+          { id: 'lux-bg-img', type: 'image', x: 0, y: 0, w: 50, h: 100, content: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1200&q=80', borderRadius: 0, zIndex: 1 },
+          { id: 'lux-overlay', type: 'shape', x: 0, y: 0, w: 50, h: 100, content: 'rect', backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 0, zIndex: 2 },
+          { id: 'lux-right-bg', type: 'shape', x: 50, y: 0, w: 50, h: 100, content: 'rect', backgroundColor: '#0a0705', borderRadius: 0, zIndex: 1 },
+          { id: 'lux-rule-top', type: 'shape', x: 58, y: 22, w: 34, h: 1, content: 'rect', backgroundColor: '#C9A96E', zIndex: 3 },
+          { id: 'lux-eyebrow', type: 'text', x: 58, y: 14, w: 34, h: 6, content: 'EXCLUSIVE PRIVATE SALE', color: '#C9A96E', fontSize: 9, fontWeight: '700', fontFamily: 'serif', align: 'center', zIndex: 4 },
+          { id: 'lux-rule-bot', type: 'shape', x: 58, y: 25, w: 34, h: 1, content: 'rect', backgroundColor: '#C9A96E', zIndex: 3 },
+          { id: 'lux-title', type: 'heading', x: 54, y: 30, w: 42, h: 26, content: 'THE RIVIERA\nCOLLECTION', color: '#FAF7F2', fontSize: 30, fontWeight: '300', fontFamily: 'serif', align: 'center', zIndex: 4 },
+          { id: 'lux-desc', type: 'text', x: 56, y: 56, w: 38, h: 12, content: 'Uncover curated pieces, seasonal lookbooks, and welcome credits for private members.', color: '#A89080', fontSize: 11, align: 'center', zIndex: 4 },
+          { id: 'lux-btn', type: 'button', x: 58, y: 72, w: 34, h: 10, content: 'ENTER THE COLLECTION', color: '#0a0705', backgroundColor: '#C9A96E', borderRadius: 0, fontSize: 10, fontWeight: '700', fontFamily: 'serif', align: 'center', href: '', zIndex: 5 },
+          { id: 'lux-dismiss', type: 'text', x: 58, y: 86, w: 34, h: 8, content: 'No thanks, I prefer full price.', color: '#4B4440', fontSize: 9, align: 'center', zIndex: 4 },
+        ]
+      },
+      success: {
+        popupType: 'modal',
+        position: 'center',
+        width: 520,
+        height: 340,
+        backgroundColor: '#0a0705',
+        borderRadius: 0,
+        borderWidth: 1,
+        borderColor: '#C9A96E',
+        boxShadow: '0 0 80px rgba(0,0,0,0.8)',
+        overlayColor: 'rgba(0,0,0,0.7)',
+        animationEntrance: 'fade',
+        elements: [
+          getCloseButton(100),
+          { id: 'lux-s-border', type: 'shape', x: 5, y: 5, w: 90, h: 90, content: 'rect', borderColor: '#C9A96E', borderWidth: 1, borderRadius: 0, zIndex: 2 },
+          { id: 'lux-s-eyebrow', type: 'text', x: 10, y: 18, w: 80, h: 6, content: 'ACCESS CONFIRMED', color: '#C9A96E', fontSize: 9, fontWeight: '700', fontFamily: 'serif', align: 'center', zIndex: 3 },
+          { id: 'lux-s-title', type: 'heading', x: 10, y: 26, w: 80, h: 16, content: 'Welcome, Valued Member', color: '#FAF7F2', fontSize: 26, fontWeight: '300', fontFamily: 'serif', align: 'center', zIndex: 3 },
+          { id: 'lux-s-rule', type: 'shape', x: 30, y: 46, w: 40, h: 1, content: 'rect', backgroundColor: '#C9A96E', zIndex: 2 },
+          { id: 'lux-s-code-label', type: 'text', x: 15, y: 52, w: 70, h: 6, content: 'Your exclusive access code', color: '#A89080', fontSize: 10, align: 'center', zIndex: 3 },
+          { id: 'lux-s-code', type: 'text', x: 25, y: 60, w: 50, h: 12, content: 'RIVIERA30', color: '#C9A96E', backgroundColor: 'rgba(201,169,110,0.08)', borderRadius: 0, fontSize: 22, fontWeight: '700', fontFamily: 'monospace', align: 'center', borderWidth: 1, borderColor: '#C9A96E', zIndex: 4 },
+          { id: 'lux-s-btn', type: 'button', x: 28, y: 77, w: 44, h: 10, content: 'SHOP THE COLLECTION', color: '#0a0705', backgroundColor: '#C9A96E', borderRadius: 0, fontSize: 10, fontWeight: '700', align: 'center', zIndex: 4 },
+        ]
+      }
+    }
+  },
+
+  // 5. Kawaii Japanese Retail (Cute, Pastel, Playful bouncy shapes)
   {
     id: 'kawaii-harajuku',
     name: 'Mochi Land - Sweet Surprise',
@@ -1332,6 +1580,166 @@ const PRESERVATION_CATALOG: Campaign[] = [
       }
     }
   },
+
+  // 6. SaaS Minimal — clean white, left accent stripe, email capture, no image
+  {
+    id: 'saas-minimal-capture',
+    name: 'SaaS — Clean Lead Capture',
+    category: 'SaaS',
+    isActive: true,
+    conversions: 5340,
+    views: 71000,
+    createdAt: '2026-05-25',
+    triggers: getDefaultTriggers(),
+    steps: {
+      teaser: {
+        popupType: 'floating',
+        position: 'bottom-right',
+        width: 160,
+        height: 56,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+        overlayColor: 'rgba(0,0,0,0)',
+        animationEntrance: 'slide-up',
+        elements: [
+          { id: 'sm-t-bg', type: 'shape', x: 0, y: 0, w: 100, h: 100, content: 'rect', backgroundColor: '#FFFFFF', borderRadius: 12, zIndex: 1 },
+          { id: 'sm-t-stripe', type: 'shape', x: 0, y: 0, w: 5, h: 100, content: 'rect', backgroundColor: '#4f46e5', borderRadius: 0, zIndex: 2 },
+          { id: 'sm-t-head', type: 'text', x: 10, y: 12, w: 86, h: 22, content: 'Get your free trial', color: '#111827', fontSize: 11, fontWeight: '700', align: 'left', zIndex: 3 },
+          { id: 'sm-t-sub', type: 'text', x: 10, y: 46, w: 86, h: 22, content: '14 days · No credit card', color: '#6B7280', fontSize: 9, align: 'left', zIndex: 3 },
+        ]
+      },
+      main: {
+        popupType: 'modal',
+        position: 'center',
+        width: 600,
+        height: 380,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
+        overlayColor: 'rgba(0,0,0,0.4)',
+        animationEntrance: 'scale-up',
+        elements: [
+          getCloseButton(100),
+          { id: 'sm-stripe', type: 'shape', x: 0, y: 0, w: 6, h: 100, content: 'rect', backgroundColor: '#4f46e5', borderRadius: 0, zIndex: 1 },
+          { id: 'sm-eyebrow', type: 'text', x: 12, y: 14, w: 80, h: 6, content: '14-DAY FREE TRIAL · NO CREDIT CARD REQUIRED', color: '#4f46e5', fontSize: 10, fontWeight: '700', align: 'left', zIndex: 3 },
+          { id: 'sm-title', type: 'heading', x: 12, y: 22, w: 80, h: 20, content: 'Start building something people love.', color: '#111827', fontSize: 26, fontWeight: '800', fontFamily: 'sans-serif', align: 'left', zIndex: 3 },
+          { id: 'sm-desc', type: 'text', x: 12, y: 44, w: 80, h: 12, content: 'Join 12,000+ teams using ScrollPop to turn visitors into customers. Setup takes 5 minutes.', color: '#6B7280', fontSize: 13, align: 'left', zIndex: 3 },
+          { id: 'sm-check-1', type: 'text', x: 12, y: 58, w: 38, h: 6, content: '✓ Unlimited campaigns', color: '#111827', fontSize: 11, fontWeight: '500', align: 'left', zIndex: 3 },
+          { id: 'sm-check-2', type: 'text', x: 12, y: 66, w: 38, h: 6, content: '✓ Cancel any time', color: '#111827', fontSize: 11, fontWeight: '500', align: 'left', zIndex: 3 },
+          { id: 'sm-check-3', type: 'text', x: 54, y: 58, w: 40, h: 6, content: '✓ No credit card needed', color: '#111827', fontSize: 11, fontWeight: '500', align: 'left', zIndex: 3 },
+          { id: 'sm-check-4', type: 'text', x: 54, y: 66, w: 40, h: 6, content: '✓ Full feature access', color: '#111827', fontSize: 11, fontWeight: '500', align: 'left', zIndex: 3 },
+          { id: 'sm-divider', type: 'shape', x: 12, y: 76, w: 80, h: 1, content: 'rect', backgroundColor: '#F3F4F6', zIndex: 2 },
+          { id: 'sm-input', type: 'input', x: 12, y: 80, w: 54, h: 12, content: '', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, zIndex: 3, extraProps: { placeholder: 'Enter your work email…' } },
+          { id: 'sm-btn', type: 'button', x: 68, y: 80, w: 24, h: 12, content: 'Start Free →', color: '#FFFFFF', backgroundColor: '#4f46e5', borderRadius: 8, fontSize: 12, fontWeight: '700', align: 'center', zIndex: 4 },
+        ]
+      },
+      success: {
+        popupType: 'modal',
+        position: 'center',
+        width: 520,
+        height: 300,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
+        overlayColor: 'rgba(0,0,0,0.4)',
+        animationEntrance: 'scale-up',
+        elements: [
+          getCloseButton(100),
+          { id: 'sm-s-stripe', type: 'shape', x: 0, y: 0, w: 6, h: 100, content: 'rect', backgroundColor: '#4f46e5', borderRadius: 0, zIndex: 1 },
+          { id: 'sm-s-icon', type: 'text', x: 40, y: 14, w: 20, h: 18, content: '🎉', fontSize: 36, color: '#4f46e5', align: 'center', zIndex: 2 },
+          { id: 'sm-s-head', type: 'heading', x: 12, y: 36, w: 76, h: 14, content: 'You\'re in! Check your inbox.', color: '#111827', fontSize: 22, fontWeight: '800', align: 'center', zIndex: 3 },
+          { id: 'sm-s-sub', type: 'text', x: 16, y: 53, w: 68, h: 14, content: 'We\'ve sent your login link. Your 14-day trial starts today — no credit card needed.', color: '#6B7280', fontSize: 12, align: 'center', zIndex: 3 },
+          { id: 'sm-s-btn', type: 'button', x: 24, y: 74, w: 52, h: 12, content: 'Open Dashboard →', color: '#FFFFFF', backgroundColor: '#4f46e5', borderRadius: 8, fontSize: 12, fontWeight: '700', align: 'center', zIndex: 4 },
+        ]
+      }
+    }
+  },
+
+  // 7. Shopify / E-com Urgency — dark, dramatic, countdown-style feel, exit intent
+  {
+    id: 'ecom-urgency-exit',
+    name: 'Dark Exit Urgency — Cart Saver',
+    category: 'Urgency',
+    isActive: true,
+    conversions: 9210,
+    views: 112000,
+    createdAt: '2026-05-26',
+    triggers: { ...getDefaultTriggers(), exitIntent: true, scrollPercent: 0 },
+    steps: {
+      teaser: {
+        popupType: 'floating',
+        position: 'bottom-right',
+        width: 152,
+        height: 58,
+        backgroundColor: '#1a1a1a',
+        borderRadius: 10,
+        borderWidth: 0,
+        borderColor: '',
+        boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+        overlayColor: 'rgba(0,0,0,0)',
+        animationEntrance: 'slide-up',
+        elements: [
+          { id: 'eu-t-bg', type: 'shape', x: 0, y: 0, w: 100, h: 100, content: 'rect', backgroundColor: '#1a1a1a', borderRadius: 10, zIndex: 1 },
+          { id: 'eu-t-pill', type: 'shape', x: 15, y: 8, w: 70, h: 28, content: 'rect', backgroundColor: '#DC2626', borderRadius: 6, zIndex: 2 },
+          { id: 'eu-t-txt', type: 'text', x: 15, y: 11, w: 70, h: 22, content: 'WAIT — 25% OFF', color: '#FFFFFF', fontSize: 10, fontWeight: '900', align: 'center', zIndex: 3 },
+          { id: 'eu-t-sub', type: 'text', x: 5, y: 50, w: 90, h: 22, content: 'Expires when you leave', color: '#9CA3AF', fontSize: 8, align: 'center', zIndex: 3 },
+        ]
+      },
+      main: {
+        popupType: 'modal',
+        position: 'center',
+        width: 580,
+        height: 380,
+        backgroundColor: '#111111',
+        borderRadius: 16,
+        borderWidth: 0,
+        borderColor: '',
+        boxShadow: '0 40px 100px rgba(0,0,0,0.7)',
+        overlayColor: 'rgba(0,0,0,0.65)',
+        animationEntrance: 'scale-up',
+        elements: [
+          getCloseButton(100),
+          { id: 'eu-top-bar', type: 'shape', x: 0, y: 0, w: 100, h: 7, content: 'rect', backgroundColor: '#DC2626', borderRadius: 0, zIndex: 1 },
+          { id: 'eu-top-txt', type: 'text', x: 10, y: 1, w: 80, h: 5, content: '⚡ EXIT OFFER — EXPIRES NOW', color: '#FFFFFF', fontSize: 9, fontWeight: '800', align: 'center', zIndex: 3 },
+          { id: 'eu-headline', type: 'heading', x: 8, y: 12, w: 84, h: 24, content: 'Wait! Your cart\nis about to expire.', color: '#FFFFFF', fontSize: 28, fontWeight: '900', fontFamily: 'sans-serif', align: 'center', zIndex: 3 },
+          { id: 'eu-sub', type: 'text', x: 12, y: 38, w: 76, h: 10, content: 'We\'ve reserved a 25% discount for the next 10 minutes. This won\'t appear again.', color: '#9CA3AF', fontSize: 12, align: 'center', zIndex: 3 },
+          { id: 'eu-coupon-bg', type: 'shape', x: 22, y: 52, w: 56, h: 14, content: 'rect', backgroundColor: '#1F1F1F', borderRadius: 10, borderWidth: 1, borderColor: '#DC2626', zIndex: 2 },
+          { id: 'eu-coupon-label', type: 'text', x: 22, y: 53, w: 56, h: 5, content: 'YOUR EXCLUSIVE CODE', color: '#DC2626', fontSize: 8, fontWeight: '700', align: 'center', zIndex: 3 },
+          { id: 'eu-coupon-code', type: 'text', x: 22, y: 59, w: 56, h: 8, content: 'STAYBACK25', color: '#FFFFFF', fontSize: 20, fontWeight: '900', fontFamily: 'monospace', align: 'center', zIndex: 4 },
+          { id: 'eu-btn', type: 'button', x: 14, y: 72, w: 72, h: 14, content: 'CLAIM 25% OFF NOW →', color: '#FFFFFF', backgroundColor: '#DC2626', borderRadius: 8, fontSize: 14, fontWeight: '900', align: 'center', href: '', zIndex: 5 },
+          { id: 'eu-dismiss', type: 'text', x: 20, y: 90, w: 60, h: 6, content: 'No thanks, I\'ll pay full price', color: '#4B5563', fontSize: 10, align: 'center', zIndex: 3 },
+        ]
+      },
+      success: {
+        popupType: 'modal',
+        position: 'center',
+        width: 480,
+        height: 300,
+        backgroundColor: '#111111',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#222222',
+        boxShadow: '0 40px 100px rgba(0,0,0,0.7)',
+        overlayColor: 'rgba(0,0,0,0.65)',
+        animationEntrance: 'scale-up',
+        elements: [
+          getCloseButton(100),
+          { id: 'eu-s-icon', type: 'text', x: 38, y: 12, w: 24, h: 18, content: '🎁', fontSize: 36, align: 'center', color: '#DC2626', zIndex: 2 },
+          { id: 'eu-s-head', type: 'heading', x: 10, y: 34, w: 80, h: 14, content: 'Code Locked In!', color: '#FFFFFF', fontSize: 24, fontWeight: '900', align: 'center', zIndex: 3 },
+          { id: 'eu-s-code', type: 'text', x: 28, y: 52, w: 44, h: 12, content: 'STAYBACK25', color: '#DC2626', backgroundColor: '#1F1F1F', borderRadius: 8, fontSize: 18, fontWeight: '900', fontFamily: 'monospace', align: 'center', borderWidth: 1, borderColor: '#DC2626', zIndex: 4 },
+          { id: 'eu-s-sub', type: 'text', x: 12, y: 68, w: 76, h: 10, content: 'Apply at checkout. Works on your entire order.', color: '#9CA3AF', fontSize: 11, align: 'center', zIndex: 3 },
+          { id: 'eu-s-btn', type: 'button', x: 18, y: 82, w: 64, h: 12, content: 'COMPLETE MY ORDER →', color: '#FFFFFF', backgroundColor: '#DC2626', borderRadius: 8, fontSize: 12, fontWeight: '800', align: 'center', zIndex: 4 },
+        ]
+      }
+    }
+  },
 ];
 
 // Helper program to compile meta list into high convertible presets campaigns
@@ -1491,7 +1899,7 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-desc`,  type: 'text',    x: lx, y: 36, w: lw, h: 14, content: meta.subtitle, color: bodyThemeColor, fontSize: 12, fontFamily: meta.palette.fontBody,    align: ta, zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-inp`,   type: 'input',   x: lx, y: 52, w: lw, h: 12, content: '', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: meta.palette.border, borderRadius: 8, zIndex: 3, extraProps: { placeholder: 'Your email address…' } } as CampaignElement,
           { id: `${meta.id}-btn`,   type: 'button',  x: lx, y: 68, w: lw, h: 12, content: meta.btnText, color: '#FFFFFF', backgroundColor: meta.palette.primary, borderRadius: 8, fontSize: 11, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: ta, zIndex: 4, animationType: 'zoom-in', animationDelay: 0.2 } as CampaignElement,
-          { id: `${meta.id}-urg`,   type: 'urgency', x: lx, y: 84, w: lw, h: 8,  content: '⚡ Over 3,400 customers redeemed this offer today.', color: meta.palette.primary, fontSize: 9, zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-urg`,   type: 'text', x: lx, y: 84, w: lw, h: 8,  content: '⚡ Over 3,400 customers redeemed this offer today.', color: meta.palette.primary, fontSize: 9, zIndex: 3 } as CampaignElement,
         );
 
       } else if (layout === 'split-right' && meta.image) {
@@ -1507,7 +1915,7 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-desc`,  type: 'text',    x: lx, y: 36, w: lw, h: 14, content: meta.subtitle, color: bodyThemeColor, fontSize: 12, fontFamily: meta.palette.fontBody,    align: ta, zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-inp`,   type: 'input',   x: lx, y: 52, w: lw, h: 12, content: '', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: meta.palette.border, borderRadius: 8, zIndex: 3, extraProps: { placeholder: 'Your email address…' } } as CampaignElement,
           { id: `${meta.id}-btn`,   type: 'button',  x: lx, y: 68, w: lw, h: 12, content: meta.btnText, color: '#FFFFFF', backgroundColor: meta.palette.primary, borderRadius: 8, fontSize: 11, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: ta, zIndex: 4, animationType: 'zoom-in', animationDelay: 0.2 } as CampaignElement,
-          { id: `${meta.id}-urg`,   type: 'urgency', x: lx, y: 84, w: lw, h: 8,  content: '⚡ Limited time — offer expires at midnight!', color: meta.palette.primary, fontSize: 9, zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-urg`,   type: 'text', x: lx, y: 84, w: lw, h: 8,  content: '⚡ Limited time — offer expires at midnight!', color: meta.palette.primary, fontSize: 9, zIndex: 3 } as CampaignElement,
         );
 
       } else if (layout === 'minimal') {
@@ -1520,6 +1928,54 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-desc`,  type: 'text',    x: 8, y: 48, w: 84, h: 12, content: meta.subtitle, color: bodyThemeColor, fontSize: 13, fontFamily: meta.palette.fontBody, align: 'center', zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-inp`,   type: 'input',   x: 14, y: 64, w: 72, h: 12, content: '', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: meta.palette.border, borderRadius: 8, zIndex: 3, extraProps: { placeholder: 'Your email address…' } } as CampaignElement,
           { id: `${meta.id}-btn`,   type: 'button',  x: 14, y: 80, w: 72, h: 12, content: meta.btnText, color: '#FFFFFF', backgroundColor: meta.palette.primary, borderRadius: 8, fontSize: 12, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: 'center', zIndex: 4, animationType: 'zoom-in', animationDelay: 0.3 } as CampaignElement,
+        );
+
+      } else if (layout === 'product-card') {
+        // PRODUCT CARD — image on left fills a tall panel, pricing/rating/CTA on right.
+        // Designed for affiliate use: the CTA button has no href so the snippet uses slot.click_tracker_url.
+        const isDark = ['#0c0c0c', '#0f172a', '#111827', '#000000'].includes(meta.palette.bg);
+        const ratingColor = isDark ? '#FBBF24' : '#F59E0B';
+        mainElementsList.push(
+          { id: `${meta.id}-img-bg`, type: 'shape', x: 0, y: 0, w: 38, h: 100, content: 'rect', backgroundColor: meta.palette.tint, borderRadius: 0, zIndex: 1 } as CampaignElement,
+          ...(meta.image ? [{ id: `${meta.id}-img`, type: 'image' as const, x: 3, y: 5, w: 32, h: 76, content: meta.image, borderRadius: 10, zIndex: 2 } as CampaignElement] : []),
+          { id: `${meta.id}-badge`, type: 'text', x: 3, y: 83, w: 32, h: 8, content: meta.title, color: meta.palette.primary, fontSize: 9, fontWeight: '700', align: 'center', zIndex: 3, backgroundColor: meta.palette.bg, borderRadius: 6 } as CampaignElement,
+          { id: `${meta.id}-stars`, type: 'text', x: 42, y: 10, w: 54, h: 7, content: meta.subtitle, color: ratingColor, fontSize: 9, fontWeight: '700', align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-name`, type: 'heading', x: 42, y: 19, w: 54, h: 18, content: 'Your Product Name', color: meta.palette.text, fontSize: 20, fontWeight: '700', fontFamily: meta.palette.fontHeading, align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-price-now`, type: 'text', x: 42, y: 39, w: 30, h: 10, content: '$XX.XX', color: meta.palette.text, fontSize: 22, fontWeight: '800', align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-price-was`, type: 'text', x: 74, y: 41, w: 20, h: 8, content: 'was $XX.XX', color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 11, fontWeight: '400', align: 'left', zIndex: 3, extraProps: { textDecoration: 'line-through' } } as CampaignElement,
+          { id: `${meta.id}-desc`, type: 'text', x: 42, y: 51, w: 54, h: 10, content: 'Click to check the latest price and availability on the retailer\'s site.', color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 11, align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-btn`, type: 'button', x: 42, y: 66, w: 54, h: 14, content: meta.btnText, color: isDark ? '#000000' : '#FFFFFF', backgroundColor: meta.palette.primary, borderRadius: 8, fontSize: 13, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: 'center', href: '', zIndex: 4 } as CampaignElement,
+          { id: `${meta.id}-disc`, type: 'text', x: 42, y: 84, w: 54, h: 8, content: 'Prices may vary. We may earn a commission on purchases.', color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 8, align: 'left', zIndex: 3 } as CampaignElement,
+        );
+
+      } else if (layout === 'testimonial') {
+        // TESTIMONIAL — quote fills the top half, avatar + name on left, CTA on right.
+        const isDark = ['#0f172a', '#111827', '#000000', '#1a1a1a'].includes(meta.palette.bg);
+        const quoteColor = isDark ? '#E2E8F0' : '#1c1917';
+        mainElementsList.push(
+          { id: `${meta.id}-quote-mark`, type: 'text', x: 8, y: 8, w: 10, h: 16, content: '"', color: meta.palette.primary, fontSize: 64, fontWeight: '700', fontFamily: meta.palette.fontHeading, align: 'left', zIndex: 2 } as CampaignElement,
+          { id: `${meta.id}-quote`, type: 'heading', x: 8, y: 14, w: 84, h: 24, content: meta.title, color: quoteColor, fontSize: 22, fontWeight: '700', fontFamily: meta.palette.fontHeading, align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-divider`, type: 'shape', x: 8, y: 42, w: 84, h: 1, content: 'rect', backgroundColor: meta.palette.border, zIndex: 2 } as CampaignElement,
+          ...(meta.image ? [{ id: `${meta.id}-avatar`, type: 'image' as const, x: 8, y: 48, w: 10, h: 18, content: meta.image, borderRadius: 99, zIndex: 3 } as CampaignElement] : []),
+          { id: `${meta.id}-who`, type: 'text', x: meta.image ? 21 : 8, y: 50, w: 52, h: 14, content: meta.subtitle, color: isDark ? '#94A3B8' : '#78716C', fontSize: 11, align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-coupon-box`, type: 'text', x: 8, y: 70, w: 34, h: 12, content: meta.coupon || 'EXCLUSIVE', color: meta.palette.primary, backgroundColor: meta.palette.tint, borderRadius: 8, fontSize: 16, fontWeight: '800', fontFamily: 'monospace', align: 'center', borderWidth: 1, borderColor: meta.palette.primary, zIndex: 4 } as CampaignElement,
+          { id: `${meta.id}-btn`, type: 'button', x: 46, y: 70, w: 46, h: 12, content: meta.btnText, color: '#FFFFFF', backgroundColor: meta.palette.primary, borderRadius: 8, fontSize: 12, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: 'center', href: '', zIndex: 4 } as CampaignElement,
+          { id: `${meta.id}-trust`, type: 'text', x: 8, y: 86, w: 84, h: 8, content: '🔒 Secure checkout · Free returns · 30-day money-back guarantee', color: isDark ? '#64748B' : '#9CA3AF', fontSize: 9, align: 'center', zIndex: 3 } as CampaignElement,
+        );
+
+      } else if (layout === 'bold-type') {
+        // BOLD TYPE — oversized split-colour typography dominates, no image needed.
+        // Accent shape fills the left 40%, huge rotated/stacked text on right.
+        const isDark = ['#000000', '#0f172a', '#111827', '#18181B'].includes(meta.palette.bg);
+        const lines = meta.title.split('\n');
+        mainElementsList.push(
+          { id: `${meta.id}-left-fill`, type: 'shape', x: 0, y: 0, w: 40, h: 100, content: 'rect', backgroundColor: meta.palette.primary, borderRadius: 0, zIndex: 1 } as CampaignElement,
+          { id: `${meta.id}-left-text`, type: 'text', x: 2, y: 38, w: 36, h: 24, content: lines[1] ?? lines[0] ?? '', color: meta.palette.bg, fontSize: 13, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'center', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-line1`, type: 'heading', x: 43, y: 8, w: 54, h: 22, content: lines[0] ?? meta.title, color: meta.palette.text, fontSize: 32, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-line2`, type: 'heading', x: 43, y: 30, w: 54, h: 20, content: lines[2] ?? lines[1] ?? '', color: meta.palette.primary, fontSize: 28, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-div`, type: 'shape', x: 43, y: 52, w: 50, h: 2, content: 'rect', backgroundColor: meta.palette.border, zIndex: 2 } as CampaignElement,
+          { id: `${meta.id}-desc`, type: 'text', x: 43, y: 56, w: 54, h: 12, content: meta.subtitle, color: isDark ? '#9CA3AF' : '#4B5563', fontSize: 11, fontFamily: meta.palette.fontBody, align: 'left', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-btn`, type: 'button', x: 43, y: 72, w: 48, h: 14, content: meta.btnText, color: meta.palette.bg, backgroundColor: meta.palette.primary, borderRadius: 4, fontSize: 14, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'center', href: '', zIndex: 4 } as CampaignElement,
         );
 
       } else {
@@ -1536,7 +1992,7 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-desc`,  type: 'text',    x: 10, y: topY + 27,w: 80, h: 12, content: meta.subtitle, color: bodyThemeColor, fontSize: 12, fontFamily: meta.palette.fontBody, align: 'center', zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-inp`,   type: 'input',   x: 14, y: topY + 43,w: 72, h: 12, content: '', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: meta.palette.border, borderRadius: 8, zIndex: 3, extraProps: { placeholder: 'Your email address…' } } as CampaignElement,
           { id: `${meta.id}-btn`,   type: 'button',  x: 14, y: topY + 58,w: 72, h: 12, content: meta.btnText, color: '#FFFFFF', backgroundColor: meta.palette.primary, borderRadius: 8, fontSize: 11, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: 'center', zIndex: 4, animationType: 'zoom-in', animationDelay: 0.2 } as CampaignElement,
-          { id: `${meta.id}-urg`,   type: 'urgency', x: 10, y: topY + 74,w: 80, h: 8,  content: '⚡ Limited offer — used by 3,400+ customers today.', color: meta.palette.primary, fontSize: 9, align: 'center', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-urg`,   type: 'text', x: 10, y: topY + 74,w: 80, h: 8,  content: '⚡ Limited offer — used by 3,400+ customers today.', color: meta.palette.primary, fontSize: 9, align: 'center', zIndex: 3 } as CampaignElement,
         );
       }
     }
@@ -1876,8 +2332,8 @@ const AMAZON_AFFILIATE_TEMPLATE: Campaign = {
           fontFamily: 'sans-serif',
           align: 'center',
           zIndex: 4,
-          href: 'YOUR_AMAZON_AFFILIATE_LINK_HERE',
-          extraProps: { href: 'YOUR_AMAZON_AFFILIATE_LINK_HERE' },
+          href: '',
+          extraProps: {},
           animationType: 'zoom-in',
           animationDuration: 0.4,
           animationDelay: 0.45,
@@ -1961,8 +2417,8 @@ const AMAZON_AFFILIATE_TEMPLATE: Campaign = {
           fontWeight: '800',
           align: 'center',
           zIndex: 4,
-          href: 'YOUR_AMAZON_AFFILIATE_LINK_HERE',
-          extraProps: { href: 'YOUR_AMAZON_AFFILIATE_LINK_HERE' },
+          href: '',
+          extraProps: {},
           animationType: 'zoom-in',
           animationDuration: 0.4,
           animationDelay: 0.4,
@@ -2202,8 +2658,8 @@ const RAKUTEN_AFFILIATE_TEMPLATE: Campaign = {
           fontFamily: 'sans-serif',
           align: 'center',
           zIndex: 4,
-          href: 'YOUR_RAKUTEN_AFFILIATE_LINK_HERE',
-          extraProps: { href: 'YOUR_RAKUTEN_AFFILIATE_LINK_HERE' },
+          href: '',
+          extraProps: {},
           animationType: 'zoom-in',
           animationDuration: 0.4,
           animationDelay: 0.45,
@@ -2286,8 +2742,8 @@ const RAKUTEN_AFFILIATE_TEMPLATE: Campaign = {
           fontWeight: '800',
           align: 'center',
           zIndex: 4,
-          href: 'YOUR_RAKUTEN_AFFILIATE_LINK_HERE',
-          extraProps: { href: 'YOUR_RAKUTEN_AFFILIATE_LINK_HERE' },
+          href: '',
+          extraProps: {},
           animationType: 'zoom-in',
           animationDuration: 0.4,
           animationDelay: 0.4,
