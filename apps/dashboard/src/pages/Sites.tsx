@@ -192,7 +192,7 @@ const WordPressConnectPanel: React.FC<{
     }
   };
 
-  const pluginDownloadUrl = 'https://github.com/dwain-coder/Scroll-pop/releases/latest/download/scrollpop-wp.zip';
+  const pluginDownloadUrl = 'https://pub-0a090ba944ba46269b65a6cfbb0ed1f0.r2.dev/scrollpop-wp.zip';
 
   return (
     <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
