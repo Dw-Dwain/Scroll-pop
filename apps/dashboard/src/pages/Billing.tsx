@@ -85,7 +85,15 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
       }
     } catch (err: any) {
       setCheckoutLoading(false);
-      showToast(err?.message ?? 'Failed to start checkout. Check STRIPE_SECRET_KEY is set on the server.');
+      // Stripe keys not yet configured (server returns 500 / no URL) — show a friendly message
+      // instead of surfacing a raw server error (P1-16).
+      const msg: string = err?.message ?? '';
+      const isStripeNotConfigured = msg.includes('not configured') || msg.includes('No checkout URL') || msg.includes('500') || !msg;
+      if (isStripeNotConfigured) {
+        showToast('Paid plans are activating soon — we\'ll notify you the moment checkout goes live!');
+      } else {
+        showToast(msg);
+      }
     }
   };
 

@@ -1,214 +1,91 @@
 import React from 'react';
-import { FlaskConical, Pause, Play, Plus, Trophy } from 'lucide-react';
-import { useApiUrl, useCustom, useCustomMutation, useList } from '@refinedev/core';
+import { FlaskConical, BarChart2, Trophy, ArrowRight } from 'lucide-react';
 
 interface ExperimentsProps {
   onNavigate: (path: string) => void;
 }
 
-function ConfidenceBar({ control, variant }: { control: number; variant: number }) {
-  const W = 300, H = 40;
-  const max = Math.max(control, variant, 0.001);
-  const cW = (control / max) * W;
-  const vW = (variant / max) * W;
-  return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
-      <rect x={0} y={8} width={cW} height={10} rx={2} fill="var(--data-1)" opacity={0.6} />
-      <rect x={0} y={22} width={vW} height={10} rx={2} fill="var(--data-5)" opacity={0.6} />
-      <text x={cW + 4} y={17} fontSize={9} fill="var(--text-muted)">Control</text>
-      <text x={vW + 4} y={31} fontSize={9} fill="var(--text-muted)">Variant</text>
-    </svg>
-  );
-}
-
 export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
-  const apiUrl = useApiUrl();
-  const { data: campaignsData } = useList({ resource: 'campaigns' });
-  const [selectedCampaignId, setSelectedCampaignId] = React.useState('');
-  const [newName, setNewName] = React.useState('');
-  const { mutate } = useCustomMutation();
-
-  React.useEffect(() => {
-    const first = campaignsData?.data?.[0]?.id;
-    if (!selectedCampaignId && first) setSelectedCampaignId(String(first));
-  }, [campaignsData, selectedCampaignId]);
-
-  const { data: experimentsResult, refetch } = useCustom({
-    url: selectedCampaignId
-      ? `${apiUrl}/campaigns/${selectedCampaignId}/experiments`
-      : `${apiUrl}/campaigns/invalid/experiments`,
-    method: 'get',
-    queryOptions: { enabled: !!selectedCampaignId },
-  });
-
-  const experiments: any[] = Array.isArray((experimentsResult as any)?.data)
-    ? (experimentsResult as any).data
-    : [];
-
-  const createExperiment = () => {
-    if (!selectedCampaignId || !newName.trim()) return;
-    mutate(
-      {
-        url: `${apiUrl}/campaigns/${selectedCampaignId}/experiments`,
-        method: 'post',
-        values: { name: newName.trim(), allocation: { control: 50, variantA: 50 }, guardrails: { minSample: 500 } },
-      },
-      { onSuccess: () => { setNewName(''); void refetch(); } }
-    );
-  };
-
-  const updateStatus = (expId: string, status: 'running' | 'paused') => {
-    if (!selectedCampaignId) return;
-    mutate(
-      { url: `${apiUrl}/campaigns/${selectedCampaignId}/experiments/${expId}`, method: 'patch', values: { status } },
-      { onSuccess: () => void refetch() }
-    );
-  };
-
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ maxWidth: 860, margin: '0 auto' }}>
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)',
+        marginBottom: 32, paddingBottom: 20, borderBottom: '1px solid var(--border-subtle)',
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em' }}>Experiments</h1>
-            <span className="badge badge-accent" style={{ fontSize: 9 }}>beta</span>
+            <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
+              Experiments
+            </h1>
+            <span className="badge badge-neutral" style={{ fontSize: 9 }}>coming soon</span>
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-            Run additive conversion experiments on live campaigns.
+            Statistically rigorous A/B/N tests across your campaigns.
           </p>
         </div>
       </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <select
-          className="input"
-          value={selectedCampaignId}
-          onChange={(e) => setSelectedCampaignId(e.target.value)}
-          style={{ maxWidth: 240 }}
-        >
-          {(campaignsData?.data ?? []).map((c: any) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <input
-          className="input"
-          placeholder="New experiment name..."
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && createExperiment()}
-          style={{ flex: 1, maxWidth: 300 }}
-        />
-        <button className="btn btn-primary" onClick={createExperiment}>
-          <Plus size={14} />
-          Create
+      {/* A/B already live callout */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14,
+        background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.15)',
+        borderRadius: 10, padding: '14px 18px', marginBottom: 24,
+      }}>
+        <FlaskConical size={18} style={{ color: '#6366f1', flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>
+            A/B testing is already live — on your campaigns
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            Open any campaign's detail page and use the <strong style={{ color: 'var(--text-secondary)' }}>A/B Test panel</strong> to
+            create weighted design variants and compare results per variant.
+          </div>
+        </div>
+        <button className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }} onClick={() => onNavigate('/campaigns')}>
+          Go to campaigns <ArrowRight size={12} style={{ marginLeft: 4 }} />
         </button>
       </div>
 
-      {/* Experiments list */}
-      {experiments.length === 0 ? (
+      {/* Coming soon card */}
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+        borderRadius: 12, padding: '48px 40px', textAlign: 'center', marginBottom: 24,
+      }}>
         <div style={{
-          background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
-          borderRadius: 8, padding: '48px 24px', textAlign: 'center',
+          width: 52, height: 52, borderRadius: 12, background: 'rgba(99,102,241,0.08)',
+          border: '1px solid rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', margin: '0 auto 20px',
         }}>
-          <FlaskConical size={28} style={{ color: 'var(--text-muted)', display: 'block', margin: '0 auto 12px' }} />
-          <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>No experiments yet.</p>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {selectedCampaignId ? 'Create your first experiment above.' : 'Select a campaign to see its experiments.'}
-          </p>
+          <BarChart2 size={24} style={{ color: '#6366f1' }} />
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {experiments.map((exp: any) => {
-            const controlCvr = exp.results?.control?.conversionRate ?? 0;
-            const variantCvr = exp.results?.variantA?.conversionRate ?? 0;
-            const confidence = exp.results?.statisticalSignificance ?? 0;
-            const isSignificant = confidence >= 0.95;
-            return (
-              <div key={exp.id} style={{
-                background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
-                borderRadius: 8, padding: 20,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{exp.name}</span>
-                      <span className={`badge ${
-                        exp.status === 'running' ? 'badge-success' :
-                        exp.status === 'complete' ? 'badge-info' :
-                        exp.status === 'paused'  ? 'badge-warning' :
-                        'badge-neutral'
-                      }`} style={{ textTransform: 'capitalize' }}>
-                        {exp.status ?? 'draft'}
-                      </span>
-                    </div>
-                    {exp.hypothesis && (
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 480 }}>{exp.hypothesis}</p>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {isSignificant && (
-                      <button className="btn btn-secondary btn-sm" style={{ color: 'var(--status-success)', borderColor: 'rgba(34,197,94,0.3)', fontSize: 11 }}>
-                        <Trophy size={12} />
-                        Declare Winner
-                      </button>
-                    )}
-                    <button
-                      onClick={() => updateStatus(exp.id, exp.status === 'running' ? 'paused' : 'running')}
-                      className="btn btn-icon"
-                    >
-                      {exp.status === 'running'
-                        ? <Pause size={14} />
-                        : <Play size={14} />}
-                    </button>
-                  </div>
-                </div>
+        <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 10px' }}>
+          Full experiment suite — coming in v2
+        </h2>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', maxWidth: 460, margin: '0 auto', lineHeight: 1.6 }}>
+          Formal statistical significance testing (Bayesian + frequentist), multi-arm bandit allocation,
+          guardrail metrics, and one-click winner declaration — beyond the current variant system.
+        </p>
+      </div>
 
-                {/* Variant cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  {[
-                    { label: 'Control', cvr: controlCvr, n: exp.results?.control?.sampleSize ?? 0, color: 'var(--data-1)' },
-                    { label: 'Variant A (Short Flow)', cvr: variantCvr, n: exp.results?.variantA?.sampleSize ?? 0, color: 'var(--data-5)' },
-                  ].map(({ label, cvr, n, color }) => (
-                    <div key={label} style={{
-                      background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                      borderRadius: 6, padding: 14,
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{label}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
-                        </div>
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 500, color, marginBottom: 4 }}>
-                        {(cvr * 100).toFixed(2)}%
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>n = {n.toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Confidence bar */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      Confidence Interval Visualization
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: isSignificant ? 'var(--status-success)' : 'var(--text-muted)' }}>
-                      p {'<'} {(1 - confidence).toFixed(2)} {isSignificant ? '✓' : '— not significant yet'}
-                    </span>
-                  </div>
-                  <ConfidenceBar control={controlCvr} variant={variantCvr} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* What's planned */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12,
+      }}>
+        {[
+          { icon: <BarChart2 size={15} style={{ color: '#6366f1' }} />, title: 'Statistical significance', desc: 'Bayesian p-values and confidence intervals calculated automatically as data accumulates.' },
+          { icon: <FlaskConical size={15} style={{ color: '#10b981' }} />, title: 'Multi-arm bandit', desc: 'Auto-allocate more traffic to winning variants in real time instead of waiting for the test to end.' },
+          { icon: <Trophy size={15} style={{ color: '#f59e0b' }} />, title: 'One-click winner', desc: 'Declare a winner, auto-promote its design to the base campaign, and archive losing variants.' },
+        ].map(({ icon, title, desc }) => (
+          <div key={title} style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+            borderRadius: 8, padding: '16px 18px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>{icon}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{title}</span></div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{desc}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
