@@ -12,10 +12,10 @@
 | Category | Total | Done | Remaining |
 |---|---|---|---|
 | P0 Launch blockers | 5 | 4 | 1 |
-| P1 High priority | 18 | 10 | 8 |
+| P1 High priority | 18 | 12 | 6 |
 | P2 Medium priority | 19 | 11 | 8 |
 | P3 Low priority | 12 | 1 | 11 |
-| **Total** | **54** | **26** | **28** |
+| **Total** | **54** | **28** | **26** |
 
 > **A/B testing (Jun 4 2026)** — `feature/ab-testing` (P0-4 + P1-10): real weighted variants.
 > New `variants` table (**migration 0010** + RLS + self-heal), variants CRUD + per-variant
@@ -80,11 +80,11 @@ Core product gaps vs. Promolayer and high-severity technical issues.
 | P1-8 | ⬜ | Feature | **Klaviyo integration** — No way to push captured emails to Klaviyo. This is the most-requested integration for Shopify operators. | ✅ native | Webhook on `email_capture` event → POST to Klaviyo List API with operator's API key stored in tenant settings. |
 | P1-9 | ⬜ | Feature | **Mailchimp integration** | ✅ native | Same pattern as Klaviyo — operator pastes API key + list ID in Settings → Integrations. |
 | P1-10 | ✅ | Feature | **Real A/B testing** — Built: `variants` table, weighted sticky per-visitor allocation in the snippet (fit inline at 9218B — no lazy-load needed), per-variant results, dashboard A/B panel. Deferred niceties: statistical-significance indicator (we show a "Leading" badge at ≥20 impressions, not a formal p-value). | `variants.ts`, `ABPanel.tsx`, snippet `resolveVariant` | Done. Optional later: formal significance test, per-variant affiliate-slot editing in the panel. |
-| P1-11 | ⬜ | Feature | **Countdown timers** — Present in every popup competitor. Standard FOMO/urgency tool. Absent from all ScrollPop popup types. | ✅ native | Add `countdown` element type to the block builder. Snippet renderer handles `Date.now()` countdown display. |
+| P1-11 | ✅ | Feature | **Countdown timers** — Present in every popup competitor. Standard FOMO/urgency tool. Absent from all ScrollPop popup types. | ✅ native | Add `countdown` element type to the block builder. Snippet renderer handles `Date.now()` countdown display. |
 | P1-12 | ⬜ | Feature | **Gamified popups (spin-to-win)** — Removed Jun 3 2026 because the editor had no entry point. Promolayer claims 300% more submissions vs standard. | ✅ claims 3× conversion | Must be lazy-loaded (separate JS chunk, fetched only when a gamified campaign renders) to protect the 10 KB gate. Build editor entry point + snippet lazy-loader together. |
 | P1-13 | ✅ | Feature | **Shopify App Embed Block** — Already built: `packages/shopify-app-embed/blocks/scrollpop.liquid` is a complete `head`-target embed with a public-key setting; Shopify CLI installed; dashboard has the install UI (Sites → App Embed Block tab). Code-complete; only needs `npx shopify app deploy` to the Partner app (ops step). | `packages/shopify-app-embed/` | Done (code). Deploy to Partner app when ready; then P1-14 (App Store submission). |
 | P1-14 | ⬜ | Feature | **Shopify App Store submission** — 4.9★ Promolayer listing with 61 reviews is an inbound discovery channel ScrollPop has no equivalent of. All Shopify operators find tools via the App Store. | ✅ 4.9★ 61 reviews | Requires App Embed Block (P1-13) first. |
-| P1-15 | ⬜ | UX | **New user onboarding** — A new user lands on a blank Dashboard with empty KPI tiles and no prompt. No guided onboarding, no empty-state CTAs, no setup checklist. | ✅ implied by 25K sites | Add empty state to Dashboard: "Add your first site →", "Create your first campaign →". Consider a setup checklist widget. |
+| P1-15 | ✅ | UX | **New user onboarding** — A new user lands on a blank Dashboard with empty KPI tiles and no prompt. No guided onboarding, no empty-state CTAs, no setup checklist. | ✅ implied by 25K sites | Add empty state to Dashboard: "Add your first site →", "Create your first campaign →". Consider a setup checklist widget. |
 | P1-16 | ⬜ | UX | **Billing upgrade throws 500** — `POST /billing/checkout` requires `STRIPE_PRICE_*` env vars not yet set. Any user clicking upgrade sees a server error. | `billing.ts:54–60` | Blocked by P0-2. Once Stripe is configured this resolves automatically, but add a graceful "Billing not yet available" state for pre-launch. |
 | P1-17 | ✅ | Security | **Incomplete ReDoS protection in url_regex** — `isSafeRegex()` catches simple nested quantifier patterns but not alternation-based ReDoS (e.g. `([a-zA-Z]+)*`). A malicious operator can cause snippet to hang in visitor browsers. | `sanitize.ts:93` | Replace with a battle-tested ReDoS-safe validator (`safe-regex2` or equivalent). Add it as a zero-dep vendored check or run the regex with a `performance.now()` wall-clock timeout. |
 | P1-18 | ⬜ | Debt | **No API route integration tests** — Zero tests for route-level behaviour, tenant isolation (IDOR scenarios), or webhook signature verification paths. The sanitizer and E2E suites cover the ends but nothing in between. | `apps/api` | Add Vitest integration tests for: tenant isolation on campaigns/sites/analytics, event injection rejection, webhook 400 on bad signature, billing checkout validation. |
