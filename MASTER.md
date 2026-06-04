@@ -3,20 +3,32 @@
 > **Audience:** Owner / lead developer. Everything about this product in one place.
 > Last updated: June 4, 2026 · v0.1.2-beta
 
-### 🔄 Recent Updates (most recent first)
+---
 
-> Keep this block current at the top of every MASTER edit — newest entry first, dated.
+### ✅ Done (as of Jun 4 2026)
+- Sentry error tracking — API (`SENTRY_DSN`) + Dashboard (`VITE_SENTRY_DSN`) both live
+- PostHog product analytics — live (`VITE_POSTHOG_KEY` set, CDN loaded in dashboard)
+- Resend transactional email — domain verified, API key set, emails firing on campaign events
+- WordPress plugin zip — hosted on Cloudflare R2 (`scrollpop-assets` bucket), dashboard URL updated
+- GitHub PATs rotated
+- All observability/email code is dependency-free and was already merged at `8c859a8`
 
-- **Jun 4 2026** — Observability + email wired (Sentry API+dashboard, PostHog, Resend), all
-  dependency-free & dormant until keys set; B3 (tenant `deleted_at` revive) + B4 (Worker event
-  retry) fixed; campaign duplication (API+UI); WP plugin zip built; "Google-compliant" claim
-  softened. Merged + synced both repos at `8c859a8`. ⏳ One **unpushed local docs commit**
-  (`6f1ccea`, activation steps) to go up with tomorrow's key-setup redeploy. Next: activate the
-  3 integrations (see "Activate Observability & Email — Setup Steps"), upload `scrollpop-wp.zip`,
-  rotate GitHub PATs. **Live-gate still open:** Stripe billing (keys pending).
-- **Jun 3 2026** — Campaign scheduling, geo + UTM targeting, deleted-data 24h-then-purge
-  lifecycle, Playwright E2E suite (non-gating CI), gamified popup types removed (~1.8 KB
-  reclaimed); dev/showcase content audit; B5 resolved.
+### ⏳ Pending (blockers before charging customers)
+- **Stripe** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs → billing UI goes live
+- **`api.scrollpop.online`** — custom domain for the API (Cloudflare DNS → Render)
+- **Cloudflare R2 snippet CDN** — `scrollpop-assets` bucket created; still need to upload `p.js` + point `cdn.scrollpop.online` at it (currently served from Worker bundle)
+- **Render Pre-Deploy Command** — auto-apply DB migrations to prevent migration-drift outages
+
+---
+
+### 🔄 Session Log (chronological)
+
+- **May 29 2026** — Production go-live: Render, Neon, Clerk, Upstash, Cloudflare Workers/Pages, Shopify app, domain `scrollpop.online`.
+- **Jun 1 2026** — Account hierarchy (super-admin isolation, Novatise shared org), `user.deleted` webhook, dashboard CI deploy wired, `dwain-coder` sync enabled.
+- **Jun 2 2026** — Production migration-drift outage fixed; KV edge cache live; analytics pipeline confirmed end-to-end; geo + UTM targeting; CORS; ESLint; security hardening; compliance audit (CMP1–5); DPA template drafted; Shopify rate-limit; snippet size fixed.
+- **Jun 3 2026** — Campaign scheduling, deleted-data 24h-purge lifecycle, Playwright E2E suite, gamified popup types removed (~1.8 KB reclaimed), B5 resolved, dev/showcase content audit.
+- **Jun 4 2026 (session 1)** — Sentry/PostHog/Resend wired dependency-free + dormant; B3 (tenant revive) + B4 (Worker event retry) fixed; campaign duplication (API+UI); WP plugin zip artifact built. Merged at `8c859a8`.
+- **Jun 4 2026 (session 2)** — All 3 integrations activated: Sentry live (both projects), PostHog live, Resend domain verified + email flowing. WP zip uploaded to R2 (`scrollpop-assets`), dashboard URL updated. GitHub PATs rotated. Commits `6f1ccea` + `b46a5b7` + `f059c8f` pushed to both repos.
 
 ---
 
@@ -305,11 +317,11 @@ marketing-claim softening is tracked in §25 (CMP2/CMP3).
 - [x] Upstash Redis instance
 - [x] Cloudflare account (Workers + Pages configured)
 - [x] Shopify Partners app (ScrollPop — Client ID: 37618fc8e087622a64ac244a2edd49f1)
-- [ ] Cloudflare R2 bucket (snippet CDN) — not yet configured (snippet served from Worker bundle)
+- [x] Cloudflare R2 bucket `scrollpop-assets` — **live** (Jun 4 2026). WP plugin zip hosted. Public r2.dev URL active. Snippet CDN (`cdn.scrollpop.online` custom domain + `p.js` upload) still TODO.
 - [x] Cloudflare KV namespace `SCROLLPOP_CONFIG` — **bound & live** (id `00a5652f5e9d435bbd1ada64fe089088`, in the deploy account). Edge config cache, 60s TTL.
 - [ ] Stripe account (test + live keys) — pending
-- [ ] Sentry project — pending
-- [ ] PostHog project — pending
+- [x] Sentry — **live** (Jun 4 2026). Two projects: `scrollpop-api` (Node) + `scrollpop-dashboard` (React). `SENTRY_DSN` on Render, `VITE_SENTRY_DSN` on CF Pages + ci.yml.
+- [x] PostHog — **live** (Jun 4 2026). `VITE_POSTHOG_KEY` on CF Pages + GitHub secrets. CDN-loaded, no npm dep.
 
 ### Render Environment Variables (Current)
 | Key | Value / Notes |
@@ -329,6 +341,9 @@ marketing-claim softening is tracked in §25 (CMP2/CMP3).
 | `SHOPIFY_API_SECRET` | From Shopify Partners — rotatable via Partners dashboard |
 | `SHOPIFY_SCOPES` | read_products,write_script_tags |
 | `SNIPPET_CDN_URL` | https://scroll-pop.onrender.com (temp — update when R2 live) |
+| `SENTRY_DSN` | ✅ Set (Jun 4 2026) |
+| `RESEND_API_KEY` | ✅ Set (Jun 4 2026) |
+| `RESEND_FROM` | `ScrollPop <notifications@scrollpop.online>` ✅ Set (Jun 4 2026) |
 | `STRIPE_SECRET_KEY` | ❌ Not yet set |
 | `STRIPE_WEBHOOK_SECRET` | ❌ Not yet set |
 
@@ -337,6 +352,8 @@ marketing-claim softening is tracked in §25 (CMP2/CMP3).
 |---|---|
 | `VITE_API_URL` | https://scroll-pop.onrender.com |
 | `VITE_CLERK_PUBLISHABLE_KEY` | pk_live_... (must match Render) |
+| `VITE_SENTRY_DSN` | ✅ Set (Jun 4 2026) |
+| `VITE_POSTHOG_KEY` | ✅ Set (Jun 4 2026) |
 
 ---
 
@@ -1408,7 +1425,7 @@ seed view/conversion numbers, and the "Test webhook" button's placeholder HMAC s
 | T5 | `apps/worker` event flush is a TODO in the Worker; events are currently only flushed by the API's `/e` local endpoint | `apps/worker/src/index.ts` |
 | T6 | Marketing site (`scrollpop.io`) does not exist | — |
 | T7 | `api.scrollpop.io` custom domain not yet configured | Cloudflare DNS |
-| T8 | 🟡 Artifact built (Jun 4 2026) — `pnpm`/`Compress-Archive` produces `packages/wp-plugin/dist/scrollpop-wp.zip` (folder `scrollpop/` at zip root so WP extracts to `wp-content/plugins/scrollpop`). **Still needs upload** to the GitHub release asset / R2 path the dashboard links to. Build: `Compress-Archive -Path packages/wp-plugin/scrollpop -DestinationPath packages/wp-plugin/dist/scrollpop-wp.zip` | R2 / GitHub release |
+| T8 | ✅ Resolved (Jun 4 2026) — `scrollpop-wp.zip` built and uploaded to Cloudflare R2 bucket `scrollpop-assets` (public r2.dev URL). `pluginDownloadUrl` in `Sites.tsx` updated to `https://pub-0a090ba944ba46269b65a6cfbb0ed1f0.r2.dev/scrollpop-wp.zip`. Next: connect `cdn.scrollpop.online` custom domain to the bucket when R2 CDN is fully set up. | `apps/dashboard/src/pages/Sites.tsx` |
 | T9 | ✅ Resolved (Jun 2 2026) — Shopify OAuth callback rate limited to 20/min per IP via per-route `@fastify/rate-limit` config | `apps/api/src/routes/shopify.ts` |
 | T10 | `weight` field on affiliate slots is in schema but no UI exposes it. Part of the in-progress **Affiliate ad templates (#9)** work — see §23. | Dashboard |
 
@@ -1642,13 +1659,17 @@ A record of every step taken to go from code to live production. Useful if you e
   `edge.scrollpop.online/c/<real-key>`)
 
 ### What's Still Pending
-- [ ] Stripe setup (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price IDs) + billing UI
-- [x] Cloudflare KV namespace `SCROLLPOP_CONFIG` bound in `wrangler.toml` (id `00a5652f…`) — **done, live**
-- [ ] Cloudflare R2 bucket → update `SNIPPET_CDN_URL` to serve from R2 instead of Worker bundle
-- [ ] Sentry DSN → call `Sentry.init()` in API + Dashboard
-- [ ] PostHog → call `posthog.init()` in Dashboard
-- [ ] `api.scrollpop.online` custom domain (Cloudflare DNS → Render)
-- [ ] Render **Pre-Deploy Command** to auto-apply DB migrations (prevents the June 2 migration-drift outage from recurring — see §25)
+- [ ] **Stripe** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs → billing UI goes live
+- [ ] **R2 snippet CDN** — upload `p.js` to `scrollpop-assets` bucket, point `cdn.scrollpop.online` custom domain at it, update `SNIPPET_CDN_URL` on Render
+- [ ] **`api.scrollpop.online`** custom domain (Cloudflare DNS → Render)
+- [ ] **Render Pre-Deploy Command** — auto-apply DB migrations (prevents migration-drift outage from recurring — see §25)
+
+### What's Done (from the original pending list)
+- [x] Cloudflare KV namespace `SCROLLPOP_CONFIG` bound — live, 60s TTL
+- [x] Sentry — both projects live (`SENTRY_DSN` + `VITE_SENTRY_DSN`) — Jun 4 2026
+- [x] PostHog — live (`VITE_POSTHOG_KEY`) — Jun 4 2026
+- [x] Resend — domain verified, `RESEND_API_KEY` + `RESEND_FROM` set — Jun 4 2026
+- [x] R2 bucket `scrollpop-assets` created — WP plugin zip hosted, dashboard URL updated — Jun 4 2026
 
 ---
 
