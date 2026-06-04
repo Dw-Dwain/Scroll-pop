@@ -35,6 +35,23 @@ function syncWorkerSnippet() {
   }
 }
 
+// Run the collapse + worker-sync after EVERY successful build — in watch mode too.
+// Previously these only ran on the one-shot build, so a watch rebuild (or any process that
+// touched dist/p.js) could leave apps/worker/src/p.txt in an UN-collapsed state. That stale
+// p.txt then got committed and broke the CI "p.txt matches a fresh build" gate. Doing it in
+// onEnd guarantees p.txt is always the canonical, collapsed bundle. esbuild watches src/, not
+// dist/, so rewriting dist/p.js here never triggers a rebuild loop.
+const collapseAndSyncPlugin = {
+  name: 'collapse-and-sync',
+  setup(build) {
+    build.onEnd((result) => {
+      if (result.errors.length) return;
+      collapseCssWhitespace();
+      syncWorkerSnippet();
+    });
+  },
+};
+
 const ctx = await esbuild.context({
   entryPoints: ['src/main.ts'],
   bundle: true,
@@ -49,6 +66,7 @@ const ctx = await esbuild.context({
   },
   drop: ['console'],
   legalComments: 'none',
+  plugins: [collapseAndSyncPlugin],
 });
 
 if (watch) {
@@ -57,7 +75,5 @@ if (watch) {
 } else {
   await ctx.rebuild();
   await ctx.dispose();
-  collapseCssWhitespace();
   console.log('Snippet built → dist/p.js');
-  syncWorkerSnippet();
 }
