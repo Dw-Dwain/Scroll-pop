@@ -113,7 +113,7 @@ export interface CampaignTriggers {
   // Empty = unbounded on that side. The popup only fires within [startsAt, endsAt].
   startsAt: string;
   endsAt: string;
-  abTestPercent: number; // 0-100, percentage of visitors to show to
+  abTestPercent?: number; // deprecated — A/B testing is now handled by the variants system
   enableSmartAffiliate?: boolean; // scrape page to inject dynamic product details
   // How often the popup may show to the same visitor (persisted as the campaign frequency rule)
   frequency?: 'always' | 'once_per_session' | 'once_per_day' | 'once_per_visitor';
