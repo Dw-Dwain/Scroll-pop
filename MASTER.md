@@ -1,26 +1,71 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 4, 2026 · v0.1.2-beta
+> Last updated: June 4, 2026 EOD · v0.1.3-beta · Tracker: **30/54** items done
 
 ---
 
-### ✅ Done (as of Jun 4 2026)
-- Sentry error tracking — API (`SENTRY_DSN`) + Dashboard (`VITE_SENTRY_DSN`) both live
-- PostHog product analytics — live (`VITE_POSTHOG_KEY` set, CDN loaded in dashboard)
-- Resend transactional email — domain verified, API key set, emails firing on campaign events
-- WordPress plugin zip — hosted on Cloudflare R2 (`scrollpop-assets` bucket), dashboard URL updated
-- R2 snippet CDN — `p.js` in R2, Worker serves from it, `SNIPPET_CDN_URL` updated to `https://cdn.scrollpop.online`
-- Render Pre-Deploy Command — `pnpm --filter @scrollpop/api exec drizzle-kit migrate` set; migrations auto-apply on every deploy
-- Security sprint (`feature/security-phase4-5`) — all CTO-AUDIT Phase 4 + Phase 5 findings closed: webhook raw-body signature fix, activate/pause cache bust, cross-tenant event-origin gate, Stripe redirect allowlist, hardened ReDoS guard, geo-spoof gate, admin audit log (migration 0007), strict API CSP, admin rate limit, paginated Clerk sync. See `CTO-AUDIT.md` + `PROJECT-TRACKER.md`
-- GitHub PATs rotated
-- All observability/email code is dependency-free and was already merged at `8c859a8`
+## 📅 June 4, 2026 — End of Day Summary
 
-### ⏳ Pending (blockers before charging customers)
-- **Stripe** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs → billing UI goes live
-- **`api.scrollpop.online`** — custom domain for the API (Cloudflare DNS → Render)
-- **Cloudflare R2 snippet CDN** — `scrollpop-assets` bucket created; still need to upload `p.js` + point `cdn.scrollpop.online` at it (currently served from Worker bundle)
-- **Render Pre-Deploy Command** — auto-apply DB migrations to prevent migration-drift outages
+**30 of 54 tracker items completed today.** This was the largest single-day sprint on the project.
+`main` is at `3773424`. Both repos (`Dw-Dwain` + `dwain-coder`) are in sync.
+Migrations 0007–0010 all auto-apply via Render preDeploy + boot self-heal — no manual SQL needed.
+
+### ✅ Completed today (30 total — 0 → 30)
+
+**Observability & Email (activated)**
+- **Sentry** — two projects live: API (`SENTRY_DSN` on Render) + Dashboard (`VITE_SENTRY_DSN` on CF Pages + CI). Dependency-free fetch-based client.
+- **PostHog** — live via CDN (`VITE_POSTHOG_KEY`). No npm dep (sidesteps pnpm v11 lockfile issue).
+- **Resend** — `scrollpop.online` domain verified in Resend, DNS auto-configured via Cloudflare. `RESEND_API_KEY` + `RESEND_FROM` set on Render. Transactional emails fire on: campaign activate/pause, 80%/95% view-cap, conversion milestones.
+
+**Infrastructure**
+- **WP plugin zip** — `scrollpop-wp.zip` uploaded to Cloudflare R2 (`scrollpop-assets`). Dashboard download link updated.
+- **R2 snippet CDN** — `scrollpop-assets` bucket live. `p.js` uploaded; Worker serves from R2 with bundled fallback. `SNIPPET_CDN_URL` updated to `https://cdn.scrollpop.online`. CI auto-uploads on every snippet build via esbuild `onEnd` hook.
+- **Render Pre-Deploy Command** — `pnpm --filter @scrollpop/api exec drizzle-kit migrate` set. Migrations now auto-apply on every deploy.
+- **GitHub PATs rotated**.
+- **`ADMIN_EMAIL`** — added to Render env vars (was missing, causing 403 on admin console).
+- **CI snippet gate fixed** — `build.mjs` now collapses+syncs `p.txt` via esbuild `onEnd` on every build (watch + one-shot), preventing un-collapsed p.txt from being committed.
+
+**Security (CTO-AUDIT Phase 4 + Phase 5 — all findings closed)**
+| Finding | Fix |
+|---|---|
+| P0-1 | Webhook raw-body signature fix — Stripe + Clerk now verify against raw request bytes, not re-serialized JSON |
+| P0-5 | Campaign activate/pause/delete busts KV edge cache immediately |
+| P1-1/P1-3 | Cross-tenant event injection blocked; pageUrl origin validated against site domain (html/wordpress only, fails open) |
+| P1-2 | Stripe checkout redirect URLs allowlisted to dashboard origins |
+| P1-17 | `isSafeRegex` hardened vs alternation-based ReDoS + huge bounded reps + non-compiling patterns (+12 tests) |
+| P2-1 | Strict `default-src 'none'` CSP on all API responses |
+| P2-3 | Visitor country only trusted from Worker (proven by INTERNAL_SECRET) |
+| P2-4 | `admin_audit_log` table (**migration 0007** + RLS + boot self-heal) |
+| P2-19 | 30/min rate limit on admin console routes |
+| P3-8 | Admin Clerk sync now paginates (was capped at 500) |
+| P1-5, P2-5 | Found already implemented (Neon pool `max:10`, Shopify token AES-256-GCM encryption) |
+Also: super-admin check hardened with fallback + diagnostic logging (admin 403 fix).
+
+**Performance & Database**
+- **P1-4** — Production config route: 4N DB queries per campaign → 4 total (batched `inArray`)
+- **P1-6** — `campaignMetaCache` full-eviction thundering herd → oldest-entry LRU eviction
+- **P2-7** — `events(tenant_id, ts DESC)` index (**migration 0008**) — analytics queries no longer do full chunk scans
+- **P2-8** — Admin tenant list owner email: 2 queries per row → single JOIN
+- **P2-11** — 30s `statement_timeout` on Neon pooled client
+- **P2-9** — In-process purge job bounded (100 entities/pass), jittered start, split statements
+
+**Features built**
+- **P0-3 + P1-7** — Email lead capture: `leads` table (**migration 0009** + RLS + self-heal), server-side extraction from conversion-event `meta.email` (deduped per campaign), `/api/v1/leads` API (list/export/delete), dashboard **Leads** page (nav, campaign filter, pagination, CSV export, GDPR delete)
+- **P0-4 + P1-10** — Real A/B testing: `variants` table (**migration 0010** + RLS + self-heal), variants CRUD + per-variant results API, config payload carries variants, snippet weighted **sticky-per-visitor** allocation (9218B — fit inline), dashboard **A/B panel** on Campaign Detail (create/weight/delete/results, edit via `?variant=`). Deceptive % slider removed.
+- **P1-11** — Countdown timers: `countdown` element type fully implemented in snippet + builder. ISO datetime target or plain seconds. Live-ticking via `setInterval` after Shadow DOM mount.
+- **P1-13** — Shopify App Embed Block confirmed already built (`packages/shopify-app-embed/`). Deploy via `npx shopify app deploy`.
+- **P1-15** — Setup checklist on Dashboard: 4-step onboarding (connect site → install snippet → create campaign → launch). Auto-hides when complete.
+- **P1-16** — Billing upgrade: graceful "coming soon" toast instead of raw 500 when Stripe not configured.
+- **P2-15** — Journeys + Experiments pages: replaced broken placeholder UIs (dead API calls) with honest "coming soon" screens. Experiments now points users to the live A/B variant panel.
+- **Template overhaul** — affiliate link wiring (Amazon/Rakuten CTAs now fall through to `slot.click_tracker_url`), `urgency` type fixed, 4 new hand-crafted templates (Dark Glass Affiliate, Luxury Brand Takeover, SaaS Minimal Lead Capture, Dark Exit Urgency), 3 new layout variants (product-card, testimonial, bold-type).
+
+### ⏳ Remaining blockers (before charging customers)
+- **P0-2 — Stripe** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs. Only remaining P0.
+
+### 📋 Open tracker items (24 remaining — see `PROJECT-TRACKER.md` for full list)
+Notable P1s: P1-8 Klaviyo, P1-9 Mailchimp, P1-12 Gamified popups, P1-14 Shopify App Store, P1-18 API integration tests
+Notable P2s: P2-10 CSV streaming, P2-12 Coupon auto-gen, P2-13 Email auto-responders, P2-14 Zapier, P2-16–P2-18 team/domain/agency
 
 ---
 
@@ -30,12 +75,7 @@
 - **Jun 1 2026** — Account hierarchy (super-admin isolation, Novatise shared org), `user.deleted` webhook, dashboard CI deploy wired, `dwain-coder` sync enabled.
 - **Jun 2 2026** — Production migration-drift outage fixed; KV edge cache live; analytics pipeline confirmed end-to-end; geo + UTM targeting; CORS; ESLint; security hardening; compliance audit (CMP1–5); DPA template drafted; Shopify rate-limit; snippet size fixed.
 - **Jun 3 2026** — Campaign scheduling, deleted-data 24h-purge lifecycle, Playwright E2E suite, gamified popup types removed (~1.8 KB reclaimed), B5 resolved, dev/showcase content audit.
-- **Jun 4 2026 (session 1)** — Sentry/PostHog/Resend wired dependency-free + dormant; B3 (tenant revive) + B4 (Worker event retry) fixed; campaign duplication (API+UI); WP plugin zip artifact built. Merged at `8c859a8`.
-- **Jun 4 2026 (session 2)** — All 3 integrations activated: Sentry live (both projects), PostHog live, Resend domain verified + email flowing. WP zip uploaded to R2 (`scrollpop-assets`), dashboard URL updated. GitHub PATs rotated. Commits `6f1ccea` + `b46a5b7` + `f059c8f` pushed to both repos.
-- **Jun 4 2026 (session 3)** — CTO due-diligence audit (`CTO-AUDIT.md`) + project tracker (`PROJECT-TRACKER.md`) created. Security sprint on `feature/security-phase4-5`: closed all Phase 4/5 findings (13 tracker items, +2 found already-done). New: `admin_audit_log` (migration 0007 + self-heal), `lib/cache-purge.ts`, `lib/token-crypto.ts` already present. All 5 CI gates green. **Migration 0007 auto-applies via Render preDeploy + boot self-heal.**
-- **Jun 4 2026 (session 4)** — Perf/infra sprint on `feature/perf-infra-cluster`: config-route N+1 batched (P1-4), cache thundering-herd → LRU eviction (P1-6), events `tenant_id` index (P2-7, **migration 0008**), admin tenant N+1 → JOIN (P2-8), 30s `statement_timeout` (P2-11). P2-2/P2-6 closed. `feature/purge-hardening`: P2-9 in-process purge bounded/jittered; P1-13 (Shopify embed) found already built. Tracker 22/54. **Migration 0008 auto-applies via Render preDeploy.**
-- **Jun 4 2026 (session 5)** — Lead capture on `feature/lead-capture` (P0-3 + P1-7): new `leads` table (**migration 0009** + RLS + self-heal), server-side extraction from the conversion-event email on the `/e` path (deduped per campaign), `/api/v1/leads` list/export/delete API, and a dashboard **Leads** page (nav, campaign filter, CSV export, delete). No snippet change (email already arrives in the conversion event's `meta`). Tracker 24/54. **Migration 0009 auto-applies via Render preDeploy.** Also fixed a CI snippet-gate failure: `build.mjs` now collapses+syncs `p.txt` on every build (esbuild `onEnd`) so a stale un-collapsed `p.txt` can't be committed.
-- **Jun 4 2026 (session 6)** — Real A/B testing on `feature/ab-testing` (P0-4 + P1-10): new `variants` table (**migration 0010** + RLS + self-heal); variants CRUD + per-variant results API; config payload carries variants; snippet does weighted **sticky-per-visitor** allocation and tags `abVariantId` (9218B, fit inline — no lazy-load needed); dashboard **A/B panel** on Campaign Detail (create/weight/delete/results, "Edit design" reuses the builder via `?variant=`); the deceptive % "rollout" slider was removed. **Only remaining P0: Stripe keys (P0-2).** Tracker 26/54. **Migration 0010 auto-applies via Render preDeploy.**
+- **Jun 4 2026** — **Major sprint day. 0 → 30/54 items.** See "June 4 EOD Summary" above for full detail. Final `main` commit: `3773424`. All migrations 0007–0010 live. Snippet: 9546B gzipped.
 
 ---
 
