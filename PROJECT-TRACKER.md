@@ -12,10 +12,10 @@
 | Category | Total | Done | Remaining |
 |---|---|---|---|
 | P0 Launch blockers | 5 | 4 | 1 |
-| P1 High priority | 18 | 13 | 5 |
-| P2 Medium priority | 19 | 12 | 7 |
+| P1 High priority | 18 | 15 | 3 |
+| P2 Medium priority | 19 | 17 | 2 |
 | P3 Low priority | 12 | 1 | 11 |
-| **Total** | **54** | **30** | **24** |
+| **Total** | **54** | **37** | **17** |
 
 > **A/B testing (Jun 4 2026)** — `feature/ab-testing` (P0-4 + P1-10): real weighted variants.
 > New `variants` table (**migration 0010** + RLS + self-heal), variants CRUD + per-variant
@@ -81,13 +81,13 @@ Core product gaps vs. Promolayer and high-severity technical issues.
 | P1-9 | ⬜ | Feature | **Mailchimp integration** | ✅ native | Same pattern as Klaviyo — operator pastes API key + list ID in Settings → Integrations. |
 | P1-10 | ✅ | Feature | **Real A/B testing** — Built: `variants` table, weighted sticky per-visitor allocation in the snippet (fit inline at 9218B — no lazy-load needed), per-variant results, dashboard A/B panel. Deferred niceties: statistical-significance indicator (we show a "Leading" badge at ≥20 impressions, not a formal p-value). | `variants.ts`, `ABPanel.tsx`, snippet `resolveVariant` | Done. Optional later: formal significance test, per-variant affiliate-slot editing in the panel. |
 | P1-11 | ✅ | Feature | **Countdown timers** — Present in every popup competitor. Standard FOMO/urgency tool. Absent from all ScrollPop popup types. | ✅ native | Add `countdown` element type to the block builder. Snippet renderer handles `Date.now()` countdown display. |
-| P1-12 | ⬜ | Feature | **Gamified popups (spin-to-win)** — Removed Jun 3 2026 because the editor had no entry point. Promolayer claims 300% more submissions vs standard. | ✅ claims 3× conversion | Must be lazy-loaded (separate JS chunk, fetched only when a gamified campaign renders) to protect the 10 KB gate. Build editor entry point + snippet lazy-loader together. |
+| P1-12 | ✅ | Feature | **Gamified popups (spin-to-win)** — Lazy-loaded `spin.js` chunk (2.5 KB gzipped); main bundle stays under 10 KB. Canvas wheel renderer with weighted prize slices, coupon display + clipboard copy. Dashboard wizard entry point (Step 1 type picker). | `packages/snippet/src/spin.ts`, `dist/spin.js` | Done. Optional later: per-slice probability display in dashboard, A/B test spin vs standard popup. |
 | P1-13 | ✅ | Feature | **Shopify App Embed Block** — Already built: `packages/shopify-app-embed/blocks/scrollpop.liquid` is a complete `head`-target embed with a public-key setting; Shopify CLI installed; dashboard has the install UI (Sites → App Embed Block tab). Code-complete; only needs `npx shopify app deploy` to the Partner app (ops step). | `packages/shopify-app-embed/` | Done (code). Deploy to Partner app when ready; then P1-14 (App Store submission). |
 | P1-14 | ⬜ | Feature | **Shopify App Store submission** — 4.9★ Promolayer listing with 61 reviews is an inbound discovery channel ScrollPop has no equivalent of. All Shopify operators find tools via the App Store. | ✅ 4.9★ 61 reviews | Requires App Embed Block (P1-13) first. |
 | P1-15 | ✅ | UX | **New user onboarding** — A new user lands on a blank Dashboard with empty KPI tiles and no prompt. No guided onboarding, no empty-state CTAs, no setup checklist. | ✅ implied by 25K sites | Add empty state to Dashboard: "Add your first site →", "Create your first campaign →". Consider a setup checklist widget. |
 | P1-16 | ✅ | UX | **Billing upgrade throws 500** — `POST /billing/checkout` requires `STRIPE_PRICE_*` env vars not yet set. Any user clicking upgrade sees a server error. | `billing.ts:54–60` | Blocked by P0-2. Once Stripe is configured this resolves automatically, but add a graceful "Billing not yet available" state for pre-launch. |
 | P1-17 | ✅ | Security | **Incomplete ReDoS protection in url_regex** — `isSafeRegex()` catches simple nested quantifier patterns but not alternation-based ReDoS (e.g. `([a-zA-Z]+)*`). A malicious operator can cause snippet to hang in visitor browsers. | `sanitize.ts:93` | Replace with a battle-tested ReDoS-safe validator (`safe-regex2` or equivalent). Add it as a zero-dep vendored check or run the regex with a `performance.now()` wall-clock timeout. |
-| P1-18 | ⬜ | Debt | **No API route integration tests** — Zero tests for route-level behaviour, tenant isolation (IDOR scenarios), or webhook signature verification paths. The sanitizer and E2E suites cover the ends but nothing in between. | `apps/api` | Add Vitest integration tests for: tenant isolation on campaigns/sites/analytics, event injection rejection, webhook 400 on bad signature, billing checkout validation. |
+| P1-18 | ✅ | Debt | **API integration tests** — 19 Vitest tests covering: event-field validation, tenant isolation (IDOR), coupon generation validation, auto-responder config validation, Stripe webhook signature rejection, billing URL allowlist logic, origin-based injection defence. | `apps/api/src/index.test.ts` | Done. All 19 passing. |
 
 ---
 
@@ -113,19 +113,19 @@ Real issues, not blocking launch, should be addressed in the first growth sprint
 | P2-7 | ✅ | Performance | **No `tenantId` index within TimescaleDB partitions** — Analytics queries do full-chunk scans within each partition. Will degrade with tenant count. | `analytics.ts` | `CREATE INDEX CONCURRENTLY ON events(tenant_id, ts DESC)` on the Neon production DB. |
 | P2-8 | ✅ | Performance | **Admin tenant list N+1** — Two additional DB queries per tenant row to fetch owner email. | `admin.ts:95` | Rewrite with a single JOIN: `SELECT t.*, u.email, u.name FROM tenants t JOIN tenant_members tm ON ... JOIN users u ON ...`. |
 | P2-9 | ✅ | Performance | **In-process purge-deleted.ts causes latency spikes** — Hardened in-process (chosen for safety: no extra service = no extra secret surface; destructive logic stays in one reviewed code path). Now bounded to 100 entities/statement, campaign+site deletes split, jittered start, backstopped by the 30s statement_timeout. Backlogs drain over hourly passes. | `db/purge-deleted.ts` | Done (in-process hardened). Revisit a dedicated cron only if event volume makes hourly bounded passes insufficient. |
-| P2-10 | ⬜ | Performance | **Campaign export 100K rows in-memory** — No streaming. A large export holds a DB connection and loads everything into memory before responding. | `campaigns.ts:236` | Stream the response using a cursor-paginated query and Node.js `Readable` piped to the reply. |
+| P2-10 | ✅ | Performance | **Campaign export streaming** — Replaced in-memory 100K fetch with cursor-paginated `Readable` stream (500-row batches, `lt(events.ts, cursor)`). DB connection never holds the full result set. | `campaigns.ts` | Done. |
 | P2-11 | ✅ | Performance | **No query timeouts on Drizzle queries** — A slow analytics query can hold a connection indefinitely. | `db/client.ts` | Set `statement_timeout` on the postgres client: `postgres(url, { connection: { statement_timeout: 30000 } })`. |
 
 ### Features vs. Promolayer
 
 | # | Status | Category | Item | Promolayer | Notes |
 |---|---|---|---|---|---|
-| P2-12 | ⬜ | Feature | **Coupon code auto-generation** — Field exists in schema but there is no auto-generation or validation flow. | ✅ auto-generation | Generate unique coupon codes per campaign. Store in a `coupons` table. Validate redemption on the `/e` ingest path via `discount_redeemed` event. |
-| P2-13 | ⬜ | Feature | **Email auto-responders** — No way to send a follow-up email after a visitor submits a form. | ✅ paid plans | On `email_capture` event, optionally send a configured reply via Resend. Operator configures subject/body in campaign settings. |
+| P2-12 | ✅ | Feature | **Coupon code auto-generation** — `coupons` table (migration 0011 + RLS + boot self-heal), `POST /coupons/generate` bulk-generates codes with configurable prefix/discount/expiry, `GET /coupons` list, `DELETE /coupons/:id`. `discount_redeemed` ingest increments use counter (P3-9 partial). | `routes/coupons.ts`, `db/ensure-coupons.ts` | Done. Dashboard Coupons UI deferred to CampaignDetail. |
+| P2-13 | ✅ | Feature | **Email auto-responders** — `auto_responder` jsonb column on campaigns (migration 0011), `GET/PUT /campaigns/:id/auto-responder` API. Ingest path fires Resend email on `email_capture` when enabled. Best-effort — never blocks ingest. | `routes/auto-responder.ts` | Done. Dashboard config UI deferred to CampaignDetail settings panel. |
 | P2-14 | ⬜ | Feature | **Zapier integration** — No outbound webhook on events. | ✅ native | Add a webhook configuration to campaign settings. On qualifying events (`email_capture`, `conversion`), POST to the operator's webhook URL. This also covers the general "Webhook outbound" v2 roadmap item. |
 | P2-15 | ✅ | UX | **Journeys and Experiments pages appear broken** — Both show placeholder content with no "coming soon" framing. They are URL-reachable and make the product look unfinished. | N/A | Add explicit "Coming soon" empty states with expected availability. Or gate behind feature flags so they don't appear in nav until ready. |
-| P2-16 | ⬜ | UX | **Agency multi-tenant: all Novatise emails share one tenant** — No way to segregate data per client within the shared org. | N/A | Long-term: Clerk Organizations with per-client workspaces. Short-term: document the limitation in the agency onboarding. |
-| P2-17 | ⬜ | Feature | **Team invitations UI** — Clerk org invitations exist but there is no dashboard wrapper. Settings page has no invite flow. | ❓ | Wrap Clerk's `inviteToOrganization` in a Settings → Team section: enter email, select role, send. List pending invitations. |
+| P2-16 | ✅ | UX | **Agency multi-tenant: limitation documented** — Settings → Team tab displays a clear note that all members share one workspace and per-client segregation (separate orgs) is a planned Agency v2 feature. | `Settings.tsx` — Team tab | Done (short-term doc). Long-term: Clerk Orgs per client. |
+| P2-17 | ✅ | Feature | **Team invitations UI** — Settings → Team tab (new): lists org members with roles, shows pending invitations with revoke button, invite form (email + role picker) via Clerk `organization.inviteMember()`. Agency limitation note included. | `Settings.tsx` — TeamTab component | Done. |
 | P2-18 | ⬜ | Infra | **`api.scrollpop.online` custom domain** — API still served from `scroll-pop.onrender.com`. All internal references use the Render URL. | N/A | Add Cloudflare DNS CNAME → Render. Update `API_BASE_URL`, `SNIPPET_EDGE_URL` references. Cleaner and removes Render vendor lock-in from URLs. |
 | P2-19 | ✅ | Security | **No rate limit on admin routes** | `admin.ts` | Add a dedicated lower rate limit (e.g. 20 req/min) on all `/api/v1/admin/*` routes. |
 

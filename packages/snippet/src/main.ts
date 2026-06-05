@@ -717,8 +717,53 @@ function resolveVariant(campaign: CampaignConfig): { design: DesignConfig; affil
   return { design: chosen.design, affiliateSlots: chosen.affiliateSlots };
 }
 
+// ─── Spin-to-Win lazy loader ──────────────────────────────────────────────────
+// Only fetched when the campaign kind is 'spin_wheel', so the main bundle stays
+// under the 10 KB gate. The chunk sets window.__sp_spin = { render }.
+
+function launchSpinWheel(campaign: CampaignConfig): void {
+  const spinUrl = `${EDGE_URL.replace(/\/c\/.*/, '')}/spin.js`;
+  const doLaunch = () => {
+    const spinMod = (window as any).__sp_spin;
+    if (!spinMod?.render) return;
+    const { design, affiliateSlots } = resolveVariant(campaign);
+    const host = document.createElement('div');
+    host.id = `__sp_popup_${campaign.id}`;
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: 'closed' });
+    spinMod.render(
+      shadow,
+      { ...(design as any), slices: (design as any).slices ?? affiliateSlots.map((s: AffiliateSlot) => ({ label: s.cta_text || s.product_name, color: '', coupon: s.coupon })) },
+      (winner: { label: string; coupon?: string }) => {
+        beaconEvent(campaign, 'conversion', undefined, { coupon_code: winner.coupon, label: winner.label });
+      },
+      () => {
+        const el = document.getElementById(`__sp_popup_${campaign.id}`);
+        if (el) el.remove();
+        beaconEvent(campaign, 'dismiss');
+      },
+    );
+    beaconEvent(campaign, 'impression');
+  };
+
+  if ((window as any).__sp_spin) {
+    doLaunch();
+  } else {
+    const s = document.createElement('script');
+    s.src = spinUrl;
+    s.async = true;
+    s.onload = doLaunch;
+    document.head.appendChild(s);
+  }
+}
+
 function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   const { id: campaignId } = campaign;
+  // Spin-to-win: delegate entirely to the lazy-loaded spin chunk.
+  if ((campaign.design as any).kind === 'spin_wheel') {
+    launchSpinWheel(campaign);
+    return;
+  }
   const { design, affiliateSlots } = resolveVariant(campaign);
   const _impressionTs = Date.now();
   const getDisplayDuration = () => Math.round(Date.now() - _impressionTs);

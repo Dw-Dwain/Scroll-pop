@@ -13,9 +13,10 @@ import { ensureNotificationsSchema } from './db/ensure-notifications.js';
 import { ensureAuditLogSchema } from './db/ensure-audit-log.js';
 import { ensureLeadsSchema } from './db/ensure-leads.js';
 import { ensureVariantsSchema } from './db/ensure-variants.js';
+import { ensureCouponsSchema } from './db/ensure-coupons.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
-import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, leads } from './db/schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, leads, coupons } from './db/schema.js';
+import { eq, and, isNull, sql as drizzleSql } from 'drizzle-orm';
 
 // Routes
 import { siteRoutes } from './routes/sites.js';
@@ -31,6 +32,8 @@ import { internalRoutes } from './routes/internal.js';
 import { notificationRoutes, emitNotification } from './routes/notifications.js';
 import { leadRoutes } from './routes/leads.js';
 import { variantRoutes } from './routes/variants.js';
+import { couponRoutes } from './routes/coupons.js';
+import { autoResponderRoutes } from './routes/auto-responder.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
@@ -43,6 +46,7 @@ import { shopifyRoutes, shopifyWebhookRoutes } from './routes/shopify.js';
 import { tenantContextPlugin } from './plugins/tenant-context.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { captureException, sentryEnabled } from './lib/sentry.js';
+import { sendEmail, emailEnabled } from './lib/email.js';
 
 const isDev = process.env['NODE_ENV'] !== 'production';
 const __filename = fileURLToPath(import.meta.url);
@@ -143,6 +147,8 @@ async function bootstrap() {
   await app.register(notificationRoutes, { prefix: '/api/v1' });
   await app.register(leadRoutes, { prefix: '/api/v1' });
   await app.register(variantRoutes, { prefix: '/api/v1' });
+  await app.register(couponRoutes, { prefix: '/api/v1' });
+  await app.register(autoResponderRoutes, { prefix: '/api/v1' });
   await app.register(opsRoutes, { prefix: '/api/v1' });
   await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });
@@ -633,6 +639,44 @@ async function bootstrap() {
                 }).onConflictDoNothing().catch(() => { /* best-effort */ });
               }
             }
+
+            // Email auto-responder: on email_capture, send the operator-configured reply
+            // if enabled. Best-effort — never fail the ingest. P2-13.
+            if (eventType === 'email_capture' && emailEnabled()) {
+              void (async () => {
+                try {
+                  const cam = await db.query.campaigns.findFirst({
+                    where: eq(campaigns.id, campaignId),
+                    columns: { autoResponder: true },
+                  });
+                  const ar = cam?.autoResponder as Record<string, unknown> | null;
+                  if (ar?.['enabled'] === true) {
+                    const md2 = (metadata ?? meta ?? {}) as Record<string, unknown>;
+                    const recipientEmail = extractLeadEmail(md2);
+                    if (recipientEmail) {
+                      const subject = typeof ar['subject'] === 'string' && ar['subject']
+                        ? ar['subject'] : 'Thank you for subscribing!';
+                      const htmlBody = typeof ar['htmlBody'] === 'string' && ar['htmlBody']
+                        ? ar['htmlBody'] : '<p>Thanks for joining our list — we\'ll be in touch!</p>';
+                      await sendEmail({ to: recipientEmail, subject, html: htmlBody });
+                    }
+                  }
+                } catch { /* best-effort */ }
+              })();
+            }
+
+            // Coupon validation: on discount_redeemed, increment usage counter for
+            // matching coupon code if provided. Best-effort. P3-9.
+            if (eventType === 'discount_redeemed') {
+              const md3 = (metadata ?? meta ?? {}) as Record<string, unknown>;
+              const couponCode = typeof md3['coupon_code'] === 'string' ? md3['coupon_code'].trim().toUpperCase() : null;
+              if (couponCode) {
+                void db.update(coupons)
+                  .set({ uses: drizzleSql`${coupons.uses} + 1` })
+                  .where(and(eq(coupons.tenantId, campaign.tenantId), eq(coupons.code, couponCode)))
+                  .catch(() => { /* best-effort */ });
+              }
+            }
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -681,6 +725,8 @@ async function bootstrap() {
   // Ensure variants schema (migration 0010) so A/B testing works even if the migration
   // hasn't been applied to prod by hand yet.
   await ensureVariantsSchema(app.log);
+  // Ensure coupons + auto_responder + spin_wheel (migration 0011).
+  await ensureCouponsSchema(app.log);
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });

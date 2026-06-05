@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { Readable } from 'node:stream';
 import { db } from '../db/client.js';
 import { campaigns, sites, designs, events, triggers, targetingRules, frequencyRules } from '../db/schema.js';
-import { eq, and, isNull, desc } from 'drizzle-orm';
+import { eq, and, isNull, desc, lt } from 'drizzle-orm';
 import { emitNotification } from './notifications.js';
 import { purgeSiteConfigCache } from '../lib/cache-purge.js';
 
@@ -231,8 +232,8 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/campaigns/:id/export — CSV of this campaign's raw event data.
-  // Works for any campaign owned by the tenant, INCLUDING soft-deleted ones — this is the
-  // "download your data" path during the 24h window before the purge hard-deletes events.
+  // Streams via cursor-paginated batches so large exports never hold a full result-set in
+  // memory (P2-10). Works for soft-deleted campaigns within the 24h download grace window.
   fastify.get<{ Params: { id: string } }>('/campaigns/:id/export', async (request, reply) => {
     const campaign = await db.query.campaigns.findFirst({
       where: and(eq(campaigns.id, request.params.id), eq(campaigns.tenantId, request.tenantId)),
@@ -242,31 +243,56 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
 
-    const rows = await db
-      .select({
-        ts: events.ts, eventType: events.eventType, device: events.device,
-        country: events.country, pageUrl: events.pageUrl, referrer: events.referrer,
-        visitorId: events.visitorId, sessionId: events.sessionId, revenueCents: events.revenueCents,
-      })
-      .from(events)
-      .where(and(eq(events.tenantId, request.tenantId), eq(events.campaignId, request.params.id)))
-      .orderBy(desc(events.ts))
-      .limit(100000);
-
+    const BATCH = 500;
     const header = ['timestamp', 'event_type', 'device', 'country', 'page_url', 'referrer', 'visitor_id', 'session_id', 'revenue_cents'];
     const esc = (v: unknown) => {
       const s = v == null ? '' : (v instanceof Date ? v.toISOString() : String(v));
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const csv = [header.join(',')]
-      .concat(rows.map((r) => [r.ts, r.eventType, r.device, r.country, r.pageUrl, r.referrer, r.visitorId, r.sessionId, r.revenueCents].map(esc).join(',')))
-      .join('\n');
+
+    const csvStream = new Readable({ read() {} });
+    csvStream.push(header.join(',') + '\n');
+
+    (async () => {
+      let cursor: Date | null = null;
+      try {
+        while (true) {
+          const batch = await db
+            .select({
+              ts: events.ts, eventType: events.eventType, device: events.device,
+              country: events.country, pageUrl: events.pageUrl, referrer: events.referrer,
+              visitorId: events.visitorId, sessionId: events.sessionId, revenueCents: events.revenueCents,
+            })
+            .from(events)
+            .where(and(
+              eq(events.tenantId, request.tenantId),
+              eq(events.campaignId, request.params.id),
+              cursor ? lt(events.ts, cursor) : undefined,
+            ))
+            .orderBy(desc(events.ts))
+            .limit(BATCH);
+
+          for (const r of batch) {
+            csvStream.push(
+              [r.ts, r.eventType, r.device, r.country, r.pageUrl, r.referrer, r.visitorId, r.sessionId, r.revenueCents]
+                .map(esc).join(',') + '\n',
+            );
+          }
+          if (batch.length < BATCH) break;
+          cursor = batch[batch.length - 1]!.ts;
+        }
+      } catch (err) {
+        csvStream.destroy(err instanceof Error ? err : new Error(String(err)));
+      } finally {
+        csvStream.push(null);
+      }
+    })();
 
     const safeName = (campaign.name || 'campaign').replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40);
     return reply
       .header('Content-Type', 'text/csv; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="scrollpop-${safeName}-${request.params.id.slice(0, 8)}.csv"`)
-      .send(csv);
+      .send(csvStream);
   });
 
   // POST & PATCH /api/v1/campaigns/:id/activate

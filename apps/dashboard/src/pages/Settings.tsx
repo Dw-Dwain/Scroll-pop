@@ -3,9 +3,10 @@ import {
   Shield, Key, Bell, Puzzle, AlertTriangle, Copy, Check, Save, Code, Globe,
   ChevronRight, RefreshCw, Eye, EyeOff, ExternalLink, Zap, BarChart2,
   Webhook, Download, Pause, Trash2, Info, Clock, Mail, Smartphone,
-  Building2, Link2, Languages, CreditCard, Activity,
+  Building2, Link2, Languages, CreditCard, Activity, Users, UserPlus, X,
 } from 'lucide-react';
 import { useList, useUpdate, useCustomMutation, useCustom } from '@refinedev/core';
+import { useOrganization, useOrganizationList } from '@clerk/clerk-react';
 import { getApiBase } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
 
@@ -47,13 +48,14 @@ function slugify(str: string) {
   return str.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
-type Tab = 'general' | 'apikeys' | 'notifications' | 'integrations' | 'danger';
+type Tab = 'general' | 'apikeys' | 'notifications' | 'integrations' | 'team' | 'danger';
 
 const TABS: { id: Tab; label: string; icon: React.FC<any>; danger?: boolean }[] = [
   { id: 'general',       label: 'General',       icon: Building2 },
   { id: 'apikeys',       label: 'API Keys',       icon: Key },
   { id: 'notifications', label: 'Notifications',  icon: Bell },
   { id: 'integrations',  label: 'Integrations',   icon: Puzzle },
+  { id: 'team',          label: 'Team',           icon: Users },
   { id: 'danger',        label: 'Danger Zone',    icon: AlertTriangle, danger: true },
 ];
 
@@ -160,6 +162,156 @@ function CodeBlock({ code, copyKey, copiedKey, onCopy }: { code: string; copyKey
       >
         {copiedKey === copyKey ? <Check size={12} style={{ color: 'var(--status-success)' }} /> : <Copy size={12} />}
       </button>
+    </div>
+  );
+}
+
+// ── Team Tab ────────────────────────────────────────────────────────────────
+
+function TeamTab() {
+  const { organization, membership, memberships, invitations, isLoaded } = useOrganization({
+    memberships: { infinite: true },
+    invitations: { infinite: true },
+  });
+  const [inviteEmail, setInviteEmail] = React.useState('');
+  const [inviteRole, setInviteRole] = React.useState<'org:member' | 'org:admin'>('org:member');
+  const [inviting, setInviting] = React.useState(false);
+  const [toastMsg, setToastMsg] = React.useState<string | null>(null);
+
+  const showToast = (msg: string) => { setToastMsg(msg); setTimeout(() => setToastMsg(null), 3200); };
+  const isOwnerOrAdmin = membership?.role === 'org:admin' || membership?.role === 'org:owner';
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!organization || !inviteEmail) return;
+    setInviting(true);
+    try {
+      await organization.inviteMember({ emailAddress: inviteEmail, role: inviteRole });
+      setInviteEmail('');
+      showToast('Invitation sent!');
+      await invitations?.revalidate?.();
+    } catch (err: any) {
+      showToast(err?.errors?.[0]?.message ?? 'Failed to send invitation.');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleRevoke = async (invitationId: string) => {
+    if (!organization) return;
+    try {
+      const inv = invitations?.data?.find((i: any) => i.id === invitationId);
+      await inv?.revoke();
+      showToast('Invitation revoked.');
+      await invitations?.revalidate?.();
+    } catch {
+      showToast('Failed to revoke invitation.');
+    }
+  };
+
+  if (!isLoaded) {
+    return <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>Loading team…</div>;
+  }
+
+  const memberList = memberships?.data ?? [];
+  const pendingList = invitations?.data ?? [];
+
+  return (
+    <div>
+      {/* Agency note */}
+      <div style={{ padding: '12px 16px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, marginBottom: 16, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        <strong>Agency / multi-tenant note:</strong> ScrollPop uses a single workspace per Clerk organization.
+        All members below share access to the same sites, campaigns, and leads.
+        Per-client workspace segregation (separate orgs per client) is a planned Agency v2 feature.
+        For now, create separate ScrollPop accounts for clients who need full data isolation.
+      </div>
+
+      {/* Members */}
+      <SectionCard title="Team Members" subtitle={`${memberList.length} member${memberList.length !== 1 ? 's' : ''} in your workspace`}>
+        {memberList.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>No members yet.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {memberList.map((m: any, i: number, arr: any[]) => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent-400)', flexShrink: 0 }}>
+                    {(m.publicUserData?.firstName?.[0] ?? m.publicUserData?.identifier?.[0] ?? '?').toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                      {m.publicUserData?.firstName ? `${m.publicUserData.firstName} ${m.publicUserData.lastName ?? ''}`.trim() : m.publicUserData?.identifier ?? 'Unknown'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.publicUserData?.identifier ?? ''}</div>
+                  </div>
+                </div>
+                <span className="badge badge-neutral" style={{ fontSize: 10, textTransform: 'capitalize' }}>
+                  {String(m.role).replace('org:', '')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Pending invitations */}
+      {pendingList.length > 0 && (
+        <SectionCard title="Pending Invitations" subtitle="Waiting for recipients to accept">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {pendingList.map((inv: any, i: number, arr: any[]) => (
+              <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                <div>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{inv.emailAddress}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Role: {String(inv.role).replace('org:', '')} · sent {new Date(inv.createdAt).toLocaleDateString()}</div>
+                </div>
+                {isOwnerOrAdmin && (
+                  <button className="btn btn-icon btn-sm" onClick={() => handleRevoke(inv.id)} title="Revoke invitation">
+                    <X size={12} style={{ color: 'var(--status-error)' }} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Invite form */}
+      {isOwnerOrAdmin && (
+        <SectionCard title="Invite a Team Member" subtitle="Send an invitation to collaborate on this workspace">
+          <form onSubmit={handleInvite} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 5 }}>Email address</label>
+              <input
+                className="input"
+                type="email"
+                placeholder="colleague@company.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div style={{ minWidth: 140 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 5 }}>Role</label>
+              <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as any)}>
+                <option value="org:member">Member</option>
+                <option value="org:admin">Admin</option>
+              </select>
+            </div>
+            <button type="submit" disabled={inviting || !inviteEmail} className="btn btn-primary" style={{ gap: 5, whiteSpace: 'nowrap' }}>
+              <UserPlus size={13} />
+              {inviting ? 'Sending…' : 'Send Invitation'}
+            </button>
+          </form>
+        </SectionCard>
+      )}
+
+      {toastMsg && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 10, padding: '14px 20px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-500)' }} />
+          <span style={{ fontSize: 13, fontWeight: 550, color: 'var(--text-primary)' }}>{toastMsg}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -875,6 +1027,9 @@ export const Settings: React.FC = () => {
             </div>
           )}
 
+          {/* ── TEAM ── */}
+          {activeTab === 'team' && <TeamTab />}
+
           {/* ── DANGER ZONE ── */}
           {activeTab === 'danger' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -949,7 +1104,7 @@ export const Settings: React.FC = () => {
           )}
 
           {/* Global Save Changes Button */}
-          {activeTab !== 'danger' && (
+          {activeTab !== 'danger' && activeTab !== 'team' && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '1px solid var(--border-subtle)', marginTop: 24, marginBottom: 32 }}>
               <button type="submit" className="btn btn-primary" style={{ gap: 7, minWidth: 130 }}>
                 {isSaved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Changes</>}

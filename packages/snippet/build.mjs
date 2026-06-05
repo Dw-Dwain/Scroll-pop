@@ -52,28 +52,40 @@ const collapseAndSyncPlugin = {
   },
 };
 
-const ctx = await esbuild.context({
-  entryPoints: ['src/main.ts'],
+const sharedOpts = {
   bundle: true,
   minify: true,
-  format: 'iife',
-  platform: 'browser',
+  format: /** @type {'iife'} */ ('iife'),
+  platform: /** @type {'browser'} */ ('browser'),
   target: ['es2020', 'chrome80', 'firefox75', 'safari13'],
+  define: { 'process.env.NODE_ENV': '"production"' },
+  drop: /** @type {['console']} */ (['console']),
+  legalComments: /** @type {'none'} */ ('none'),
+};
+
+const ctx = await esbuild.context({
+  ...sharedOpts,
+  entryPoints: ['src/main.ts'],
   outfile: 'dist/p.js',
-  // No external deps — snippet must be fully self-contained
-  define: {
-    'process.env.NODE_ENV': '"production"',
-  },
-  drop: ['console'],
-  legalComments: 'none',
   plugins: [collapseAndSyncPlugin],
+});
+
+// Spin-to-win lazy chunk — built separately so the main p.js stays under 10 KB.
+// The main snippet fetches this dynamically only when a spin_wheel campaign is served.
+const spinCtx = await esbuild.context({
+  ...sharedOpts,
+  entryPoints: ['src/spin.ts'],
+  outfile: 'dist/spin.js',
 });
 
 if (watch) {
   await ctx.watch();
+  await spinCtx.watch();
   console.log('Watching for changes...');
 } else {
   await ctx.rebuild();
   await ctx.dispose();
-  console.log('Snippet built → dist/p.js');
+  await spinCtx.rebuild();
+  await spinCtx.dispose();
+  console.log('Snippet built → dist/p.js + dist/spin.js');
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Sparkles, Laptop, Tablet, Smartphone, Undo2, Redo2, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Sparkles, Laptop, Tablet, Smartphone, Undo2, Redo2, Play, Disc3 } from 'lucide-react';
 import { useCreate, useList, useCustomMutation, useApiUrl } from '@refinedev/core';
 import { TemplateSelector } from '../components/campaign-wizard/TemplateSelector';
 import { DesignControls } from '../components/campaign-wizard/DesignControls';
@@ -647,7 +647,22 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
       let designConfig: any;
       let designKind: any = formData.kind;
 
-      if (campaign) {
+      // Spin-to-win: build design config from slice labels, bypass visual editor
+      if (designKind === 'spin_wheel') {
+        const rawSlices: string[] = (formData as any).spinSlices ?? ['10% OFF', '20% OFF', 'Free Shipping', 'Try Again', '5% OFF', '15% OFF'];
+        const COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6'];
+        designConfig = {
+          kind: 'spin_wheel',
+          slices: rawSlices.filter(Boolean).map((label, i) => ({ label, color: COLORS[i % COLORS.length], weight: 1 })),
+          headline: formData.headline || 'Spin to Win!',
+          subheadline: formData.subheadline || 'Try your luck for an exclusive discount!',
+          ctaText: formData.ctaText || 'Spin the Wheel!',
+          backgroundColor: formData.backgroundColor,
+          accentColor: formData.accentColor,
+          textColor: formData.textColor,
+          showPoweredBy: formData.showPoweredBy,
+        };
+      } else if (campaign) {
           const mainStep = campaign.steps.main;
           const teaserStep = campaign.steps.teaser;
           const successStep = campaign.steps.success;
@@ -1067,6 +1082,69 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                       ))}
                     </select>
                   </div>
+
+                  {/* Popup type — Standard or Spin to Win */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Popup Type
+                    </label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {([
+                        { value: 'modal', label: 'Standard Popup', desc: 'Modal, slide-in, banner, or bar', icon: Megaphone },
+                        { value: 'spin_wheel', label: 'Spin to Win', desc: 'Gamified wheel with discount prizes', icon: Disc3 },
+                      ] as const).map(({ value, label, desc, icon: Icon }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setFormData((f: any) => ({ ...f, kind: value }))}
+                          style={{
+                            flex: 1, padding: '12px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                            border: `2px solid ${formData.kind === value ? 'var(--accent-500)' : 'var(--border-subtle)'}`,
+                            background: formData.kind === value ? 'rgba(99,102,241,0.06)' : 'var(--bg-raised)',
+                            transition: 'all 120ms',
+                            display: 'flex', flexDirection: 'column', gap: 4,
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Icon size={14} style={{ color: formData.kind === value ? 'var(--accent-500)' : 'var(--text-muted)' }} />
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Spin-to-win quick config */}
+                  {formData.kind === 'spin_wheel' && (
+                    <div style={{ padding: '14px 16px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Disc3 size={13} style={{ color: 'var(--accent-500)' }} /> Wheel Slices
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>(visitors spin to reveal a prize)</span>
+                      </div>
+                      {[0, 1, 2, 3, 4, 5].map((i) => {
+                        const slices: string[] = (formData as any).spinSlices ?? ['10% OFF', '20% OFF', 'Free Shipping', 'Try Again', '5% OFF', '15% OFF'];
+                        return (
+                          <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                            <input
+                              className="input"
+                              style={{ flex: 1, fontSize: 12 }}
+                              placeholder={`Slice ${i + 1} label`}
+                              value={slices[i] ?? ''}
+                              onChange={(e) => {
+                                const next = [...slices];
+                                next[i] = e.target.value;
+                                setFormData((f: any) => ({ ...f, spinSlices: next }));
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Coupon codes can be attached to each slice after the campaign is created.
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1140,7 +1218,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                       alert('Please enter a campaign name and select a target site.');
                       return;
                     }
-                    setStep((s) => Math.min(3, s + 1));
+                    // Spin-to-win has no visual editor — skip step 2
+                    const next = (step === 1 && formData.kind === 'spin_wheel') ? 3 : Math.min(3, step + 1);
+                    setStep(next);
                   }}
                 >
                   Next Step

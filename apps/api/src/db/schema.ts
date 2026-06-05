@@ -32,7 +32,7 @@ export const campaignStatusEnum = pgEnum('campaign_status', [
 ]);
 
 export const designKindEnum = pgEnum('design_kind', [
-  'modal', 'slide_in', 'banner', 'bar', 'fullscreen',
+  'modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'spin_wheel',
 ]);
 
 export const triggerTypeEnum = pgEnum('trigger_type', [
@@ -261,6 +261,8 @@ export const campaigns = pgTable('campaigns', {
   status: campaignStatusEnum('status').notNull().default('draft'),
   startsAt: timestamp('starts_at', { withTimezone: true }),
   endsAt: timestamp('ends_at', { withTimezone: true }),
+  // Auto-responder config: { enabled, subject, htmlBody, replyTo? }. Added migration 0011.
+  autoResponder: jsonb('auto_responder').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),
@@ -345,6 +347,25 @@ export const frequencyRules = pgTable('frequency_rules', {
     .references(() => tenants.id, { onDelete: 'cascade' }),
   frequency: frequencyEnum('frequency').notNull().default('once_per_session'),
   intervalDays: integer('interval_days'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`NOW()`),
+});
+
+// ─── Coupons ─────────────────────────────────────────────────────────────────
+// Auto-generated discount codes displayed in popups. Validated on `discount_redeemed`
+// ingest events. Tenant-scoped (RLS). Added migration 0011. See P2-12 / P3-9.
+
+export const coupons = pgTable('coupons', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  campaignId: uuid('campaign_id'),
+  code: text('code').notNull(),
+  discountPct: smallint('discount_pct'),
+  discountAmtCents: integer('discount_amt_cents'),
+  maxUses: integer('max_uses'),
+  uses: integer('uses').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),

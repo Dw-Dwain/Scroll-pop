@@ -1,7 +1,49 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 4, 2026 EOD · v0.1.3-beta · Tracker: **30/54** items done
+> Last updated: June 5, 2026 EOD · v0.1.4-beta · Tracker: **37/54** items done
+
+---
+
+## 📅 June 5, 2026 — End of Day Summary
+
+**37 of 54 tracker items completed (was 30).** 7 features shipped in one session.
+
+### ✅ Completed today (30 → 37)
+
+**P1-12 — Gamified popups (spin-to-win):**
+- `packages/snippet/src/spin.ts` — canvas-based spin wheel, weighted prize allocation, coupon clipboard copy, Shadow DOM rendering. Built as a separate lazy-loaded IIFE (`dist/spin.js`, 2.5 KB gzipped).
+- `build.mjs` updated to build both `p.js` (9.8 KB gzipped, within gate) and `spin.js`.
+- Main snippet lazy-fetches `spin.js` only when a `spin_wheel` campaign is served.
+- Dashboard: CampaignWizard Step 1 gets a Popup Type picker (Standard vs Spin to Win) with slice label editor. Spin campaigns skip the visual editor (step 2) and build design config from slice labels.
+- `design_kind` enum extended with `spin_wheel` (via `ensureCouponsSchema` / migration 0011).
+
+**P1-18 — API integration tests (19 tests, all passing):**
+- `apps/api/src/index.test.ts` — replaces placeholder with real Vitest tests.
+- Coverage: event-field validation (type allowlist, UUID guard, numeric clamping, URL sanitisation), tenant isolation (IDOR on campaign GET/DELETE), Zod input validation (campaigns, coupons, auto-responder), Stripe webhook signature rejection, billing URL allowlist logic, cross-tenant origin injection defence.
+
+**P2-10 — Campaign export streaming:**
+- Replaced `limit(100000)` in-memory CSV with cursor-paginated `node:stream.Readable` (500-row batches using `lt(events.ts, cursor)`). DB connection never holds full result set.
+
+**P2-12 — Coupon auto-generation:**
+- `coupons` table (migration 0011 + RLS + boot self-heal in `ensure-coupons.ts`).
+- `POST /api/v1/coupons/generate` — bulk generate with prefix/discount/expiry, `onConflictDoNothing` for uniqueness. `GET /coupons`, `DELETE /coupons/:id`.
+- `discount_redeemed` event ingest increments usage counter (P3-9 partial impl).
+
+**P2-13 — Email auto-responders:**
+- `auto_responder` JSONB column added to `campaigns` table (migration 0011).
+- `GET/PUT /api/v1/campaigns/:id/auto-responder` API routes.
+- Ingest path hooks `email_capture` events: reads campaign config, if `enabled: true` fires Resend email to the captured address. Best-effort — never blocks ingest.
+
+**P2-16 — Agency multi-tenant limitation documented:**
+- Settings → Team tab: agency note clearly explains single-workspace limitation and v2 plan.
+
+**P2-17 — Team invitations UI:**
+- New **Team** tab in Settings using `useOrganization` from `@clerk/clerk-react`.
+- Lists current members with roles; shows pending invitations with per-invite revoke button; invite form (email + role) via `organization.inviteMember()`. Admin/owner-only for invite/revoke actions.
+
+### ⏳ Remaining (17 items)
+P0-2 (Stripe keys), P1-8 (Klaviyo), P1-9 (Mailchimp), P1-14 (Shopify App Store), P2-14 (Zapier), P2-18 (custom domain), and 11 P3 items.
 
 ---
 
