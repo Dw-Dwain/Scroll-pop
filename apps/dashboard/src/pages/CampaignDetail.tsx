@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ArrowLeft, Eye, Globe, Megaphone, MousePointerClick, Percent, Radar, Sliders,
   Activity, Play, Disc3, Ticket, Plus, Trash2, Copy, Check, RefreshCw, X,
+  Target, Save, Clock, MousePointer2,
 } from 'lucide-react';
 import { useApiUrl, useCustom, useCustomMutation, useList, useOne } from '@refinedev/core';
 import { ABPanel } from '../components/ABPanel';
@@ -43,6 +44,49 @@ function mapApiTriggers(apiTriggers: RuleItem[], freq: RuleItem | null): Campaig
     if (rule.type === 'inactivity')          t.inactivitySeconds    = rule.params?.seconds ?? 30;
   }
   return t;
+}
+
+// Flat settings state shared by the spin-wheel triggers/targeting panel.
+type FlatSettings = {
+  exitIntent: boolean;
+  scrollPercent: number;
+  timeDelaySeconds: number;
+  inactivitySeconds: number;
+  frequency: 'always' | 'once_per_session' | 'once_per_day' | 'once_per_visitor';
+  frequencyCapDays: number;
+  deviceTargeting: 'all' | 'desktop' | 'mobile' | 'tablet';
+  pageTargeting: string;
+  geoTargeting: string;
+  newVisitorOnly: boolean;
+  sessionPageCount: number;
+  utmParam: string;
+  utmValue: string;
+};
+
+// Map loaded API triggers + targeting + frequency → the flat settings state.
+function mapApiToFlat(apiTriggers: RuleItem[], apiTargeting: RuleItem[], freq: RuleItem | null): FlatSettings {
+  const f: FlatSettings = {
+    exitIntent: false, scrollPercent: 0, timeDelaySeconds: 0, inactivitySeconds: 0,
+    frequency: (freq?.frequency as any) ?? 'once_per_session',
+    frequencyCapDays: (freq as any)?.intervalDays ?? 7,
+    deviceTargeting: 'all', pageTargeting: '', geoTargeting: 'All Countries',
+    newVisitorOnly: false, sessionPageCount: 0, utmParam: 'utm_source', utmValue: '',
+  };
+  for (const r of apiTriggers) {
+    if (r.type === 'scroll_pct')       f.scrollPercent     = r.params?.pct ?? r.params?.scroll_pct ?? 50;
+    if (r.type === 'dwell_time')       f.timeDelaySeconds  = r.params?.seconds ?? 5;
+    if (r.type === 'exit_intent_mouse') f.exitIntent       = true;
+    if (r.type === 'inactivity')       f.inactivitySeconds = r.params?.seconds ?? 30;
+  }
+  for (const r of apiTargeting) {
+    if (r.kind === 'device')             f.deviceTargeting = (r.value?.device as any) ?? 'all';
+    if (r.kind === 'returning_visitor')  f.newVisitorOnly  = r.value?.returning === false;
+    if (r.kind === 'url_contains')       f.pageTargeting   = (r.value?.pattern as string) ?? '';
+    if (r.kind === 'geo')                f.geoTargeting    = (r.value?.country as string) ?? 'All Countries';
+    if (r.kind === 'session_page_views') f.sessionPageCount = (r.value?.count as number) ?? 0;
+    if (r.kind === 'utm')              { f.utmParam = (r.value?.param as string) ?? 'utm_source'; f.utmValue = (r.value?.value as string) ?? ''; }
+  }
+  return f;
 }
 
 // Build a minimal Campaign object from design config + API triggers so
@@ -335,6 +379,176 @@ function SpinWheelPanel({ campaignId, design, apiUrl, onDesignSaved }: { campaig
   );
 }
 
+// ── Triggers / Targeting / Frequency panel (spin-wheel — mirrors the design editor) ──
+function TriggersTargetingPanel({
+  campaignId, apiUrl, apiTriggers, apiTargeting, frequency, onSaved,
+}: {
+  campaignId: string; apiUrl: string;
+  apiTriggers: RuleItem[]; apiTargeting: RuleItem[]; frequency: RuleItem | null;
+  onSaved: () => void;
+}) {
+  const { mutateAsync: customMutate } = useCustomMutation();
+  const [s, setS] = React.useState<FlatSettings>(() => mapApiToFlat(apiTriggers, apiTargeting, frequency));
+  const [saving, setSaving] = React.useState(false);
+  const [toast, setToast] = React.useState<string | null>(null);
+  const seeded = React.useRef(false);
+
+  // Seed once when the API data first arrives (the parent may render before fetch resolves).
+  React.useEffect(() => {
+    if (!seeded.current && (apiTriggers.length || apiTargeting.length || frequency)) {
+      setS(mapApiToFlat(apiTriggers, apiTargeting, frequency));
+      seeded.current = true;
+    }
+  }, [apiTriggers, apiTargeting, frequency]);
+
+  const set = <K extends keyof FlatSettings>(k: K, v: FlatSettings[K]) => setS(prev => ({ ...prev, [k]: v }));
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2800); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Build the normalized trigger/targeting arrays exactly like the design editor does.
+      const triggersList: Array<{ type: string; params: Record<string, number> }> = [];
+      if (s.scrollPercent > 0)     triggersList.push({ type: 'scroll_pct', params: { pct: s.scrollPercent } });
+      if (s.timeDelaySeconds > 0)  triggersList.push({ type: 'dwell_time', params: { seconds: s.timeDelaySeconds } });
+      if (s.inactivitySeconds > 0) triggersList.push({ type: 'inactivity', params: { seconds: Math.max(5, s.inactivitySeconds) } });
+      if (s.exitIntent)            triggersList.push({ type: 'exit_intent_mouse', params: { sensitivity: 20 } });
+
+      const targetingList: Array<{ kind: string; operator: string; value: Record<string, unknown> }> = [];
+      if (s.deviceTargeting !== 'all')                 targetingList.push({ kind: 'device', operator: 'include', value: { device: s.deviceTargeting } });
+      if (s.newVisitorOnly)                            targetingList.push({ kind: 'returning_visitor', operator: 'include', value: { returning: false } });
+      if (s.pageTargeting.trim() && s.pageTargeting.trim() !== '*') targetingList.push({ kind: 'url_contains', operator: 'include', value: { pattern: s.pageTargeting.trim() } });
+      if (s.geoTargeting !== 'All Countries')          targetingList.push({ kind: 'geo', operator: 'include', value: { country: s.geoTargeting } });
+      if (s.sessionPageCount > 0)                      targetingList.push({ kind: 'session_page_views', operator: 'include', value: { count: s.sessionPageCount } });
+      if (s.utmValue.trim() !== '')                    targetingList.push({ kind: 'utm', operator: 'include', value: { param: s.utmParam || 'utm_source', value: s.utmValue.trim() } });
+
+      const freqInterval = s.frequencyCapDays > 0 ? s.frequencyCapDays : undefined;
+
+      await customMutate({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'put', values: triggersList });
+      await customMutate({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency: s.frequency, intervalDays: freqInterval } });
+      await customMutate({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'put', values: targetingList });
+
+      showToast('Triggers & targeting saved!');
+      onSaved();
+    } catch {
+      showToast('Failed to save settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 5, display: 'block' };
+  const sectionTitle: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 };
+  const GEO = ['All Countries', 'US', 'GB', 'CA', 'AU', 'DE', 'FR', 'IN', 'BR', 'JP', 'SG'];
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <Sliders size={13} style={{ color: 'var(--accent-300)' }} />
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Triggers, Targeting & Frequency</span>
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 18px' }}>
+        Same controls as the campaign design editor — when this wheel fires, who sees it, and how often.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
+        {/* Triggers */}
+        <div>
+          <div style={sectionTitle}><MousePointer2 size={11} style={{ display: 'inline', marginRight: 5, verticalAlign: 'middle' }} />When it fires</div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>Exit intent</span>
+            <input type="checkbox" checked={s.exitIntent} onChange={e => set('exitIntent', e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label style={labelStyle}>Scroll depth trigger (%) — 0 = off</label>
+            <input className="input" type="number" min={0} max={100} value={s.scrollPercent} onChange={e => set('scrollPercent', Math.min(100, Math.max(0, +e.target.value)))} style={{ width: '100%', fontSize: 12 }} />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>Dwell time (seconds) — 0 = off</label>
+            <input className="input" type="number" min={0} value={s.timeDelaySeconds} onChange={e => set('timeDelaySeconds', Math.max(0, +e.target.value))} style={{ width: '100%', fontSize: 12 }} />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>Inactivity (seconds) — 0 = off</label>
+            <input className="input" type="number" min={0} value={s.inactivitySeconds} onChange={e => set('inactivitySeconds', Math.max(0, +e.target.value))} style={{ width: '100%', fontSize: 12 }} />
+          </div>
+        </div>
+
+        {/* Targeting */}
+        <div>
+          <div style={sectionTitle}><Target size={11} style={{ display: 'inline', marginRight: 5, verticalAlign: 'middle' }} />Who sees it</div>
+
+          <div>
+            <label style={labelStyle}>Device</label>
+            <select className="input" value={s.deviceTargeting} onChange={e => set('deviceTargeting', e.target.value as any)} style={{ width: '100%', fontSize: 12 }}>
+              <option value="all">All devices</option>
+              <option value="desktop">Desktop only</option>
+              <option value="mobile">Mobile only</option>
+              <option value="tablet">Tablet only</option>
+            </select>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>Page URL contains (blank = all pages)</label>
+            <input className="input" value={s.pageTargeting} onChange={e => set('pageTargeting', e.target.value)} placeholder="/products" style={{ width: '100%', fontSize: 12 }} />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>Country</label>
+            <select className="input" value={s.geoTargeting} onChange={e => set('geoTargeting', e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+              {GEO.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0 0' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>New visitors only</span>
+            <input type="checkbox" checked={s.newVisitorOnly} onChange={e => set('newVisitorOnly', e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>Fire after N page views (0 = off)</label>
+            <input className="input" type="number" min={0} value={s.sessionPageCount} onChange={e => set('sessionPageCount', Math.max(0, +e.target.value))} style={{ width: '100%', fontSize: 12 }} />
+          </div>
+        </div>
+
+        {/* Frequency + UTM */}
+        <div>
+          <div style={sectionTitle}><Clock size={11} style={{ display: 'inline', marginRight: 5, verticalAlign: 'middle' }} />How often + UTM</div>
+
+          <div>
+            <label style={labelStyle}>Display frequency</label>
+            <select className="input" value={s.frequency} onChange={e => set('frequency', e.target.value as any)} style={{ width: '100%', fontSize: 12 }}>
+              <option value="always">Always</option>
+              <option value="once_per_session">Once per session</option>
+              <option value="once_per_day">Once per day</option>
+              <option value="once_per_visitor">Once per visitor</option>
+            </select>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>Frequency cap (days)</label>
+            <input className="input" type="number" min={0} value={s.frequencyCapDays} onChange={e => set('frequencyCapDays', Math.max(0, +e.target.value))} style={{ width: '100%', fontSize: 12 }} />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>UTM parameter</label>
+            <select className="input" value={s.utmParam} onChange={e => set('utmParam', e.target.value)} style={{ width: '100%', fontSize: 12 }}>
+              {['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>UTM value (blank = any)</label>
+            <input className="input" value={s.utmValue} onChange={e => set('utmValue', e.target.value)} placeholder="e.g. summer_sale" style={{ width: '100%', fontSize: 12 }} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
+        <button className="btn btn-primary btn-sm" style={{ gap: 5 }} onClick={handleSave} disabled={saving}>
+          {saving ? <RefreshCw size={11} className="spin" /> : <Save size={11} />}
+          Save settings
+        </button>
+        {toast && <span style={{ fontSize: 12, color: toast.startsWith('Failed') ? 'var(--status-error)' : 'var(--status-success)' }}>{toast}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNavigate }) => {
   const { data: campaignData, isLoading: isCampaignLoading } = useOne({ resource: 'campaigns', id: campaignId });
@@ -344,9 +558,9 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
   const { data: analyticsRes, isLoading: analyticsLoading } = useCustom({
     url: `${apiUrl}/analytics/campaigns/${campaignId}`, method: 'get',
   });
-  const { data: triggersRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'get' });
-  const { data: targetingRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'get' });
-  const { data: frequencyRes } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'get' });
+  const { data: triggersRes, refetch: refetchTriggers } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'get' });
+  const { data: targetingRes, refetch: refetchTargeting } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'get' });
+  const { data: frequencyRes, refetch: refetchFrequency } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'get' });
   const { data: designRes, refetch: refetchDesign } = useCustom({
     url: `${apiUrl}/campaigns/${campaignId}/design`, method: 'get',
   });
@@ -476,9 +690,19 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
         ))}
       </div>
 
-      {/* Spin wheel config + coupons (spin_wheel only) */}
+      {/* Spin wheel config + triggers/targeting (spin_wheel only — it has no design editor) */}
       {isSpinWheel && design && (
-        <SpinWheelPanel campaignId={campaignId} design={design} apiUrl={apiUrl} onDesignSaved={() => refetchDesign()} />
+        <>
+          <SpinWheelPanel campaignId={campaignId} design={design} apiUrl={apiUrl} onDesignSaved={() => refetchDesign()} />
+          <TriggersTargetingPanel
+            campaignId={campaignId}
+            apiUrl={apiUrl}
+            apiTriggers={triggers}
+            apiTargeting={targeting}
+            frequency={frequency}
+            onSaved={() => { void refetchTriggers(); void refetchTargeting(); void refetchFrequency(); }}
+          />
+        </>
       )}
 
       {/* Coupons — visible for all campaign types */}
@@ -548,10 +772,13 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
         </div>
       </div>
 
-      {/* A/B Test panel */}
-      <div style={{ marginBottom: 12 }}>
-        <ABPanel campaignId={campaignId} onNavigate={onNavigate} />
-      </div>
+      {/* A/B Test panel — hidden for spin wheels: variant design editing routes into the
+          canvas editor, which has no spin-wheel template. */}
+      {!isSpinWheel && (
+        <div style={{ marginBottom: 12 }}>
+          <ABPanel campaignId={campaignId} onNavigate={onNavigate} />
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
         {/* Trigger Debugger */}

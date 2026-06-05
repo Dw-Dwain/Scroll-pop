@@ -463,6 +463,13 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                 }}>
                   <button
                     onClick={() => {
+                      // Spin-to-win has no visual editor template — its design (wheel slices,
+                      // colours) and settings live on the campaign detail page. Route there
+                      // instead of the canvas editor so the user lands on the right screen.
+                      if (c.kind === 'spin_wheel') {
+                        onNavigate(`/campaigns/detail/${c.id}`);
+                        return;
+                      }
                       // Cache campaign data so the designer can restore it without the API
                       try {
                         sessionStorage.setItem(
@@ -474,10 +481,10 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                     }}
                     className="btn btn-sm btn-secondary"
                     style={{ flex: 1, justifyContent: 'center', gap: 5, fontSize: 11 }}
-                    title="Edit design"
+                    title={c.kind === 'spin_wheel' ? 'Customize wheel & settings' : 'Edit design'}
                   >
                     <Pencil size={12} />
-                    Edit Design
+                    {c.kind === 'spin_wheel' ? 'Customize' : 'Edit Design'}
                   </button>
 
                   <button
