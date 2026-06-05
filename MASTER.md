@@ -1,7 +1,7 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 5, 2026 EOD · v0.1.4-beta · Tracker: **37/54** items done
+> Last updated: June 5, 2026 · v0.1.4-beta · Tracker: **40/54** items done
 
 ---
 
@@ -1556,6 +1556,28 @@ await sql.end();
 console.log('done');
 "
 ```
+
+### Pre-Deploy Command Failed (Migration Failure)
+
+Render runs `pnpm --filter @scrollpop/api exec drizzle-kit migrate` before every deploy.
+If it fails, the deploy is aborted and the API stays on the previous version — **no data is
+lost and no bad code reaches production.**
+
+**Diagnosis steps:**
+1. Open the Render deploy log and find the migration error message.
+2. Connect to the prod DB directly (`psql $DIRECT_DATABASE_URL`) and check which migrations
+   have been applied: `SELECT * FROM drizzle.__drizzle_migrations ORDER BY created_at DESC;`
+3. If the failing migration is idempotent (uses `IF NOT EXISTS`, `DO $$ … EXCEPTION … END $$`)
+   run it manually via `psql $DIRECT_DATABASE_URL -f apps/api/drizzle/migrations/000X_name.sql`.
+4. Re-trigger the deploy from the Render dashboard.
+
+**Rollback procedure** (if a bad migration already ran):
+1. Run the corresponding `.down.sql` file: `psql $DIRECT_DATABASE_URL -f apps/api/drizzle/migrations/000X_name.down.sql`
+2. Revert the code commit that introduced the migration.
+3. Re-deploy.
+
+> **Never** run `drizzle-kit push` against the production database — it is not idempotent and
+> may drop columns. Always use the numbered migration files.
 
 ### Purge a Campaign from KV Cache
 ```bash

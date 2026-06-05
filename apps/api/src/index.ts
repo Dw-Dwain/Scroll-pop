@@ -665,16 +665,26 @@ async function bootstrap() {
               })();
             }
 
-            // Coupon validation: on discount_redeemed, increment usage counter for
-            // matching coupon code if provided. Best-effort. P3-9.
+            // Coupon validation: on discount_redeemed, verify the code is valid for this
+            // tenant and hasn't exceeded its use limit, then increment. P3-9.
             if (eventType === 'discount_redeemed') {
               const md3 = (metadata ?? meta ?? {}) as Record<string, unknown>;
               const couponCode = typeof md3['coupon_code'] === 'string' ? md3['coupon_code'].trim().toUpperCase() : null;
               if (couponCode) {
-                void db.update(coupons)
-                  .set({ uses: drizzleSql`${coupons.uses} + 1` })
-                  .where(and(eq(coupons.tenantId, campaign.tenantId), eq(coupons.code, couponCode)))
-                  .catch(() => { /* best-effort */ });
+                void (async () => {
+                  try {
+                    const coupon = await db.query.coupons.findFirst({
+                      where: and(eq(coupons.tenantId, campaign.tenantId), eq(coupons.code, couponCode)),
+                      columns: { id: true, maxUses: true, uses: true, expiresAt: true },
+                    });
+                    if (!coupon) return; // unknown code — ignore
+                    if (coupon.expiresAt && coupon.expiresAt < new Date()) return; // expired
+                    if (coupon.maxUses != null && coupon.uses >= coupon.maxUses) return; // exhausted
+                    await db.update(coupons)
+                      .set({ uses: drizzleSql`${coupons.uses} + 1` })
+                      .where(eq(coupons.id, coupon.id));
+                  } catch { /* best-effort — never block ingest */ }
+                })();
               }
             }
           }

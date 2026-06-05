@@ -14,8 +14,8 @@
 | P0 Launch blockers | 5 | 4 | 1 |
 | P1 High priority | 18 | 15 | 3 |
 | P2 Medium priority | 19 | 17 | 2 |
-| P3 Low priority | 12 | 1 | 11 |
-| **Total** | **54** | **37** | **17** |
+| P3 Low priority | 12 | 4 | 8 |
+| **Total** | **54** | **40** | **14** |
 
 > **A/B testing (Jun 4 2026)** — `feature/ab-testing` (P0-4 + P1-10): real weighted variants.
 > New `variants` table (**migration 0010** + RLS + self-heal), variants CRUD + per-variant
@@ -137,15 +137,15 @@ Real issues but low urgency. Address during maintenance windows.
 
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
-| P3-1 | ⬜ | Debt | **`any` types in campaign activate/pause handlers** | `campaigns.ts:256,288` | Type `request` and `reply` properly using Fastify generics. |
+| P3-1 | ✅ | Debt | **`any` types in campaign activate/pause handlers** — Both handlers now typed as `FastifyRequest<{ Params: { id: string } }>` and `FastifyReply`. | `campaigns.ts` | Done. |
 | P3-2 | ⬜ | Debt | **428 ESLint warnings in dashboard** | Dashboard-wide | Resolve incrementally: prioritize `no-explicit-any` and `rules-of-hooks` first. |
 | P3-3 | ⬜ | Security | **R2 bucket on rate-limited r2.dev URL** — The snippet CDN and WP plugin download use the `pub-*.r2.dev` URL. Rate-limited and not recommended for production by Cloudflare. | `Sites.tsx:195` | Connect `cdn.scrollpop.online` as a custom domain on the `scrollpop-assets` R2 bucket. Update both URLs. |
 | P3-4 | ⬜ | Security | **No session revocation mechanism** — Relies entirely on Clerk JWT TTL. A compromised token remains valid until it expires. | `tenant-context.ts` | For high-value operations (plan change, delete tenant), add a `last_sign_out_at` check or call Clerk's session revocation API. |
 | P3-5 | ⬜ | Feature | **`scrollpop.online` marketing site** — No separate marketing site exists. Operators cannot find ScrollPop without a direct link. | ✅ Promolayer has full site | Separate Cloudflare Pages project. Exists as `site-plan/` in repo — needs deploying and content. |
-| P3-6 | ⬜ | Infra | **Render Pre-Deploy Command already set** — Migration drift prevention is in place. Document in runbook what to do if it fails. | MASTER.md §27 | Add a "Pre-deploy command failed" runbook entry: manual migration steps, rollback procedure. |
+| P3-6 | ✅ | Infra | **Pre-deploy runbook entry added** — MASTER.md §27 now has "Pre-Deploy Command Failed" section: diagnosis steps, manual migration procedure, rollback via `.down.sql`, warning against `drizzle-kit push` on prod. | `MASTER.md §27` | Done. |
 | P3-7 | ⬜ | Scale | **`resolveCampaignMeta` cache is instance-local** — On 2+ Render instances, each has a cold cache. DB queries spike per instance on cold start. | `index.ts:408` | Move campaign meta cache to a Redis hash: `HGETALL sp_campaign_meta:{campaignId}` with 5-minute TTL. |
 | P3-8 | ✅ | Scale | **Admin Clerk sync not paginated** — At >500 Clerk users, stale users past the limit won't be cleaned up. | `admin.ts:178` | Paginate with Clerk's cursor until response is empty. |
-| P3-9 | ⬜ | Feature | **Coupon validation on `/e` ingest** — `discount_redeemed` event type exists but there is no server-side validation that a coupon code is valid before accepting the event. | `index.ts` | Look up coupon against `coupons` table on `discount_redeemed` event type. Mark redeemed. |
+| P3-9 | ✅ | Feature | **Coupon validation on `/e` ingest** — `discount_redeemed` event looks up the code against the `coupons` table, rejects unknown/expired/exhausted codes, and atomically increments the `uses` counter. Best-effort, never blocks ingest. | `index.ts` | Done. |
 | P3-10 | ⬜ | Feature | **Mobile-specific trigger overrides** — Promolayer calls out explicit mobile trigger customization. ScrollPop handles device targeting but has no per-device trigger param overrides. | Promolayer marketing | Allow different scroll % or dwell time thresholds for mobile vs desktop in the trigger config. |
 | P3-11 | ⬜ | Debt | **`ensure-notifications.ts` and `ensure-partitions.ts` run a DB call on every cold start** — Adds latency to every new Render instance spin-up. | `index.ts:560,563` | Move to a startup probe that only runs the check once per deploy (cache a flag in Redis). Or convert to a proper migration. |
 | P3-12 | ⬜ | Debt | **Conversion milestone Redis counter starts at zero from feature launch** — Historical conversions are not counted. Users who have existing conversions see a misleadingly low milestone count. | `index.ts:351` | On first `incr` (result = 1), backfill the counter from the DB `count(*)` of historical `conversion` events for that tenant, then continue incrementing. |

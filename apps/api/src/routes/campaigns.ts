@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { Readable } from 'node:stream';
 import { db } from '../db/client.js';
@@ -296,7 +296,7 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST & PATCH /api/v1/campaigns/:id/activate
-  const handleActivate = async (request: any, reply: any) => {
+  const handleActivate = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const [updated] = await db
       .update(campaigns)
       .set({ status: 'active', updatedAt: new Date() })
@@ -329,7 +329,7 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{ Params: { id: string } }>('/campaigns/:id/activate', handleActivate);
 
   // POST & PATCH /api/v1/campaigns/:id/pause
-  const handlePause = async (request: any, reply: any) => {
+  const handlePause = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const [updated] = await db
       .update(campaigns)
       .set({ status: 'paused', updatedAt: new Date() })
