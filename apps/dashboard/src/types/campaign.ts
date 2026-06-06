@@ -1,3 +1,11 @@
+import type { BuilderElement } from '@scrollpop/shared';
+
+// Draft element used in form state. Relaxes BuilderElement in two ways:
+// 1. id is optional (auto-assigned on first save)
+// 2. type is widened to string (the element palette passes literals, not enum members)
+// Narrowed to BuilderElement when serialized to the API.
+export type DraftBuilderElement = Omit<BuilderElement, 'id' | 'type'> & { id?: string; type: string };
+
 export type RuleOperator = 'and' | 'or';
 export type RuleKind = 'url_contains' | 'url_exact' | 'url_regex' | 'device' | 'returning_visitor' | 'time_on_site' | 'idle_time' | 'scroll_depth' | 'exit_intent' | 'browser_back' | 'custom_js' | 'browser_language' | 'referring_website' | 'visit_count' | 'page_view_count' | 'visited_page_count' | 'not_seen_page' | 'previously_viewed' | 'has_clicked_button' | 'is_subscriber' | 'country_state' | 'block_ip';
 export type TriggerType = 'scroll_pct' | 'dwell_time' | 'inactivity' | 'exit_intent' | 'custom';
@@ -76,7 +84,7 @@ export type FormDataShape = {
   productUrl: string;
   imageUrl?: string;
   backgroundImage?: string;
-  elements?: any[]; // Replaced with any[] to simplify types without importing BuilderElement in frontend types temporarily, though it's better to just import it.
+  elements?: DraftBuilderElement[];
   layoutMode?: 'legacy' | 'blocks';
 
   // Actions
