@@ -10,7 +10,7 @@ interface CampaignsProps {
 type CampaignStat = { campaignId: string; impressions: number; clicks: number; ctr: number };
 
 // ── Mini popup preview thumbnail ───────────────────────────────────────────────
-function PopupPreview({ kind, status }: { kind: string; status: string }) {
+function PopupPreview({ kind, status: _status }: { kind: string; status: string }) {
   const palette: Record<string, { bg: string; accent: string }> = {
     modal:      { bg: '#f5f3ff', accent: '#6366f1' },
     bar:        { bg: '#f0fdf4', accent: '#22c55e' },
@@ -88,10 +88,11 @@ function PopupPreview({ kind, status }: { kind: string; status: string }) {
     </div>
   );
 }
-function CampaignThumbnail({ config, status, kind }: { config: any; status: string; kind?: string }) {
-  const mainStep = Array.isArray(config?.steps)
-    ? config.steps.find((s: any) => s.id === 'main')
-    : config?.steps?.main;
+type StepConfig = { id?: string; width?: number; height?: number; backgroundColor?: string; borderRadius?: number; elements?: Array<{ id: string; x?: number; y?: number; w?: number; h?: number; zIndex?: number; type?: string; content?: string; color?: string; fontSize?: number; fontFamily?: string; align?: string; backgroundColor?: string; borderRadius?: number; borderWidth?: number; borderColor?: string; padding?: number; extraProps?: { placeholder?: string }; opacity?: number }> };
+function CampaignThumbnail({ config, status, kind }: { config: Record<string, unknown>; status: string; kind?: string }) {
+  const mainStep = Array.isArray(config?.['steps'])
+    ? (config['steps'] as StepConfig[]).find((s) => s.id === 'main')
+    : (config?.['steps'] as Record<string, StepConfig> | undefined)?.['main'];
   
   if (!mainStep) {
     return <PopupPreview kind={kind ?? 'modal'} status={status} />;
@@ -105,8 +106,8 @@ function CampaignThumbnail({ config, status, kind }: { config: any; status: stri
   const availW = containerW - 40;
   const availH = containerH - 40;
 
-  const scaleX = availW / mainStep.width;
-  const scaleY = availH / mainStep.height;
+  const scaleX = availW / (mainStep.width ?? 300);
+  const scaleY = availH / (mainStep.height ?? 200);
   const scale = Math.min(scaleX, scaleY, 1);
 
   return (
@@ -136,7 +137,7 @@ function CampaignThumbnail({ config, status, kind }: { config: any; status: stri
         overflow: 'hidden',
         zIndex: 1,
       }}>
-        {mainStep.elements?.map((el: any) => (
+        {mainStep.elements?.map((el) => (
           <div
             key={el.id}
             style={{
@@ -149,12 +150,12 @@ function CampaignThumbnail({ config, status, kind }: { config: any; status: stri
             }}
           >
             {el.type === 'heading' && (
-              <h2 style={{ width: '100%', height: '100%', margin: 0, color: el.color, fontSize: `${el.fontSize || 22}px`, fontFamily: el.fontFamily, textAlign: el.align || 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', wordBreak: 'break-word', fontWeight: 800 }}>
+              <h2 style={{ width: '100%', height: '100%', margin: 0, color: el.color, fontSize: `${el.fontSize || 22}px`, fontFamily: el.fontFamily, textAlign: (el.align || 'center') as React.CSSProperties['textAlign'], display: 'flex', alignItems: 'center', justifyContent: 'center', wordBreak: 'break-word', fontWeight: 800 }}>
                 {el.content}
               </h2>
             )}
             {el.type === 'text' && (
-              <p style={{ width: '100%', height: '100%', margin: 0, color: el.color, fontSize: `${el.fontSize || 12}px`, fontFamily: el.fontFamily, textAlign: el.align || 'left', backgroundColor: el.backgroundColor || 'transparent', borderRadius: el.borderRadius ? `${el.borderRadius}px` : undefined, borderWidth: el.borderWidth ? `${el.borderWidth}px` : undefined, borderColor: el.borderColor, padding: el.padding ? `${el.padding}px` : undefined }}>
+              <p style={{ width: '100%', height: '100%', margin: 0, color: el.color, fontSize: `${el.fontSize || 12}px`, fontFamily: el.fontFamily, textAlign: (el.align || 'left') as React.CSSProperties['textAlign'], backgroundColor: el.backgroundColor || 'transparent', borderRadius: el.borderRadius ? `${el.borderRadius}px` : undefined, borderWidth: el.borderWidth ? `${el.borderWidth}px` : undefined, borderColor: el.borderColor, padding: el.padding ? `${el.padding}px` : undefined }}>
                 {el.content}
               </p>
             )}
@@ -209,28 +210,29 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
 
   const analyticsMap = useMemo<Record<string, CampaignStat>>(() => {
     const map: Record<string, CampaignStat> = {};
-    const rows = Array.isArray((analyticsResult as any)?.data) ? (analyticsResult as any).data : [];
+    const rows: CampaignStat[] = Array.isArray((analyticsResult as { data?: CampaignStat[] } | undefined)?.data) ? (analyticsResult as { data: CampaignStat[] }).data : [];
     for (const row of rows) map[row.campaignId] = row;
     return map;
   }, [analyticsResult]);
 
   const siteById = useMemo(() => {
-    const map: Record<string, any> = {};
-    for (const s of sitesData?.data ?? []) if (s?.id) map[s.id] = s;
+    const map: Record<string, { id: string; domain?: string }> = {};
+    for (const s of sitesData?.data ?? []) { const r = s as { id?: string; domain?: string }; if (r?.id) map[r.id] = r as { id: string; domain?: string }; }
     return map;
   }, [sitesData]);
 
   const rows = useMemo(() => {
     const raw = campaignsData?.data ?? [];
-    const filtered = raw.filter((c: any) => {
+    type CRow = { id: string; name: string; status?: string; createdAt?: string; config?: Record<string, unknown>; design?: Record<string, unknown>; kind?: string; siteId?: string };
+    const filtered = (raw as CRow[]).filter((c) => {
       const matchQ = c.name.toLowerCase().includes(deferredQuery.toLowerCase());
       const matchS = statusFilter === 'all' || c.status === statusFilter;
       return matchQ && matchS;
     });
     const sorted = [...filtered];
-    if (sortBy === 'name') sorted.sort((a: any, b: any) => a.name.localeCompare(b.name));
-    if (sortBy === 'ctr') sorted.sort((a: any, b: any) => (analyticsMap[b.id]?.ctr ?? 0) - (analyticsMap[a.id]?.ctr ?? 0));
-    if (sortBy === 'newest') sorted.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    if (sortBy === 'name') sorted.sort((a, b) => a.name.localeCompare(b.name));
+    if (sortBy === 'ctr') sorted.sort((a, b) => (analyticsMap[b.id]?.ctr ?? 0) - (analyticsMap[a.id]?.ctr ?? 0));
+    if (sortBy === 'newest') sorted.sort((a, b) => new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime());
     return sorted;
   }, [campaignsData, deferredQuery, statusFilter, sortBy, analyticsMap]);
 
@@ -322,7 +324,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
         <select
           className="input"
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as any)}
+          onChange={(e) => setSortBy(e.target.value as 'newest' | 'name' | 'ctr')}
           style={{ maxWidth: 140 }}
         >
           <option value="newest">Newest first</option>
@@ -373,9 +375,9 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {rows.map((c: any) => {
+          {rows.map((c) => {
             const stats = analyticsMap[c.id];
-            const site = siteById[c.siteId];
+            const site = c.siteId ? siteById[c.siteId] : undefined;
             const isMenuOpen = openMenuId === c.id;
 
             return (
@@ -401,7 +403,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                 }}
               >
                 {/* Popup preview thumbnail */}
-                <CampaignThumbnail config={c.design} status={c.status ?? 'draft'} kind={c.kind ?? 'modal'} />
+                <CampaignThumbnail config={c.design ?? {}} status={c.status ?? 'draft'} kind={c.kind ?? 'modal'} />
 
                 {/* Card body */}
                 <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -474,7 +476,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                       try {
                         sessionStorage.setItem(
                           `sp_campaign_${c.id}`,
-                          JSON.stringify({ name: c.name, kind: c.kind, config: (c as any).config ?? {} })
+                          JSON.stringify({ name: c.name, kind: c.kind, config: c.config ?? {} })
                         );
                       } catch {}
                       onNavigate(`/campaigns/${c.id}/design`);
@@ -488,7 +490,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                   </button>
 
                   <button
-                    onClick={() => handleToggleStatus(c.id, c.status)}
+                    onClick={() => handleToggleStatus(c.id, c.status ?? 'draft')}
                     className="btn btn-icon"
                     title={c.status === 'active' ? 'Pause campaign' : 'Activate campaign'}
                     style={{ color: c.status === 'active' ? 'var(--status-warning)' : 'var(--status-success)' }}

@@ -1,5 +1,4 @@
 import React from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { useOne, useApiUrl, useCustom, useCustomMutation } from '@refinedev/core';
 
 // Upgraded Canvas Designer Components
@@ -9,23 +8,38 @@ import Canvas from '../components/campaign-designer/Canvas';
 import SidebarRight from '../components/campaign-designer/SidebarRight';
 import InteractivePreview from '../components/campaign-designer/InteractivePreview';
 
-import { Campaign, CampaignElement, CampaignStep, ElementType, CampaignStepConfig } from '../components/campaign-designer/types';
+import { Campaign, CampaignElement, CampaignStep, ElementType, CampaignStepConfig, CanvasPosition } from '../components/campaign-designer/types';
 
 interface CampaignDesignProps {
   campaignId: string;
   onNavigate: (path: string) => void;
 }
 
+type TriggerRow = { type?: string; params?: Record<string, number> };
+type TargetingRow = { kind?: string; value?: Record<string, unknown> };
+type FrequencyData = { intervalDays?: number; frequency?: string };
+
 // Helper to bootstrap Campaign object from legacy flat fields or new steps config
 function bootstrapCampaign(
   campaignId: string,
   campaignName: string,
-  designData: any,
-  triggersData: any[] = [],
-  targetingData: any[] = [],
-  frequencyData: any = {}
+  designData: Record<string, unknown>,
+  triggersData: TriggerRow[] = [],
+  targetingData: TargetingRow[] = [],
+  frequencyData: FrequencyData = {}
 ): Campaign {
-  const config = designData?.config || {};
+  // Cast config to a loose shape — values are validated later by RLS/Zod on the API;
+  // here we only need to read optional legacy flat-config fields safely.
+  const config = (designData?.['config'] || {}) as Record<string, unknown> & {
+    steps?: { main?: { triggers?: Record<string, unknown> }; teaser?: Record<string, unknown>; success?: Record<string, unknown> };
+    schedule?: { startsAt?: string; endsAt?: string };
+    uiTriggers?: Record<string, unknown>;
+    headline?: string; subheadline?: string; bodyText?: string; textColor?: string;
+    accentColor?: string; backgroundColor?: string; borderRadius?: number;
+    borderColor?: string; borderWidth?: number; boxShadow?: string;
+    position?: string; teaserPosition?: string; animation?: string;
+    ctaText?: string; teaserHeadline?: string; successHeadline?: string; successBody?: string;
+  };
   
   let exitIntent = true;
   let scrollPercent = 30;
@@ -44,10 +58,10 @@ function bootstrapCampaign(
       if (t.type === 'dwell_time') timeDelaySeconds = t.params?.seconds || 5;
     });
   } else {
-    exitIntent = config.steps?.main?.triggers?.exitIntent ?? true;
-    scrollPercent = config.steps?.main?.triggers?.scrollPercent ?? 30;
-    inactivitySeconds = config.steps?.main?.triggers?.inactivitySeconds ?? 20;
-    timeDelaySeconds = config.steps?.main?.triggers?.timeDelaySeconds ?? 5;
+    exitIntent = (config.steps?.main?.triggers?.['exitIntent'] as boolean | undefined) ?? true;
+    scrollPercent = (config.steps?.main?.triggers?.['scrollPercent'] as number | undefined) ?? 30;
+    inactivitySeconds = (config.steps?.main?.triggers?.['inactivitySeconds'] as number | undefined) ?? 20;
+    timeDelaySeconds = (config.steps?.main?.triggers?.['timeDelaySeconds'] as number | undefined) ?? 5;
   }
 
   let deviceTargeting = 'all';
@@ -59,34 +73,34 @@ function bootstrapCampaign(
   let utmValue = '';
   let abTestPercent = 100;
   // Schedule lives in config.schedule (canonical) with a uiTriggers fallback.
-  const startsAt: string = config.schedule?.startsAt ?? config.uiTriggers?.startsAt ?? '';
-  const endsAt: string = config.schedule?.endsAt ?? config.uiTriggers?.endsAt ?? '';
+  const startsAt: string = config.schedule?.startsAt ?? (config.uiTriggers?.['startsAt'] as string | undefined) ?? '';
+  const endsAt: string = config.schedule?.endsAt ?? (config.uiTriggers?.['endsAt'] as string | undefined) ?? '';
 
   if (targetingData.length > 0) {
     targetingData.forEach((t) => {
-      if (t.kind === 'device') deviceTargeting = t.value?.device || 'all';
-      if (t.kind === 'returning_visitor') newVisitorOnly = t.value?.returning === false;
-      if (t.kind === 'url_contains') pageTargeting = t.value?.pattern || '*';
-      if (t.kind === 'geo') geoTargeting = t.value?.country || 'All Countries';
-      if (t.kind === 'session_page_views') sessionPageCount = t.value?.count || 0;
+      if (t.kind === 'device') deviceTargeting = (t.value?.['device'] as string | undefined) || 'all';
+      if (t.kind === 'returning_visitor') newVisitorOnly = t.value?.['returning'] === false;
+      if (t.kind === 'url_contains') pageTargeting = (t.value?.['pattern'] as string | undefined) || '*';
+      if (t.kind === 'geo') geoTargeting = (t.value?.['country'] as string | undefined) || 'All Countries';
+      if (t.kind === 'session_page_views') sessionPageCount = (t.value?.['count'] as number | undefined) || 0;
       if (t.kind === 'utm') {
-        utmParam = t.value?.param || 'utm_source';
-        utmValue = t.value?.value ?? t.value?.source ?? ''; // tolerate legacy { source }
+        utmParam = (t.value?.['param'] as string | undefined) || 'utm_source';
+        utmValue = (t.value?.['value'] as string | undefined) ?? (t.value?.['source'] as string | undefined) ?? ''; // tolerate legacy { source }
       }
-      if (t.kind === 'ab_test') abTestPercent = t.value?.percent || 100;
+      if (t.kind === 'ab_test') abTestPercent = (t.value?.['percent'] as number | undefined) || 100;
     });
   } else {
-    deviceTargeting = config.steps?.main?.triggers?.deviceTargeting ?? 'all';
-    newVisitorOnly = config.steps?.main?.triggers?.newVisitorOnly ?? false;
-    pageTargeting = config.steps?.main?.triggers?.pageTargeting ?? '*';
-    geoTargeting = config.steps?.main?.triggers?.geoTargeting ?? 'All Countries';
-    sessionPageCount = config.steps?.main?.triggers?.sessionPageCount ?? 0;
-    utmParam = config.steps?.main?.triggers?.utmParam ?? 'utm_source';
-    utmValue = config.steps?.main?.triggers?.utmValue ?? config.steps?.main?.triggers?.utmSource ?? '';
-    abTestPercent = config.steps?.main?.triggers?.abTestPercent ?? 100;
+    deviceTargeting = (config.steps?.main?.triggers?.['deviceTargeting'] as string | undefined) ?? 'all';
+    newVisitorOnly = (config.steps?.main?.triggers?.['newVisitorOnly'] as boolean | undefined) ?? false;
+    pageTargeting = (config.steps?.main?.triggers?.['pageTargeting'] as string | undefined) ?? '*';
+    geoTargeting = (config.steps?.main?.triggers?.['geoTargeting'] as string | undefined) ?? 'All Countries';
+    sessionPageCount = (config.steps?.main?.triggers?.['sessionPageCount'] as number | undefined) ?? 0;
+    utmParam = (config.steps?.main?.triggers?.['utmParam'] as string | undefined) ?? 'utm_source';
+    utmValue = (config.steps?.main?.triggers?.['utmValue'] as string | undefined) ?? (config.steps?.main?.triggers?.['utmSource'] as string | undefined) ?? '';
+    abTestPercent = (config.steps?.main?.triggers?.['abTestPercent'] as number | undefined) ?? 100;
   }
 
-  const frequencyCapDays = frequencyData?.intervalDays || (frequencyData?.frequency ? (frequencyData.frequency === 'always' ? 0 : 7) : (config.steps?.main?.triggers?.frequencyCapDays ?? 7));
+  const frequencyCapDays = frequencyData?.intervalDays || (frequencyData?.frequency ? (frequencyData.frequency === 'always' ? 0 : 7) : ((config.steps?.main?.triggers?.['frequencyCapDays'] as number | undefined) ?? 7));
 
   // Build the canonical sidebar trigger state. Start from the values derived from the
   // normalized triggers/targeting tables, restore the Display Frequency dropdown from the
@@ -112,9 +126,9 @@ function bootstrapCampaign(
     frequency: (frequencyData?.frequency as Campaign['triggers']['frequency']) ?? 'once_per_session',
   };
   if (config.uiTriggers && typeof config.uiTriggers === 'object') {
-    triggers = { ...triggers, ...config.uiTriggers };
+    triggers = { ...triggers, ...(config.uiTriggers as Partial<Campaign['triggers']>) };
     // The frequency rule table stays authoritative for these two (also written on save).
-    if (frequencyData?.frequency) triggers.frequency = frequencyData.frequency;
+    if (frequencyData?.frequency) triggers.frequency = frequencyData.frequency as 'always' | 'once_per_session' | 'once_per_day' | 'once_per_visitor';
     if (frequencyData?.intervalDays) triggers.frequencyCapDays = frequencyData.intervalDays;
   }
 
@@ -124,7 +138,7 @@ function bootstrapCampaign(
       name: campaignName,
       category: 'Countdown Campaigns',
       isActive: true,
-      steps: config.steps,
+      steps: config.steps as unknown as Campaign['steps'],
       triggers,
       conversions: 0,
       views: 0,
@@ -223,8 +237,8 @@ function bootstrapCampaign(
   });
 
   const mainStep: CampaignStepConfig = {
-    popupType: (designData?.kind as any) || 'modal',
-    position: config.position || 'center',
+    popupType: ((designData?.['kind'] as string | undefined) || 'modal') as CampaignStepConfig['popupType'],
+    position: (config.position || 'center') as CanvasPosition,
     width: 600,
     height: 380,
     backgroundColor: config.backgroundColor || '#FFFFFF',
@@ -239,7 +253,7 @@ function bootstrapCampaign(
 
   const teaserStep: CampaignStepConfig = {
     popupType: 'floating',
-    position: config.teaserPosition || 'bottom-right',
+    position: (config.teaserPosition || 'bottom-right') as CanvasPosition,
     width: 140,
     height: 60,
     backgroundColor: '#000000',
@@ -394,13 +408,13 @@ function mapCampaignToDesign(campaign: Campaign) {
 }
 
 export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNavigate }) => {
-  const { data: campaignData, isLoading: isCampaignLoading, isError: isCampaignError } = useOne({ resource: 'campaigns', id: campaignId });
+  const { data: campaignData, isLoading: isCampaignLoading, isError: _isCampaignError } = useOne({ resource: 'campaigns', id: campaignId });
   const apiUrl = useApiUrl();
   // A/B variant editing: when ?variant=<id> is present this builder edits that variant's design
   // (loaded from / saved to /variants/:id) instead of the campaign's base design. Triggers/
   // targeting/frequency are campaign-level and are not touched in variant mode.
   const variantId = React.useMemo(() => new URLSearchParams(window.location.search).get('variant') || undefined, []);
-  const { data: designData, isLoading: isDesignLoading, isError: isDesignError } = useCustom({
+  const { data: designData, isLoading: isDesignLoading, isError: _isDesignError } = useCustom({
     url: variantId ? `${apiUrl}/variants/${variantId}` : `${apiUrl}/campaigns/${campaignId}/design`,
     method: 'get',
   });
@@ -427,7 +441,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
   // Undo / Redo History States
   const [history, setHistory] = React.useState<CampaignElement[][]>([]);
   const [historyIndex, setHistoryIndex] = React.useState<number>(-1);
-  const [isSaving, setIsSaving] = React.useState(false);
+  const [_isSaving, setIsSaving] = React.useState(false);
   const [toast, setToast] = React.useState<string | null>(null);
 
   // Track whether the API data has been loaded yet. A ref (not state) so changes to it
@@ -447,16 +461,16 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     apiLoadedRef.current = true;
     const camp = bootstrapCampaign(
       campaignId,
-      campaignData?.data?.name || 'New Campaign',
-      designData?.data || {},
-      (triggersData?.data as any[]) || [],
-      (targetingData?.data as any[]) || [],
-      (frequencyData?.data as any) || {}
+      (campaignData?.data as { name?: string } | undefined)?.name || 'New Campaign',
+      (designData?.data as Record<string, unknown> | undefined) || {},
+      (triggersData?.data as TriggerRow[]) || [],
+      (targetingData?.data as TargetingRow[]) || [],
+      (frequencyData?.data as FrequencyData) || {}
     );
     setCampaign(camp);
     setHistory([JSON.parse(JSON.stringify(camp.steps.main.elements))]);
     setHistoryIndex(0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [campaignData, designData, triggersData, targetingData, frequencyData, isCampaignLoading, isDesignLoading, isTriggersLoading, isTargetingLoading, isFrequencyLoading, campaignId]);
 
   // Fallback: if API hasn't responded within 8s, load from sessionStorage cache so the
@@ -466,7 +480,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     const timer = setTimeout(() => {
       if (apiLoadedRef.current) return; // real data already arrived
       let cachedName = 'New Campaign';
-      let cachedDesign: any = {};
+      let cachedDesign: Record<string, unknown> = {};
       try {
         const raw = sessionStorage.getItem(`sp_campaign_${campaignId}`);
         if (raw) {
@@ -481,7 +495,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       setHistoryIndex(0);
     }, 8000);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [campaignId]);
 
   const toastMessage = (msg: string) => {
@@ -528,32 +542,32 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     }
   };
 
-  const handleUpdateStepConfig = (keyOrObj: string | Record<string, any>, value?: any) => {
+  const handleUpdateStepConfig = (keyOrObj: string | Record<string, unknown>, value?: unknown) => {
     if (!campaign) return;
 
     setCampaign((prev) => {
       if (!prev) return prev;
       const updatedSteps = { ...prev.steps };
-      let newStepConfig = { ...updatedSteps[activeStep] } as any;
+      let newStepConfig = { ...updatedSteps[activeStep] } as Record<string, unknown>;
 
       if (typeof keyOrObj === 'string') {
-        newStepConfig[keyOrObj as any] = value;
+        newStepConfig[keyOrObj] = value;
       } else {
         newStepConfig = { ...newStepConfig, ...keyOrObj };
       }
 
-      updatedSteps[activeStep] = newStepConfig;
+      updatedSteps[activeStep] = newStepConfig as unknown as CampaignStepConfig;
       return { ...prev, steps: updatedSteps };
     });
 
     if (typeof keyOrObj === 'string') {
-      if (keyOrObj === 'elements') pushHistoryState(value);
+      if (keyOrObj === 'elements') pushHistoryState(value as CampaignElement[]);
     } else if ('elements' in keyOrObj) {
-      pushHistoryState(keyOrObj.elements);
+      pushHistoryState(keyOrObj.elements as CampaignElement[]);
     }
   };
 
-  const handleUpdateTriggers = (key: string, value: any) => {
+  const handleUpdateTriggers = (key: string, value: unknown) => {
     // Functional update — reading `campaign` from the closure would clobber rapid
     // successive trigger changes (each handler would start from the same stale state,
     // so only the last write survived). This keeps every sidebar change.
@@ -646,7 +660,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     toastMessage(`➕ Added visual ${type} block`);
   };
 
-  const handleUpdateElement = (id: string, keyOrObj: string | Record<string, any>, value?: any) => {
+  const handleUpdateElement = (id: string, keyOrObj: string | Record<string, unknown>, value?: unknown) => {
     if (!campaign) return;
     const stepConfig = campaign.steps[activeStep];
     const updated = stepConfig.elements.map(item => {
@@ -688,7 +702,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     const designPayload = mapCampaignToDesign(campaign);
     // Preserve existing affiliate slots — mapCampaignToDesign always returns [] because
     // affiliate slots live on the design record, not on the Campaign canvas object.
-    designPayload.affiliateSlots = (designData?.data as any)?.affiliateSlots ?? [];
+    designPayload.affiliateSlots = ((designData?.data as { affiliateSlots?: unknown[] } | undefined)?.affiliateSlots ?? []) as typeof designPayload.affiliateSlots;
 
     // A/B variant mode: save only the design to the variant; triggers/targeting/frequency are
     // campaign-level and shared across variants, so they're left untouched here.
@@ -799,7 +813,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
         onStepChange={(step) => {
           setActiveStep(step);
           setSelectedElementId(null);
-          setHistory([JSON.parse(JSON.stringify((campaign.steps as any)[step].elements))]);
+          setHistory([JSON.parse(JSON.stringify(campaign.steps[step as CampaignStep].elements))]);
           setHistoryIndex(0);
         }}
         onDeviceModeChange={setDeviceMode}

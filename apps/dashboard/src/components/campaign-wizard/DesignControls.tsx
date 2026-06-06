@@ -5,7 +5,7 @@ import {
   Type, Zap, Image as ImageIcon, Clock, Ticket, FormInput,
   ArrowUp, ArrowDown,
 } from 'lucide-react';
-import { FormDataShape } from '../../types/campaign';
+import { FormDataShape, DraftBuilderElement } from '../../types/campaign';
 
 interface DesignControlsProps {
   formData: FormDataShape;
@@ -83,10 +83,12 @@ type TabId = typeof TABS[number]['id'];
 export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFormData }) => {
   const [activeTab, setActiveTab] = useState<TabId>('elements');
 
-  const updateBlock = (idx: number, updates: any) => {
+  const updateBlock = (idx: number, updates: Partial<DraftBuilderElement>) => {
     if (!formData.elements) return;
     const next = [...formData.elements];
-    next[idx] = { ...next[idx], ...updates };
+    const current = next[idx];
+    if (!current) return;
+    next[idx] = { ...current, ...updates } as DraftBuilderElement;
     setFormData(prev => ({ ...prev, elements: next }));
   };
 
@@ -102,12 +104,12 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
     const next = [...formData.elements];
     const target = dir === 'up' ? idx - 1 : idx + 1;
     if (target < 0 || target >= next.length) return;
-    [next[idx], next[target]] = [next[target], next[idx]];
+    [next[idx], next[target]] = [next[target]!, next[idx]!];
     setFormData(prev => ({ ...prev, elements: next }));
   };
 
   const addBlock = (type: string) => {
-    let props: any;
+    let props: Record<string, unknown> | undefined;
     if (type === 'scratch_card') props = { prizeCode: 'LUCKY25', prizeLabel: '25% OFF YOUR ORDER!', overlayText: 'Scratch to Reveal ⚡' };
     else if (type === 'wheel') props = { slices: [{ label: '10% OFF', value: 'SAVE10', color: '#ec4899', isWin: true }, { label: 'Try Again', value: 'LOSE', color: '#1e1b4b', isWin: false }, { label: 'Free Ship', value: 'FREESHIP', color: '#6366f1', isWin: true }, { label: 'Try Again', value: 'LOSE', color: '#312e81', isWin: false }, { label: '50% OFF', value: 'SAVE50', color: '#f59e0b', isWin: true }, { label: 'No Luck', value: 'LOSE', color: '#4338ca', isWin: false }] };
     else if (type === 'form') props = { fields: 'email', placeholder: 'Enter your email…', buttonColor: '#18181b' };
@@ -129,8 +131,8 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
   };
 
   const iFocus = {
-    onFocus: (e: React.FocusEvent<any>) => { e.currentTarget.style.borderColor = Z.zinc900; },
-    onBlur:  (e: React.FocusEvent<any>) => { e.currentTarget.style.borderColor = Z.zinc200; },
+    onFocus: (e: React.FocusEvent<HTMLElement>) => { e.currentTarget.style.borderColor = Z.zinc900; },
+    onBlur:  (e: React.FocusEvent<HTMLElement>) => { e.currentTarget.style.borderColor = Z.zinc200; },
   };
 
   const blockCount = formData.elements?.length ?? 0;
@@ -328,7 +330,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
             {formData.showCloseButton && (
               <div>
                 <Label>Position</Label>
-                <select value={formData.closeButtonPosition} onChange={e => setFormData(p => ({ ...p, closeButtonPosition: e.target.value as any }))} style={inputS} {...iFocus}>
+                <select value={formData.closeButtonPosition} onChange={e => setFormData(p => ({ ...p, closeButtonPosition: e.target.value as FormDataShape['closeButtonPosition'] }))} style={inputS} {...iFocus}>
                   <option value="top-right">Top Right</option>
                   <option value="top-left">Top Left</option>
                 </select>
@@ -348,7 +350,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
                 <span style={{ fontSize: 12, fontWeight: 600, color: Z.zinc900 }}>Trigger Event</span>
               </div>
               <Label>When to show</Label>
-              <select value={formData.triggerType} onChange={e => setFormData(p => ({ ...p, triggerType: e.target.value as any }))} style={inputS} {...iFocus}>
+              <select value={formData.triggerType} onChange={e => setFormData(p => ({ ...p, triggerType: e.target.value as FormDataShape['triggerType'] }))} style={inputS} {...iFocus}>
                 <option value="scroll_pct">Scroll Depth</option>
                 <option value="dwell_time">Time Delay</option>
                 <option value="exit_intent">Exit Intent</option>
@@ -402,7 +404,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
 
             <div>
               <Label>Size</Label>
-              <select value={formData.size} onChange={e => setFormData(p => ({ ...p, size: e.target.value as any }))} style={inputS} {...iFocus}>
+              <select value={formData.size} onChange={e => setFormData(p => ({ ...p, size: e.target.value as FormDataShape['size'] }))} style={inputS} {...iFocus}>
                 <option value="sm">Small</option>
                 <option value="md">Medium</option>
                 <option value="lg">Large</option>
@@ -411,7 +413,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
 
             <div>
               <Label>Animation</Label>
-              <select value={formData.animation} onChange={e => setFormData(p => ({ ...p, animation: e.target.value as any }))} style={inputS} {...iFocus}>
+              <select value={formData.animation} onChange={e => setFormData(p => ({ ...p, animation: e.target.value as FormDataShape['animation'] }))} style={inputS} {...iFocus}>
                 <option value="fade">Fade In</option>
                 <option value="slide_up">Slide Up</option>
                 <option value="slide_down">Slide Down</option>
@@ -438,7 +440,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
 
             <Divider />
             <SectionTitle>Display Frequency</SectionTitle>
-            <select value={formData.frequency} onChange={e => setFormData(p => ({ ...p, frequency: e.target.value as any }))} style={inputS} {...iFocus}>
+            <select value={formData.frequency} onChange={e => setFormData(p => ({ ...p, frequency: e.target.value as FormDataShape['frequency'] }))} style={inputS} {...iFocus}>
               <option value="always">Every page view</option>
               <option value="once_per_session">Once per session</option>
               <option value="once_per_day">Once per day</option>
@@ -479,7 +481,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {formData.elements?.map((block: any, idx: number) => (
+                  {formData.elements?.map((block, idx) => (
                     <div key={block.id || idx} style={{ padding: '10px 12px', border: `1px solid ${Z.zinc200}`, borderRadius: 8, background: Z.zinc50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                         <GripVertical style={{ width: 14, height: 14, color: Z.zinc300, flexShrink: 0, cursor: 'grab' }} />
@@ -511,7 +513,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
                 {formData.elements && formData.elements.length > 0 && (
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: Z.zinc400, fontFamily: 'monospace' }}>Block Editors</div>
-                    {formData.elements.map((block: any, idx: number) => {
+                    {formData.elements.map((block, idx) => {
                       if (block.type === 'text' || block.type === 'button' || block.type === 'coupon') {
                         return (
                           <div key={block.id || idx} style={{ padding: '10px 12px', border: `1px solid ${Z.zinc200}`, borderRadius: 8, background: Z.white }}>
@@ -577,7 +579,7 @@ export const DesignControls: React.FC<DesignControlsProps> = ({ formData, setFor
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div><Label>Teaser headline</Label><input type="text" value={formData.teaserHeadline || ''} onChange={e => setFormData(p => ({ ...p, teaserHeadline: e.target.value }))} placeholder="⚡ Click here!" style={inputS} {...iFocus} /></div>
                   <div><Label>Teaser position</Label>
-                    <select value={formData.teaserPosition || 'bottom-right'} onChange={e => setFormData(p => ({ ...p, teaserPosition: e.target.value as any }))} style={inputS} {...iFocus}>
+                    <select value={formData.teaserPosition || 'bottom-right'} onChange={e => setFormData(p => ({ ...p, teaserPosition: e.target.value as 'bottom-left' | 'bottom-right' }))} style={inputS} {...iFocus}>
                       <option value="bottom-right">Bottom Right</option>
                       <option value="bottom-left">Bottom Left</option>
                     </select>

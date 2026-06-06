@@ -36,7 +36,7 @@ export const ActionsBuilder: React.FC<ActionsBuilderProps> = ({ formData, setFor
           </h3>
           <select 
             value={formData.afterSubmitAction || 'thank_you_view'}
-            onChange={e => setFormData(prev => ({ ...prev, afterSubmitAction: e.target.value as any }))}
+            onChange={e => setFormData(prev => ({ ...prev, afterSubmitAction: e.target.value as 'thank_you_view' | 'redirect_url' | 'none' }))}
             className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
           >
             <option value="thank_you_view">Show 'Thank You' view</option>
@@ -64,7 +64,7 @@ export const ActionsBuilder: React.FC<ActionsBuilderProps> = ({ formData, setFor
           </h3>
           <select 
             value={formData.afterSubmitEffect || 'none'}
-            onChange={e => setFormData(prev => ({ ...prev, afterSubmitEffect: e.target.value as any }))}
+            onChange={e => setFormData(prev => ({ ...prev, afterSubmitEffect: e.target.value as 'confetti' | 'none' }))}
             className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
           >
             <option value="none">None</option>

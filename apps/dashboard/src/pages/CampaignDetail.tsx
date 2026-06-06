@@ -7,14 +7,14 @@ import {
 import { useApiUrl, useCustom, useCustomMutation, useList, useOne } from '@refinedev/core';
 import { ABPanel } from '../components/ABPanel';
 import InteractivePreview from '../components/campaign-designer/InteractivePreview';
-import type { Campaign } from '../components/campaign-designer/types';
+import type { Campaign, CampaignStepConfig } from '../components/campaign-designer/types';
 
 interface CampaignDetailProps {
   campaignId: string;
   onNavigate: (path: string) => void;
 }
 
-type RuleItem = { id: string; type?: string; params?: any; kind?: string; operator?: string; value?: any; frequency?: string };
+type RuleItem = { id: string; type?: string; params?: Record<string, number>; kind?: string; operator?: string; value?: Record<string, unknown>; frequency?: string; intervalDays?: number };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ function mapApiTriggers(apiTriggers: RuleItem[], freq: RuleItem | null): Campaig
     utmValue: '',
     startsAt: '',
     endsAt: '',
-    frequency: (freq?.frequency as any) ?? 'once_per_session',
+    frequency: (freq?.frequency as Campaign['triggers']['frequency']) ?? 'once_per_session',
   };
   for (const rule of apiTriggers) {
     if (rule.type === 'scroll_pct')         t.scrollPercent        = rule.params?.pct ?? rule.params?.scroll_pct ?? 50;
@@ -67,8 +67,8 @@ type FlatSettings = {
 function mapApiToFlat(apiTriggers: RuleItem[], apiTargeting: RuleItem[], freq: RuleItem | null): FlatSettings {
   const f: FlatSettings = {
     exitIntent: false, scrollPercent: 0, timeDelaySeconds: 0, inactivitySeconds: 0,
-    frequency: (freq?.frequency as any) ?? 'once_per_session',
-    frequencyCapDays: (freq as any)?.intervalDays ?? 7,
+    frequency: (freq?.frequency as FlatSettings['frequency']) ?? 'once_per_session',
+    frequencyCapDays: freq?.intervalDays ?? 7,
     deviceTargeting: 'all', pageTargeting: '', geoTargeting: 'All Countries',
     newVisitorOnly: false, sessionPageCount: 0, utmParam: 'utm_source', utmValue: '',
   };
@@ -79,7 +79,7 @@ function mapApiToFlat(apiTriggers: RuleItem[], apiTargeting: RuleItem[], freq: R
     if (r.type === 'inactivity')       f.inactivitySeconds = r.params?.seconds ?? 30;
   }
   for (const r of apiTargeting) {
-    if (r.kind === 'device')             f.deviceTargeting = (r.value?.device as any) ?? 'all';
+    if (r.kind === 'device')             f.deviceTargeting = (r.value?.device as FlatSettings['deviceTargeting']) ?? 'all';
     if (r.kind === 'returning_visitor')  f.newVisitorOnly  = r.value?.returning === false;
     if (r.kind === 'url_contains')       f.pageTargeting   = (r.value?.pattern as string) ?? '';
     if (r.kind === 'geo')                f.geoTargeting    = (r.value?.country as string) ?? 'All Countries';
@@ -91,11 +91,13 @@ function mapApiToFlat(apiTriggers: RuleItem[], apiTargeting: RuleItem[], freq: R
 
 // Build a minimal Campaign object from design config + API triggers so
 // InteractivePreview can render & simulate without the wizard's Campaign type.
-function buildPreviewCampaign(campaignId: string, name: string, design: any, triggers: Campaign['triggers']): Campaign {
-  const cfg = design?.config ?? {};
-  const mainStep = Array.isArray(cfg.steps) ? cfg.steps.find((s: any) => s.id === 'main') : cfg.steps?.main;
-  const teaserStep = Array.isArray(cfg.steps) ? cfg.steps.find((s: any) => s.id === 'teaser') : cfg.steps?.teaser;
-  const successStep = Array.isArray(cfg.steps) ? cfg.steps.find((s: any) => s.id === 'success') : cfg.steps?.success;
+type PreviewConfig = { backgroundColor?: string; borderRadius?: number; animation?: string; steps?: unknown };
+function buildPreviewCampaign(campaignId: string, name: string, design: Record<string, unknown>, triggers: Campaign['triggers']): Campaign {
+  const cfg = (design?.['config'] ?? {}) as PreviewConfig;
+  const stepsArr = cfg.steps as Array<{ id: string }> | Record<string, unknown> | undefined;
+  const mainStep = Array.isArray(stepsArr) ? stepsArr.find((s) => s.id === 'main') : (stepsArr as Record<string, unknown> | undefined)?.['main'];
+  const teaserStep = Array.isArray(stepsArr) ? stepsArr.find((s) => s.id === 'teaser') : (stepsArr as Record<string, unknown> | undefined)?.['teaser'];
+  const successStep = Array.isArray(stepsArr) ? stepsArr.find((s) => s.id === 'success') : (stepsArr as Record<string, unknown> | undefined)?.['success'];
 
   const fallbackMain = {
     popupType: 'modal' as const,
@@ -129,9 +131,9 @@ function buildPreviewCampaign(campaignId: string, name: string, design: any, tri
     category: 'Campaign',
     isActive: true,
     steps: {
-      teaser:  teaserStep  ?? emptyStep,
-      main:    mainStep    ?? fallbackMain,
-      success: successStep ?? emptyStep,
+      teaser:  (teaserStep  ?? emptyStep) as CampaignStepConfig,
+      main:    (mainStep    ?? fallbackMain) as CampaignStepConfig,
+      success: (successStep ?? emptyStep) as CampaignStepConfig,
     },
     triggers,
     conversions: 0,
@@ -189,14 +191,15 @@ function CouponsPanel({ campaignId, apiUrl }: { campaignId: string; apiUrl: stri
   const [copied, setCopied] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<string | null>(null);
 
-  const coupons: any[] = (couponsRes as any)?.data ?? [];
+  type CouponItem = { id: string; code: string; discountPct?: number; uses?: number; maxUses?: number | null; expiresAt?: string };
+  const coupons = ((couponsRes as { data?: CouponItem[] } | undefined)?.data ?? []) as CouponItem[];
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2800); };
 
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const body: any = { campaignId, count, prefix };
-      if (discountPct !== '') body.discountPct = discountPct;
+      const body: Record<string, unknown> = { campaignId, count, prefix };
+      if (discountPct !== '') body['discountPct'] = discountPct;
       await customMutate({ url: `${apiUrl}/coupons/generate`, method: 'post', values: body });
       await refetch();
       showToast(`Generated ${count} coupon${count !== 1 ? 's' : ''}.`);
@@ -253,7 +256,7 @@ function CouponsPanel({ campaignId, apiUrl }: { campaignId: string; apiUrl: stri
         <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>No codes yet — generate some above.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {coupons.map((c: any) => (
+          {coupons.map((c) => (
             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--bg-raised)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
               <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)', flex: 1, letterSpacing: '0.06em' }}>{c.code}</code>
               {c.discountPct && <span className="badge badge-neutral" style={{ fontSize: 9 }}>{c.discountPct}% off</span>}
@@ -282,11 +285,11 @@ function CouponsPanel({ campaignId, apiUrl }: { campaignId: string; apiUrl: stri
 }
 
 // ── Spin Wheel config panel ───────────────────────────────────────────────────
-function SpinWheelPanel({ campaignId, design, apiUrl, onDesignSaved }: { campaignId: string; design: any; apiUrl: string; onDesignSaved: () => void }) {
-  const cfg = design?.config ?? {};
+function SpinWheelPanel({ campaignId, design, apiUrl, onDesignSaved }: { campaignId: string; design: Record<string, unknown>; apiUrl: string; onDesignSaved: () => void }) {
+  const cfg = (design?.config ?? {}) as { slices?: Array<{ label?: string; color?: string }>; kind?: string; [key: string]: unknown };
   const COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#f97316'];
-  const initSlices = (cfg.slices ?? []).map((s: any, i: number) => ({ label: s.label || '', color: s.color || COLORS[i % COLORS.length] }));
-  while (initSlices.length < 6) initSlices.push({ label: '', color: COLORS[initSlices.length % COLORS.length] });
+  const initSlices = (cfg.slices ?? []).map((s, i) => ({ label: s.label || '', color: s.color || COLORS[i % COLORS.length] || '#6366f1' }));
+  while (initSlices.length < 6) initSlices.push({ label: '', color: COLORS[initSlices.length % COLORS.length] || '#6366f1' });
 
   const [slices, setSlices] = React.useState<{ label: string; color: string }[]>(initSlices);
   const [saving, setSaving] = React.useState(false);
@@ -306,7 +309,7 @@ function SpinWheelPanel({ campaignId, design, apiUrl, onDesignSaved }: { campaig
       await customMutate({
         url: `${apiUrl}/campaigns/${campaignId}/design`,
         method: 'put',
-        values: { kind: 'spin_wheel', config: newConfig, affiliate_slots: design?.affiliateSlots ?? [] },
+        values: { kind: 'spin_wheel', config: newConfig, affiliate_slots: (design?.['affiliateSlots'] as unknown[]) ?? [] },
       });
       showToast('Wheel saved!');
       onDesignSaved();
@@ -481,7 +484,7 @@ function TriggersTargetingPanel({
 
           <div>
             <label style={labelStyle}>Device</label>
-            <select className="input" value={s.deviceTargeting} onChange={e => set('deviceTargeting', e.target.value as any)} style={{ width: '100%', fontSize: 12 }}>
+            <select className="input" value={s.deviceTargeting} onChange={e => set('deviceTargeting', e.target.value as FlatSettings['deviceTargeting'])} style={{ width: '100%', fontSize: 12 }}>
               <option value="all">All devices</option>
               <option value="desktop">Desktop only</option>
               <option value="mobile">Mobile only</option>
@@ -514,7 +517,7 @@ function TriggersTargetingPanel({
 
           <div>
             <label style={labelStyle}>Display frequency</label>
-            <select className="input" value={s.frequency} onChange={e => set('frequency', e.target.value as any)} style={{ width: '100%', fontSize: 12 }}>
+            <select className="input" value={s.frequency} onChange={e => set('frequency', e.target.value as FlatSettings['frequency'])} style={{ width: '100%', fontSize: 12 }}>
               <option value="always">Always</option>
               <option value="once_per_session">Once per session</option>
               <option value="once_per_day">Once per day</option>
@@ -575,17 +578,28 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
 
   const [showSimulation, setShowSimulation] = React.useState(false);
 
-  const analytics: any[] = (analyticsRes as any)?.data ?? [];
-  const triggers: RuleItem[] = (triggersRes as any)?.data ?? [];
-  const targeting: RuleItem[] = (targetingRes as any)?.data ?? [];
-  const frequency: RuleItem | null = (frequencyRes as any)?.data ?? null;
-  const design: any = (designRes as any)?.data ?? null;
-  const diagnose: any | null = (diagnoseRes as any)?.data ?? null;
-  const liveEvents: any[] = (liveEventsRes as any)?.data ?? [];
+  type ApiResult<T> = { data?: T } | undefined;
+  // Wrap in useMemo so hook deps receive a stable reference instead of a new array/null on every render
+  const analytics = React.useMemo(
+    () => (analyticsRes as ApiResult<Array<{ eventType: string; count: number }>>)?.data ?? [],
+    [analyticsRes],
+  );
+  const triggers: RuleItem[] = React.useMemo(
+    () => (triggersRes as ApiResult<RuleItem[]>)?.data ?? [],
+    [triggersRes],
+  );
+  const targeting: RuleItem[] = ((targetingRes as ApiResult<RuleItem[]>)?.data ?? []);
+  const frequency: RuleItem | null = ((frequencyRes as ApiResult<RuleItem>)?.data ?? null);
+  const design = ((designRes as ApiResult<Record<string, unknown>>)?.data ?? null);
+  type DiagnoseData = { rulesEvaluated?: number; fired?: number; blocked?: number; topBlockedReasons?: Array<{ reason: string; count: number }> };
+  const diagnose = ((diagnoseRes as ApiResult<DiagnoseData>)?.data ?? null);
+  type LiveEvent = { id: string; ts?: string; eventType?: string; domain?: string; visitorId?: string };
+  const liveEvents = ((liveEventsRes as ApiResult<LiveEvent[]>)?.data ?? []);
 
-  const campaign = campaignData?.data as any;
-  const site = sitesData?.data?.find((s: any) => s.id === campaign?.siteId);
-  const designKind: string = design?.kind ?? 'modal';
+  type CampaignRecord = { id: string; name: string; siteId?: string; status?: string; createdAt?: string; kind?: string };
+  const campaign = campaignData?.data as CampaignRecord | undefined;
+  const site = sitesData?.data?.find((s) => (s as { id?: string }).id === campaign?.siteId) as { domain?: string } | undefined;
+  const designKind: string = (design?.['kind'] as string | undefined) ?? 'modal';
   const isSpinWheel = designKind === 'spin_wheel';
 
   const stats = React.useMemo(() => {
@@ -754,7 +768,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { label: 'Type',            value: isSpinWheel ? 'Spin to Win' : (design?.kind ?? 'modal') },
+              { label: 'Type',            value: isSpinWheel ? 'Spin to Win' : ((design?.['kind'] as string | undefined) ?? 'modal') },
               { label: 'Trigger count',   value: triggers.length },
               { label: 'Targeting rules', value: targeting.length },
               { label: 'Frequency cap',   value: frequency?.frequency ?? 'once_per_session' },
@@ -804,7 +818,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
               {(diagnose.topBlockedReasons ?? []).length > 0 && (
                 <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '10px 12px', marginTop: 4 }}>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Top blocked reasons</div>
-                  {diagnose.topBlockedReasons.map((r: any) => (
+                  {diagnose.topBlockedReasons?.map((r) => (
                     <div key={r.reason} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 3 }}>
                       <span>{r.reason}</span>
                       <span style={{ fontFamily: 'var(--font-mono)' }}>{r.count}</span>
@@ -826,7 +840,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
             <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No recent events for this campaign.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {liveEvents.map((evt: any) => (
+              {liveEvents.map((evt) => (
                 <div key={evt.id} style={{ display: 'flex', gap: 8, padding: '4px 0', borderBottom: '1px solid var(--border-subtle)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                   <span style={{ color: 'var(--text-muted)', minWidth: 60 }}>
                     {evt.ts ? new Date(evt.ts).toLocaleTimeString('en', { hour12: false }) : '—'}

@@ -1,16 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  X, 
-  Sparkles, 
-  HelpCircle, 
-  Move, 
-  Scale, 
-  Maximize2, 
-  Star, 
-  QrCode, 
-  Timer, 
-  Image as ImageIcon,
+import { motion, type Variants } from 'motion/react';
+import {
+  Maximize2,
+  Star,
+  QrCode,
   RotateCw,
   Trash2,
   Copy,
@@ -18,8 +11,6 @@ import {
   ArrowDown,
   Lock,
   Unlock,
-  Eye,
-  EyeOff,
   Grid,
   ZoomIn,
   ZoomOut,
@@ -28,7 +19,7 @@ import {
   AlignRight,
   Sparkle
 } from 'lucide-react';
-import { CampaignElement, CampaignStepConfig, DragState, PopupType } from './types';
+import { CampaignElement, CampaignStepConfig, DragState } from './types';
 
 // Injected once — shared keyframes for popup entrance + element animations
 const CANVAS_KEYFRAMES = `
@@ -47,7 +38,7 @@ if (typeof document !== 'undefined' && !document.getElementById('sp-canvas-keyfr
 }
 
 // Animation variants generator for element-level transitions
-const getAnimationVariants = (type: string): any => {
+const getAnimationVariants = (type: string): Variants => {
   switch (type) {
     case 'fade-in':
       return {
@@ -96,8 +87,8 @@ interface CanvasProps {
   selectedElementId: string | null;
   deviceMode: 'desktop' | 'tablet' | 'mobile';
   onSelectElement: (id: string | null) => void;
-  onUpdateElement: (id: string, keyOrObj: string | Record<string, any>, value?: any) => void;
-  onUpdateStepConfig: (key: string, value: any) => void;
+  onUpdateElement: (id: string, keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
+  onUpdateStepConfig: (key: string, value: unknown) => void;
 }
 
 export default function Canvas({
@@ -130,7 +121,7 @@ export default function Canvas({
 
   // Determine scaling based on device preview mode
   let frameWidth = '100%';
-  let containerScale = canvasZoom;
+  const containerScale = canvasZoom;
   
   if (deviceMode === 'tablet') {
     frameWidth = '768px';
@@ -207,7 +198,7 @@ export default function Canvas({
           elemStartX: el.x,
           elemStartY: el.y,
           action: 'rotate',
-          startRotation: el.extraProps?.rotation || 0,
+          startRotation: (el.extraProps?.rotation as number) || 0,
         });
       }
       return;
@@ -231,7 +222,7 @@ export default function Canvas({
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragState.elementId || !dragState.action || !containerRef.current) return;
       
-      const el = stepConfig.elements.find((item: any) => item.id === dragState.elementId);
+      const el = stepConfig.elements.find((item) => item.id === dragState.elementId);
       if (!el || el.extraProps?.isLocked) return;
 
       const rect = containerRef.current.getBoundingClientRect();
@@ -292,7 +283,7 @@ export default function Canvas({
           }
         });
 
-        setGuidelines({ x: snapX, y: snapY, xLabel, yLabel } as any);
+        setGuidelines({ x: snapX, y: snapY, xLabel, yLabel } as { x?: number; y?: number; xLabel?: string; yLabel?: string });
         onUpdateElement(el.id, { x: newX, y: newY });
 
       } else if (dragState.action === 'resize') {
@@ -397,7 +388,7 @@ export default function Canvas({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState, stepConfig.elements]);
+  }, [dragState, stepConfig.elements]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Craft.js Style Inline Layer Manipulation Triggers
   const handleDuplicate = (e: React.MouseEvent, el: CampaignElement) => {
@@ -621,8 +612,8 @@ export default function Canvas({
             {stepConfig.elements.map((el) => {
               const isSelected = selectedElementId === el.id;
               const isHovered = hoveredElementId === el.id;
-              const isLocked = el.extraProps?.isLocked;
-              const rotAngle = el.extraProps?.rotation || 0;
+              const isLocked = el.extraProps?.isLocked as boolean | undefined;
+              const rotAngle = (el.extraProps?.rotation as number) || 0;
 
               return (
                 <div
@@ -676,7 +667,7 @@ export default function Canvas({
 
                   {/* Inner element renderer container */}
                   <motion.div
-                    key={`${el.id}-${el.animationType || 'none'}-${el.animationDuration ?? 0.5}-${el.animationDelay ?? 0}-${el.extraProps?.replayKey ?? 0}`}
+                    key={`${el.id}-${el.animationType || 'none'}-${el.animationDuration ?? 0.5}-${el.animationDelay ?? 0}-${(el.extraProps?.replayKey as number) ?? 0}`}
                     initial={el.animationType && el.animationType !== 'none' ? 'hidden' : 'visible'}
                     animate="visible"
                     variants={getAnimationVariants(el.animationType || '')}
@@ -792,7 +783,7 @@ export default function Canvas({
                         <input
                           type="text"
                           disabled
-                          placeholder={el.extraProps?.placeholder || el.content || 'Your email address...'}
+                          placeholder={(el.extraProps?.placeholder as string) || el.content || 'Your email address...'}
                           className="w-full h-full text-xs font-medium px-3 text-zinc-705 bg-white shadow-inner select-none pointer-events-none"
                           style={{
                             borderRadius: `${el.borderRadius ?? 8}px`,

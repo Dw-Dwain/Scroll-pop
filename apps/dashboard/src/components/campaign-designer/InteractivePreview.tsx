@@ -1,22 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ShoppingBag, 
-  User, 
-  Search, 
-  Menu, 
-  ArrowLeft, 
-  Sparkles, 
-  Clock, 
-  Heart, 
-  Check, 
-  Copy, 
-  CornerDownRight, 
-  MousePointerClick,
-  MonitorOff,
+import {
+  ShoppingBag,
+  User,
+  Search,
+  Menu,
+  ArrowLeft,
+  Sparkles,
+  Heart,
+  Check,
   Star,
   QrCode
 } from 'lucide-react';
-import { Campaign, CampaignStepConfig, CampaignElement } from './types';
+import { Campaign, CampaignStepConfig } from './types';
 
 interface InteractivePreviewProps {
   campaign: Campaign;
@@ -152,7 +147,7 @@ export default function InteractivePreview({
   const [couponCode, setCouponCode] = useState<string>('');
   const [appliedCoupon, setAppliedCoupon] = useState<string>('');
   const [checkoutStep, setCheckoutStep] = useState<'shopping' | 'checkout' | 'thankyou'>('shopping');
-  const [copied, setCopied] = useState(false);
+  const [_copied, setCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Campaign Trigger Engine Simulation State
@@ -176,7 +171,7 @@ export default function InteractivePreview({
 
   // Handle countdown ticker tick
   useEffect(() => {
-    let interval = setInterval(() => {
+    const interval = setInterval(() => {
       setCountdownTimer((prev) => {
         if (prev <= 1) return 599;
         return prev - 1;
@@ -227,16 +222,16 @@ export default function InteractivePreview({
   }, [awaitingReturn]);
 
   // Resolve the affiliate href for a given step config (first button or close element with href)
-  const getStepAffiliate = (stepConfig: any): string => {
-    for (const el of stepConfig.elements as any[]) {
-      const link = el.href || el.extraProps?.href;
+  const getStepAffiliate = (stepConfig: CampaignStepConfig): string => {
+    for (const el of stepConfig.elements) {
+      const link = el.href || (el.extraProps?.href as string | undefined);
       if (link && link.length > 4 && !link.includes('YOUR_')) return link;
     }
     return '';
   };
 
   // Open affiliate link in new tab — first call arms the dismiss gate, second dismisses
-  const handleAffiliateDismiss = (stepConfig: any) => {
+  const handleAffiliateDismiss = (stepConfig: CampaignStepConfig) => {
     const href = getStepAffiliate(stepConfig);
     if (!href) {
       // No affiliate link — just close normally
@@ -261,7 +256,7 @@ export default function InteractivePreview({
   };
 
   // Monitor simulated scrolling inside store frame
-  const handleStoreScroll = (e: any) => {
+  const handleStoreScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
     const scrollPct = Math.round(
       (target.scrollTop / (target.scrollHeight - target.clientHeight)) * 100
@@ -293,7 +288,7 @@ export default function InteractivePreview({
       // No other trigger configured — fire immediately
       triggerMainPopup('Instant trigger');
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Exit-intent simulation: fire when mouse leaves the top of the simulation frame
   useEffect(() => {
@@ -305,7 +300,7 @@ export default function InteractivePreview({
     };
     document.addEventListener('mouseleave', handleMouseLeave);
     return () => document.removeEventListener('mouseleave', handleMouseLeave);
-  }, [campaign.triggers.exitIntent, showMainCampaign, campaignStep]);
+  }, [campaign.triggers.exitIntent, showMainCampaign, campaignStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Inactivity simulation: fire after N seconds of no mouse/keyboard activity
   useEffect(() => {
@@ -326,7 +321,7 @@ export default function InteractivePreview({
       document.removeEventListener('mousemove', reset);
       document.removeEventListener('keydown', reset);
     };
-  }, [campaign.triggers.inactivitySeconds, showMainCampaign, campaignStep]);
+  }, [campaign.triggers.inactivitySeconds, showMainCampaign, campaignStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const triggerMainPopup = (reason?: string) => {
     setShowMainCampaign(true);
@@ -392,12 +387,12 @@ export default function InteractivePreview({
   };
 
   // Engage Submit Sign up newsletter Form / Spin Wheel Raffle
-  const handleCampaignSubmit = (stepConfig: any) => {
+  const handleCampaignSubmit = (stepConfig: CampaignStepConfig) => {
     // Record user conversion click
     onRecordConversion();
 
     // Check if it's spinwheel campaign
-    const isWheel = stepConfig.elements.some((e: any) => e.content === 'wheel');
+    const isWheel = stepConfig.elements.some((e) => e.content === 'wheel');
 
     if (isWheel) {
       if (isSpinning) return;
@@ -762,7 +757,7 @@ export default function InteractivePreview({
               }}
             >
               {/* Teaser items rendering */}
-              {campaign.steps.teaser.elements.map((el: any) => (
+              {campaign.steps.teaser.elements.map((el) => (
                 <div 
                   key={el.id}
                   className="absolute pointer-events-none"
@@ -808,7 +803,7 @@ export default function InteractivePreview({
             {/* Active configured template container representing popupType */}
             {(() => {
               const activeStepConfig = campaignStep === 'main' ? campaign.steps.main : campaign.steps.success;
-              const isWheel      = activeStepConfig.elements.some((e: any) => e.content === 'wheel');
+              const _isWheel     = activeStepConfig.elements.some((e) => e.content === 'wheel');
               const isStickybar  = activeStepConfig.popupType === 'stickybar';
               const isFullscreen = activeStepConfig.popupType === 'fullscreen';
 
@@ -818,7 +813,7 @@ export default function InteractivePreview({
               const popupRadius = isStickybar ? 0 : activeStepConfig.borderRadius;
 
               // Only show the fallback X if the design has no dedicated close element
-              const hasCloseEl = activeStepConfig.elements.some((e: any) => e.type === 'close');
+              const hasCloseEl = activeStepConfig.elements.some((e) => e.type === 'close');
 
               return (
                 <div
@@ -873,7 +868,7 @@ export default function InteractivePreview({
                   )}
 
                   {/* Render Elements inside dialog with real interaction */}
-                  {activeStepConfig.elements.map((el: any) => {
+                  {activeStepConfig.elements.map((el) => {
                     return (
                       <div
                         key={el.id}
@@ -929,7 +924,7 @@ export default function InteractivePreview({
                         {el.type === 'button' && (
                           <button
                             onClick={() => {
-                              const href = el.href || el.extraProps?.href;
+                              const href = el.href || (el.extraProps?.href as string | undefined);
                               // If button has an affiliate/destination URL — open in new tab
                               if (href && href.length > 4 && !href.includes('YOUR_')) {
                                 window.open(href, '_blank', 'noopener');
@@ -942,7 +937,7 @@ export default function InteractivePreview({
                               if (campaignStep === 'main') {
                                 handleCampaignSubmit(activeStepConfig);
                               } else {
-                                const couponEl = activeStepConfig.elements.find((e: any) => e.type === 'text' && (e.content.length < 20 || e.id.includes('coupon') || e.id.includes('code')));
+                                const couponEl = activeStepConfig.elements.find((e) => e.type === 'text' && (e.content.length < 20 || e.id.includes('coupon') || e.id.includes('code')));
                                 const couponTxt = couponEl ? couponEl.content : 'LUCKYSPIN50';
                                 handleCopyCode(couponTxt);
                                 setShowMainCampaign(false);
@@ -969,7 +964,7 @@ export default function InteractivePreview({
                               type="email"
                               value={viewerInputs[el.id] || ''}
                               onChange={(e) => setViewerInputs({ ...viewerInputs, [el.id]: e.target.value })}
-                              placeholder={el.extraProps?.placeholder || 'Email entry...'}
+                              placeholder={(el.extraProps?.placeholder as string | undefined) || 'Email entry...'}
                               className="w-full h-full text-xs font-semibold px-3 border border-zinc-200 focus:border-zinc-900 outline-hidden bg-white text-zinc-900"
                               style={{ borderRadius: `${el.borderRadius ?? 8}px` }}
                             />

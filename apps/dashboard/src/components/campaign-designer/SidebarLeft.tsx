@@ -32,15 +32,15 @@ import { TargetingRuleBuilder } from './TargetingRuleBuilder';
 interface SidebarLeftProps {
   campaign: Campaign;
   activeStep: 'teaser' | 'main' | 'success';
-  onUpdateStepConfig: (keyOrObj: any, value?: any) => void;
-  onUpdateTriggers: (key: string, value: any) => void;
-  onSelectTemplate: (template: any) => void;
+  onUpdateStepConfig: (keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
+  onUpdateTriggers: (key: string, value: unknown) => void;
+  onSelectTemplate: (template: Campaign) => void;
   onAddElement: (type: ElementType) => void;
   onRemoveElement: (id: string) => void;
   onReorderElement: (id: string, action: 'up' | 'down') => void;
   selectedElementId?: string | null;
   onSelectElement?: (id: string | null) => void;
-  onUpdateElement?: (id: string, keyOrObj: string | Record<string, any>, value?: any) => void;
+  onUpdateElement?: (id: string, keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
 }
 
 const BRAND_PALETTES: BrandStyle[] = [
@@ -501,7 +501,7 @@ export default function SidebarLeft({
     };
 
 
-    const targetPreset: any = (presets as any)[mixerCategory] || presets.valentine;
+    const targetPreset = presets[mixerCategory] || presets['valentine'];
     if (mixerHeading) titleText = mixerHeading;
     else titleText = targetPreset?.title || '';
     subText = targetPreset?.sub || '';
@@ -871,8 +871,8 @@ export default function SidebarLeft({
   // Apply Brand Styles dynamically
   const applyBrandStyle = (brand: BrandStyle) => {
     // Generate updated elements mapping and styling
-    const updatedElements = stepConfig.elements.map((el: any) => {
-      let updated = { ...el };
+    const updatedElements = stepConfig.elements.map((el) => {
+      const updated = { ...el };
       if (el.type === 'heading') {
         updated.color = brand.primaryColor === '#FCFCFC' ? '#111827' : brand.primaryColor;
         updated.fontFamily = brand.fontHeading;
@@ -1025,12 +1025,12 @@ export default function SidebarLeft({
                 Aesthetic Campaigns ({filteredTemplates.length})
               </div>
               <div className="grid grid-cols-1 gap-4">
-                {filteredTemplates.map((tpl: any) => {
+                {filteredTemplates.map((tpl) => {
                   const isActiveTemplate = campaign.id === tpl.id;
                   return (
                     <div
                       key={tpl.id}
-                      onClick={() => onSelectTemplate(tpl as any)}
+                      onClick={() => onSelectTemplate(tpl)}
                       className={`group relative overflow-hidden rounded-lg border transition-all duration-200 cursor-pointer ${
                         isActiveTemplate 
                           ? 'border-zinc-900 ring-1 ring-zinc-900 bg-zinc-50/20' 
@@ -1049,11 +1049,11 @@ export default function SidebarLeft({
                         >
                           {/* Inner mini elements helper */}
                           <div className="flex flex-col gap-0.5 w-full pointer-events-none">
-                            <span className="text-[8px] font-bold truncate" style={{ color: tpl.steps.main.elements.find((e: any) => e.type === 'heading')?.color || '#111827' }}>
-                              {tpl.steps.main.elements.find((e: any) => e.type === 'heading')?.content.substring(0, 24) || 'Exclusive Discount'}
+                            <span className="text-[8px] font-bold truncate" style={{ color: tpl.steps.main.elements.find((e) => e.type === 'heading')?.color || '#111827' }}>
+                              {tpl.steps.main.elements.find((e) => e.type === 'heading')?.content.substring(0, 24) || 'Exclusive Discount'}
                             </span>
                             <span className="text-[6px] line-clamp-1 leading-tight text-gray-500">
-                              {tpl.steps.main.elements.find((e: any) => e.type === 'text')?.content.substring(0, 48) || 'Sign up to redeem.'}
+                              {tpl.steps.main.elements.find((e) => e.type === 'text')?.content.substring(0, 48) || 'Sign up to redeem.'}
                             </span>
                           </div>
                           
@@ -1064,7 +1064,7 @@ export default function SidebarLeft({
                             </div>
                             <div 
                               className="px-2 h-3 text-[5px] font-semibold text-white rounded-xs flex items-center justify-center truncate"
-                              style={{ backgroundColor: tpl.steps.main.elements.find((e: any) => e.type === 'button')?.backgroundColor || '#000000' }}
+                              style={{ backgroundColor: tpl.steps.main.elements.find((e) => e.type === 'button')?.backgroundColor || '#000000' }}
                             >
                               CLAIM
                             </div>
@@ -1624,7 +1624,7 @@ export default function SidebarLeft({
                       key={String(opt.v)}
                       onClick={() => onUpdateTriggers('newVisitorOnly', opt.v)}
                       className={`py-1.5 px-2 rounded text-[10px] font-medium border transition-all cursor-pointer ${
-                        (campaign.triggers as any).newVisitorOnly === opt.v
+                        campaign.triggers.newVisitorOnly === opt.v
                           ? 'bg-indigo-600 border-indigo-600 text-white'
                           : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100'
                       }`}
@@ -1643,7 +1643,7 @@ export default function SidebarLeft({
                 </div>
                 <div className="bg-white rounded-lg p-2">
                   <TargetingRuleBuilder
-                    rules={(campaign.triggers as any).pageTargetingRules || []}
+                    rules={campaign.triggers.pageTargetingRules || []}
                     onChange={(rules) => onUpdateTriggers('pageTargetingRules', rules)}
                   />
                 </div>
@@ -1657,14 +1657,14 @@ export default function SidebarLeft({
                     <span className="text-xs font-semibold text-zinc-100">Smart Product Match</span>
                   </div>
                   <button
-                    onClick={() => onUpdateTriggers('enableSmartAffiliate', !(campaign.triggers as any).enableSmartAffiliate)}
+                    onClick={() => onUpdateTriggers('enableSmartAffiliate', !campaign.triggers.enableSmartAffiliate)}
                     className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors ${
-                      (campaign.triggers as any).enableSmartAffiliate ? 'bg-indigo-600' : 'bg-zinc-700'
+                      campaign.triggers.enableSmartAffiliate ? 'bg-indigo-600' : 'bg-zinc-700'
                     }`}
                   >
                     <span
                       className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                        (campaign.triggers as any).enableSmartAffiliate ? 'translate-x-4' : 'translate-x-1'
+                        campaign.triggers.enableSmartAffiliate ? 'translate-x-4' : 'translate-x-1'
                       }`}
                     />
                   </button>
@@ -1680,14 +1680,14 @@ export default function SidebarLeft({
                     <span className="text-xs font-semibold text-zinc-100">Session Page Count</span>
                   </div>
                   <span className="text-[11px] font-mono font-medium text-zinc-100 bg-zinc-800 px-2 py-0.5 rounded">
-                    {((campaign.triggers as any).sessionPageCount > 0) ? `After ${(campaign.triggers as any).sessionPageCount}p` : 'Disabled'}
+                    {(campaign.triggers.sessionPageCount > 0) ? `After ${campaign.triggers.sessionPageCount}p` : 'Disabled'}
                   </span>
                 </div>
                 <input
                   type="range"
                   min="0"
                   max="20"
-                  value={(campaign.triggers as any).sessionPageCount ?? 0}
+                  value={campaign.triggers.sessionPageCount ?? 0}
                   onChange={(e) => onUpdateTriggers('sessionPageCount', parseInt(e.target.value))}
                   className="w-full accent-indigo-500 cursor-pointer h-1 bg-zinc-700 rounded-lg"
                 />
@@ -1702,7 +1702,7 @@ export default function SidebarLeft({
                 </div>
                 <div className="grid grid-cols-5 gap-1.5">
                   <select
-                    value={(campaign.triggers as any).utmParam ?? 'utm_source'}
+                    value={campaign.triggers.utmParam ?? 'utm_source'}
                     onChange={(e) => onUpdateTriggers('utmParam', e.target.value)}
                     className="col-span-2 text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden font-mono"
                   >
@@ -1715,7 +1715,7 @@ export default function SidebarLeft({
                   <input
                     type="text"
                     placeholder="e.g. instagram, newsletter…"
-                    value={(campaign.triggers as any).utmValue ?? ''}
+                    value={campaign.triggers.utmValue ?? ''}
                     onChange={(e) => onUpdateTriggers('utmValue', e.target.value)}
                     className="col-span-3 text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden font-mono placeholder:text-zinc-600"
                   />
@@ -1734,7 +1734,7 @@ export default function SidebarLeft({
                     <span className="text-[10.5px] text-zinc-500 block mb-1">Starts</span>
                     <input
                       type="datetime-local"
-                      value={(campaign.triggers as any).startsAt ?? ''}
+                      value={campaign.triggers.startsAt ?? ''}
                       onChange={(e) => onUpdateTriggers('startsAt', e.target.value)}
                       className="w-full text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden"
                     />
@@ -1743,7 +1743,7 @@ export default function SidebarLeft({
                     <span className="text-[10.5px] text-zinc-500 block mb-1">Ends</span>
                     <input
                       type="datetime-local"
-                      value={(campaign.triggers as any).endsAt ?? ''}
+                      value={campaign.triggers.endsAt ?? ''}
                       onChange={(e) => onUpdateTriggers('endsAt', e.target.value)}
                       className="w-full text-xs p-2 border border-zinc-700 rounded bg-zinc-800 text-zinc-100 focus:border-indigo-500 outline-hidden"
                     />
@@ -1850,7 +1850,7 @@ export default function SidebarLeft({
                     .sort((a,b) => b.zIndex - a.zIndex) // Display highest z-index layers on top
                     .map((el) => {
                       const isSelected = selectedElementId === el.id;
-                      const customName = el.extraProps?.title || el.type;
+                      const customName = (el.extraProps?.title as string) || el.type;
                       const isHidden = el.opacity === 0;
 
                       return (

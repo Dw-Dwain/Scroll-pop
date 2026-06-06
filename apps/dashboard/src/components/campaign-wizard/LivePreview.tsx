@@ -4,24 +4,27 @@ import { FormDataShape } from '../../types/campaign';
 import { cn } from '../../lib/utils';
 
 // ─── Scratch Card Interactive Block ───────────────────────────────────────────
+type LiveBlock = { id?: string; props?: Record<string, unknown>; styles?: Record<string, string>; content?: string; type?: string };
+type WheelSlice = { label: string; value: string; color: string; isWin: boolean };
+
 interface ScratchCardBlockProps {
-  block: any;
+  block: LiveBlock;
   accentColor: string;
 }
 
 // Constants to avoid i18n raw literal warnings in JSX
 const TEXT_MYSTERY_GIFT_UNCOVERED = 'Mystery Gift Uncovered';
 
-const ScratchCardBlock: React.FC<ScratchCardBlockProps> = ({ block, accentColor }) => {
+const ScratchCardBlock: React.FC<ScratchCardBlockProps> = ({ block, accentColor: _accentColor }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isRevealed, setIsRevealed] = useState(false);
   const [isScratching, setIsScratching] = useState(false);
-  const [scratchProgress, setScratchProgress] = useState(0);
+  const [_scratchProgress, setScratchProgress] = useState(0);
 
-  const prizeCode = block.props?.prizeCode || 'WELCOME50';
-  const prizeLabel = block.props?.prizeLabel || '50% OFF ENTIRE ORDER';
-  const overlayText = block.props?.overlayText || 'Scratch to Reveal ⚡';
+  const prizeCode = (block.props?.prizeCode as string | undefined) || 'WELCOME50';
+  const prizeLabel = (block.props?.prizeLabel as string | undefined) || '50% OFF ENTIRE ORDER';
+  const overlayText = (block.props?.overlayText as string | undefined) || 'Scratch to Reveal ⚡';
 
   const initCanvas = () => {
     const canvas = canvasRef.current;
@@ -71,7 +74,7 @@ const ScratchCardBlock: React.FC<ScratchCardBlockProps> = ({ block, accentColor 
     });
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [isRevealed, block.props]);
+  }, [isRevealed, block.props]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleScratch = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -177,16 +180,16 @@ const ScratchCardBlock: React.FC<ScratchCardBlockProps> = ({ block, accentColor 
 
 // ─── Spin To Win Interactive Block ───────────────────────────────────────────
 interface SpinWheelBlockProps {
-  block: any;
+  block: LiveBlock;
   accentColor: string;
 }
 
-const SpinWheelBlock: React.FC<SpinWheelBlockProps> = ({ block, accentColor }) => {
+const SpinWheelBlock: React.FC<SpinWheelBlockProps> = ({ block, accentColor: _accentColor }) => {
   const [angle, setAngle] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [wonPrize, setWonPrize] = useState<any | null>(null);
+  const [wonPrize, setWonPrize] = useState<WheelSlice | null>(null);
 
-  const slices = block.props?.slices || [
+  const slices = (block.props?.slices as WheelSlice[] | undefined) || [
     { label: '10% OFF', value: 'SAVE10', color: '#ec4899', isWin: true },
     { label: 'Try Again', value: 'LOSE', color: '#1e1b4b', isWin: false },
     { label: 'Free Ship', value: 'FREESHIP', color: '#6366f1', isWin: true },
@@ -212,15 +215,10 @@ const SpinWheelBlock: React.FC<SpinWheelBlockProps> = ({ block, accentColor }) =
 
     setTimeout(() => {
       setIsSpinning(false);
-      setWonPrize(selectedSlice);
+      setWonPrize(selectedSlice ?? null);
     }, 5000); // matching the transition duration
   };
 
-  const getCoordinatesForPercent = (percent: number) => {
-    const x = Math.cos(2 * Math.PI * percent);
-    const y = Math.sin(2 * Math.PI * percent);
-    return [x, y];
-  };
 
   return (
     <div className="w-full flex flex-col items-center justify-center my-4 overflow-hidden" style={block.styles}>
@@ -242,7 +240,7 @@ const SpinWheelBlock: React.FC<SpinWheelBlockProps> = ({ block, accentColor }) =
           }}
         >
           <svg viewBox="0 0 300 300" className="w-full h-full">
-            {slices.map((slice: any, i: number) => {
+            {slices.map((slice, i) => {
               const sliceAngle = 360 / slices.length;
               const startAngleRad = (i * sliceAngle - 90) * Math.PI / 180;
               const endAngleRad = ((i + 1) * sliceAngle - 90) * Math.PI / 180;
@@ -444,7 +442,7 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ formData }) => {
     }
   };
 
-  const renderBlock = (block: any, idx: number) => {
+  const renderBlock = (block: LiveBlock, idx: number) => {
     switch (block.type) {
       case 'text':
         return (
@@ -464,7 +462,7 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ formData }) => {
         );
       case 'timer': {
         const minutes = block.props?.minutes || 15;
-        const color = block.props?.color || '#ef4444';
+        const color = (block.props?.color as string | undefined) || '#ef4444';
         return (
           <div key={idx} className="flex items-center justify-center gap-4 my-4" style={block.styles}>
             {['00', '00', String(minutes).padStart(2, '0'), '00'].map((num, i) => (
@@ -484,9 +482,9 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ formData }) => {
         );
       }
       case 'form': {
-        const fields = block.props?.fields || 'email';
-        const placeholder = block.props?.placeholder || 'Enter your email…';
-        const btnColor = block.props?.buttonColor || '#6366f1';
+        const fields = (block.props?.fields as string | undefined) || 'email';
+        const placeholder = (block.props?.placeholder as string | undefined) || 'Enter your email…';
+        const btnColor = (block.props?.buttonColor as string | undefined) || '#6366f1';
         const inputCls = 'w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none bg-white/60 backdrop-blur-sm text-sm';
         return (
           <div key={idx} className="flex flex-col gap-2 my-3" style={block.styles}>
@@ -524,7 +522,7 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ formData }) => {
           </div>
         );
       case 'spacer':
-        return <div key={idx} style={{ height: block.props?.height || '20px' }} />;
+        return <div key={idx} style={{ height: (block.props?.height as string | undefined) || '20px' }} />;
       case 'scratch_card':
         return (
           <ScratchCardBlock key={block.id || idx} block={block} accentColor={formData.accentColor} />
@@ -731,7 +729,7 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ formData }) => {
                     gap: formData.gap || '12px',
                   }}
                 >
-                  {formData.elements.map((block, idx) => renderBlock(block, idx))}
+                  {formData.elements.map((block, idx) => renderBlock(block as unknown as LiveBlock, idx))}
                 </div>
               ) : (
                 /* Legacy Layout Fallback (For backwards compatibility during rollout) */

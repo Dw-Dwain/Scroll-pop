@@ -1,13 +1,13 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Check, Megaphone, Layers, Wand2, Sparkles, Laptop, Tablet, Smartphone, Undo2, Redo2, Play, Disc3 } from 'lucide-react';
+import { ChevronLeft, Megaphone, Wand2, Sparkles, Laptop, Tablet, Smartphone, Undo2, Redo2, Play, Disc3 } from 'lucide-react';
 import { useCreate, useList, useCustomMutation, useApiUrl } from '@refinedev/core';
-import { TemplateSelector } from '../components/campaign-wizard/TemplateSelector';
-import { DesignControls } from '../components/campaign-wizard/DesignControls';
+// TemplateSelector + DesignControls imported transitionally — wizard now uses the canvas designer directly
+
 import { TemplatePreset, FormDataShape } from '../types/campaign';
 import { MASSIVE_TEMPLATES, OSS_TEMPLATES } from '../lib/templates';
 
 // Advanced Canvas Designer Component Imports
-import { Campaign, CampaignElement, CampaignStep, ElementType, CampaignStepConfig } from '../components/campaign-designer/types';
+import { Campaign, CampaignElement, CampaignStep, ElementType, CampaignStepConfig, CanvasPosition } from '../components/campaign-designer/types';
 import { PREBUILT_TEMPLATES } from '../components/campaign-designer/data/templates';
 import SidebarLeftDesigner from '../components/campaign-designer/SidebarLeft';
 import CanvasDesigner from '../components/campaign-designer/Canvas';
@@ -15,7 +15,7 @@ import SidebarRightDesigner from '../components/campaign-designer/SidebarRight';
 import InteractivePreviewDesigner from '../components/campaign-designer/InteractivePreview';
 
 // Merge OSS-inspired templates at the front so they appear first in the marketplace
-const ALL_TEMPLATES = [...OSS_TEMPLATES, ...MASSIVE_TEMPLATES];
+const _ALL_TEMPLATES = [...OSS_TEMPLATES, ...MASSIVE_TEMPLATES];
 
 interface CampaignWizardProps {
   onNavigate: (path: string) => void;
@@ -29,8 +29,17 @@ const STEPS = [
 ] as const;
 
 // Helper to bootstrap Campaign object from legacy flat fields or new steps config
-function bootstrapCampaign(campaignId: string, campaignName: string, designData: any): Campaign {
-  const config = designData?.config || {};
+type DesignConfigStep = Record<string, unknown> & { triggers?: Record<string, unknown> };
+type DesignConfig = {
+  steps?: { main?: DesignConfigStep; teaser?: DesignConfigStep; success?: DesignConfigStep };
+  kind?: string; position?: string; teaserPosition?: string;
+  backgroundColor?: string; borderRadius?: number; borderColor?: string; borderWidth?: number;
+  boxShadow?: string; animation?: string; headline?: string; subheadline?: string;
+  bodyText?: string; textColor?: string; accentColor?: string; ctaText?: string;
+  teaserHeadline?: string; successHeadline?: string; successBody?: string;
+};
+function bootstrapCampaign(campaignId: string, campaignName: string, designData: Record<string, unknown>): Campaign {
+  const config = (designData?.['config'] || {}) as DesignConfig;
   
   const prefs = (() => {
     try {
@@ -49,23 +58,23 @@ function bootstrapCampaign(campaignId: string, campaignName: string, designData:
       name: campaignName,
       category: 'Countdown Campaigns',
       isActive: true,
-      steps: config.steps,
+      steps: config.steps as unknown as Campaign['steps'],
       triggers: {
-        exitIntent: config.steps.main?.triggers?.exitIntent ?? (defaultTrigger === 'exit_intent'),
-        scrollPercent: config.steps.main?.triggers?.scrollPercent ?? (defaultTrigger === 'scroll_pct' ? defaultScrollPercent : 0),
-        inactivitySeconds: config.steps.main?.triggers?.inactivitySeconds ?? (defaultTrigger === 'inactivity' ? 20 : 0),
-        timeDelaySeconds: config.steps.main?.triggers?.timeDelaySeconds ?? (defaultTrigger === 'time_delay' || defaultTrigger === 'dwell_time' ? 5 : 0),
-        pageTargeting: config.steps.main?.triggers?.pageTargeting ?? '*',
-        deviceTargeting: config.steps.main?.triggers?.deviceTargeting ?? 'all',
-        geoTargeting: config.steps.main?.triggers?.geoTargeting ?? 'All Countries',
-        frequencyCapDays: config.steps.main?.triggers?.frequencyCapDays ?? defaultFreqCap,
-        newVisitorOnly: config.steps.main?.triggers?.newVisitorOnly ?? false,
-        sessionPageCount: config.steps.main?.triggers?.sessionPageCount ?? 0,
-        utmParam: config.steps.main?.triggers?.utmParam ?? 'utm_source',
-        utmValue: config.steps.main?.triggers?.utmValue ?? config.steps.main?.triggers?.utmSource ?? '',
-        startsAt: config.steps.main?.triggers?.startsAt ?? '',
-        endsAt: config.steps.main?.triggers?.endsAt ?? '',
-        abTestPercent: config.steps.main?.triggers?.abTestPercent ?? 100,
+        exitIntent: (config.steps.main?.triggers?.['exitIntent'] as boolean | undefined) ?? (defaultTrigger === 'exit_intent'),
+        scrollPercent: (config.steps.main?.triggers?.['scrollPercent'] as number | undefined) ?? (defaultTrigger === 'scroll_pct' ? defaultScrollPercent : 0),
+        inactivitySeconds: (config.steps.main?.triggers?.['inactivitySeconds'] as number | undefined) ?? (defaultTrigger === 'inactivity' ? 20 : 0),
+        timeDelaySeconds: (config.steps.main?.triggers?.['timeDelaySeconds'] as number | undefined) ?? (defaultTrigger === 'time_delay' || defaultTrigger === 'dwell_time' ? 5 : 0),
+        pageTargeting: (config.steps.main?.triggers?.['pageTargeting'] as string | undefined) ?? '*',
+        deviceTargeting: (config.steps.main?.triggers?.['deviceTargeting'] as 'all' | 'desktop' | 'mobile' | 'tablet' | undefined) ?? 'all',
+        geoTargeting: (config.steps.main?.triggers?.['geoTargeting'] as string | undefined) ?? 'All Countries',
+        frequencyCapDays: (config.steps.main?.triggers?.['frequencyCapDays'] as number | undefined) ?? defaultFreqCap,
+        newVisitorOnly: (config.steps.main?.triggers?.['newVisitorOnly'] as boolean | undefined) ?? false,
+        sessionPageCount: (config.steps.main?.triggers?.['sessionPageCount'] as number | undefined) ?? 0,
+        utmParam: (config.steps.main?.triggers?.['utmParam'] as string | undefined) ?? 'utm_source',
+        utmValue: (config.steps.main?.triggers?.['utmValue'] as string | undefined) ?? (config.steps.main?.triggers?.['utmSource'] as string | undefined) ?? '',
+        startsAt: (config.steps.main?.triggers?.['startsAt'] as string | undefined) ?? '',
+        endsAt: (config.steps.main?.triggers?.['endsAt'] as string | undefined) ?? '',
+        abTestPercent: (config.steps.main?.triggers?.['abTestPercent'] as number | undefined) ?? 100,
       },
       conversions: 0,
       views: 0,
@@ -164,8 +173,8 @@ function bootstrapCampaign(campaignId: string, campaignName: string, designData:
   });
 
   const mainStep: CampaignStepConfig = {
-    popupType: (designData?.kind as any) || 'modal',
-    position: config.position || 'center',
+    popupType: ((designData?.['kind'] as string | undefined) || 'modal') as CampaignStepConfig['popupType'],
+    position: (config.position || 'center') as CanvasPosition,
     width: 600,
     height: 380,
     backgroundColor: config.backgroundColor || '#FFFFFF',
@@ -180,7 +189,7 @@ function bootstrapCampaign(campaignId: string, campaignName: string, designData:
 
   const teaserStep: CampaignStepConfig = {
     popupType: 'floating',
-    position: config.teaserPosition || 'bottom-right',
+    position: (config.teaserPosition || 'bottom-right') as CanvasPosition,
     width: 140,
     height: 60,
     backgroundColor: '#000000',
@@ -308,11 +317,10 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
 
   const [step, setStep] = React.useState(1);
   const [loading, setLoading] = React.useState(false);
-  const [favorites, setFavorites] = React.useState<string[]>(() => {
+  const [favorites] = React.useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('campaign_template_favorites') ?? '[]'); } catch { return []; }
   });
-  const [customTemplates, setCustomTemplates] = React.useState<TemplatePreset[]>([]);
-  const [activeKind, setActiveKind] = React.useState<TemplatePreset['kind'] | 'all'>('all');
+  const [, setCustomTemplates] = React.useState<TemplatePreset[]>([]);
 
   // Advanced Visual Designer state variables
   const [campaign, setCampaign] = React.useState<Campaign | null>(null);
@@ -363,32 +371,32 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     }
   };
 
-  const handleUpdateStepConfig = (keyOrObj: string | Record<string, any>, value?: any) => {
+  const handleUpdateStepConfig = (keyOrObj: string | Record<string, unknown>, value?: unknown) => {
     if (!campaign) return;
 
     setCampaign((prev) => {
       if (!prev) return prev;
       const updatedSteps = { ...prev.steps };
-      let newStepConfig = { ...updatedSteps[activeStep] } as any;
+      let newStepConfig = { ...updatedSteps[activeStep] } as Record<string, unknown>;
 
       if (typeof keyOrObj === 'string') {
-        newStepConfig[keyOrObj as any] = value;
+        newStepConfig[keyOrObj] = value;
       } else {
         newStepConfig = { ...newStepConfig, ...keyOrObj };
       }
 
-      updatedSteps[activeStep] = newStepConfig;
+      updatedSteps[activeStep] = newStepConfig as unknown as CampaignStepConfig;
       return { ...prev, steps: updatedSteps };
     });
 
     if (typeof keyOrObj === 'string') {
-      if (keyOrObj === 'elements') pushHistoryState(value);
+      if (keyOrObj === 'elements') pushHistoryState(value as CampaignElement[]);
     } else if ('elements' in keyOrObj) {
-      pushHistoryState(keyOrObj.elements);
+      pushHistoryState(keyOrObj.elements as CampaignElement[]);
     }
   };
 
-  const handleUpdateTriggers = (key: string, value: any) => {
+  const handleUpdateTriggers = (key: string, value: unknown) => {
     if (!campaign) return;
     const updatedTriggers = { ...campaign.triggers, [key]: value };
     setCampaign({ ...campaign, triggers: updatedTriggers });
@@ -474,7 +482,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     toastMessage(`➕ Added visual ${type} block`);
   };
 
-  const handleUpdateElement = (id: string, keyOrObj: string | Record<string, any>, value?: any) => {
+  const handleUpdateElement = (id: string, keyOrObj: string | Record<string, unknown>, value?: unknown) => {
     if (!campaign) return;
     const stepConfig = campaign.steps[activeStep];
     const updated = stepConfig.elements.map(item => {
@@ -540,7 +548,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     setTimeout(() => setToast(null), 3000);
   };
 
-  const applyTemplate = (t: TemplatePreset) => {
+  const _applyTemplate = (t: TemplatePreset) => {
     setFormData((prev) => ({ ...prev, kind: t.kind, backgroundColor: t.colors.bg, textColor: t.colors.text, accentColor: t.colors.accent, ...t.fields }));
     
     // Find prebuilt high-fidelity template matching this id
@@ -607,7 +615,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     }
   }, [step, campaign, formData]);
 
-  const cloneTemplate = (template: TemplatePreset) =>
+  const _cloneTemplate = (template: TemplatePreset) =>
     setCustomTemplates((prev) => [{ ...template, id: `custom-${crypto.randomUUID()}`, name: `${template.name} Copy`, tags: [...template.tags, 'custom'] }, ...prev]);
 
   // Build trigger/frequency/targeting specs from step 2's campaign.triggers,
@@ -641,15 +649,15 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     if (!formData.siteId || !formData.name) { alert('Campaign name and site are required.'); return; }
     setLoading(true);
     try {
-      const campaignRes: any = await createCampaign({ resource: 'campaigns', values: { siteId: formData.siteId, name: formData.name } });
-      const campaignId = campaignRes.data.id;
+      const campaignRes = await createCampaign({ resource: 'campaigns', values: { siteId: formData.siteId, name: formData.name } });
+      const campaignId = (campaignRes.data as { id: string }).id;
 
-      let designConfig: any;
-      let designKind: any = formData.kind;
+      let designConfig: Record<string, unknown>;
+      let designKind: string = formData.kind ?? 'modal';
 
       // Spin-to-win: build design config from slice labels, bypass visual editor
       if (designKind === 'spin_wheel') {
-        const rawSlices: string[] = (formData as any).spinSlices ?? ['10% OFF', '20% OFF', 'Free Shipping', 'Try Again', '5% OFF', '15% OFF'];
+        const rawSlices: string[] = (formData as FormDataShape & { spinSlices?: string[] }).spinSlices ?? ['10% OFF', '20% OFF', 'Free Shipping', 'Try Again', '5% OFF', '15% OFF'];
         const COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6'];
         designConfig = {
           kind: 'spin_wheel',
@@ -675,7 +683,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
           const successHeadingEl = successStep.elements.find(e => e.type === 'heading');
           const successTextEl = successStep.elements.find(e => e.type === 'text');
 
-          designKind = (mainStep.popupType as any) || 'modal';
+          designKind = mainStep.popupType || 'modal';
           designConfig = {
             steps: campaign.steps,
             backgroundColor: mainStep.backgroundColor,
@@ -873,7 +881,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                     onClick={() => {
                       setActiveStep(s);
                       setSelectedElementId(null);
-                      setHistory([JSON.parse(JSON.stringify((campaign.steps as any)[s].elements))]);
+                      setHistory([JSON.parse(JSON.stringify(campaign.steps[s as CampaignStep].elements))]);
                       setHistoryIndex(0);
                     }}
                     className={`py-1 px-3 rounded-md text-xs font-medium transition-all duration-150 cursor-pointer whitespace-nowrap ${
@@ -1075,9 +1083,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                       style={{ width: '100%' }}
                     >
                       <option value="">Select a site...</option>
-                      {sitesData?.data?.map((s: any) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.domain})
+                      {sitesData?.data?.map((s) => (
+                        <option key={(s as { id: string }).id} value={(s as { id: string }).id}>
+                          {(s as { name: string }).name} ({(s as { domain: string }).domain})
                         </option>
                       ))}
                     </select>
@@ -1096,7 +1104,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                         <button
                           key={value}
                           type="button"
-                          onClick={() => setFormData((f: any) => ({ ...f, kind: value }))}
+                          onClick={() => setFormData((f) => ({ ...f, kind: value }))}
                           style={{
                             flex: 1, padding: '12px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
                             border: `2px solid ${formData.kind === value ? 'var(--accent-500)' : 'var(--border-subtle)'}`,
@@ -1123,7 +1131,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>(visitors spin to reveal a prize)</span>
                       </div>
                       {[0, 1, 2, 3, 4, 5].map((i) => {
-                        const slices: string[] = (formData as any).spinSlices ?? ['10% OFF', '20% OFF', 'Free Shipping', 'Try Again', '5% OFF', '15% OFF'];
+                        const slices: string[] = (formData as FormDataShape & { spinSlices?: string[] }).spinSlices ?? ['10% OFF', '20% OFF', 'Free Shipping', 'Try Again', '5% OFF', '15% OFF'];
                         return (
                           <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                             <input
@@ -1134,7 +1142,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                               onChange={(e) => {
                                 const next = [...slices];
                                 next[i] = e.target.value;
-                                setFormData((f: any) => ({ ...f, spinSlices: next }));
+                                setFormData((f) => ({ ...f, spinSlices: next } as FormDataShape));
                               }}
                             />
                           </div>
