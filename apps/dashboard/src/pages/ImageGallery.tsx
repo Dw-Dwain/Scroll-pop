@@ -27,7 +27,7 @@ export const ImageGallery: React.FC = () => {
 
   // Campaign integration
   const { data: campaignsData } = useList({ resource: 'campaigns' });
-  const { mutate: updateCampaign, isLoading: isSaving } = useUpdate();
+  const { mutate: _updateCampaign, isLoading: isSaving } = useUpdate();
   const [assignTarget, setAssignTarget] = React.useState<GalleryItem | null>(null);
   const [assignCampaignId, setAssignCampaignId] = React.useState('');
   const [assignSuccess, setAssignSuccess] = React.useState<string | null>(null);
@@ -70,7 +70,7 @@ export const ImageGallery: React.FC = () => {
   const handleAssign = () => {
     if (!assignTarget || !assignCampaignId) return;
     
-    const campaign = campaignsData?.data?.find((c: any) => c.id === assignCampaignId);
+    const campaign = campaignsData?.data?.find((c) => (c as { id?: string }).id === assignCampaignId);
     const existingDesign = campaign?.design || { config: {} };
     
     mutate({
@@ -88,7 +88,7 @@ export const ImageGallery: React.FC = () => {
         const updated = { ...assignments, [assignTarget.id]: assignCampaignId };
         setAssignments(updated);
         localStorage.setItem('_sp_gallery_assignments', JSON.stringify(updated));
-        const name = (campaignsData?.data?.find((c: any) => c.id === assignCampaignId) as any)?.name ?? 'campaign';
+        const name = (campaignsData?.data?.find((c) => (c as { id?: string }).id === assignCampaignId) as { name?: string } | undefined)?.name ?? 'campaign';
         setAssignSuccess(name);
         setTimeout(() => { setAssignSuccess(null); setAssignTarget(null); setAssignCampaignId(''); }, 2200);
       },
@@ -106,7 +106,7 @@ export const ImageGallery: React.FC = () => {
         const updated = { ...assignments, [assignTarget.id]: assignCampaignId };
         setAssignments(updated);
         localStorage.setItem('_sp_gallery_assignments', JSON.stringify(updated));
-        const name = (campaignsData?.data?.find((c: any) => c.id === assignCampaignId) as any)?.name ?? 'campaign';
+        const name = (campaignsData?.data?.find((c) => (c as { id?: string }).id === assignCampaignId) as { name?: string } | undefined)?.name ?? 'campaign';
         setAssignSuccess(name);
         setTimeout(() => { setAssignSuccess(null); setAssignTarget(null); setAssignCampaignId(''); }, 2200);
       },
@@ -116,7 +116,7 @@ export const ImageGallery: React.FC = () => {
   const getAssignedCampaignName = (imageId: string) => {
     const cId = assignments[imageId];
     if (!cId) return null;
-    return (campaignsData?.data?.find((c: any) => c.id === cId) as any)?.name ?? 'a campaign';
+    return (campaignsData?.data?.find((c) => (c as { id?: string }).id === cId) as { name?: string } | undefined)?.name ?? 'a campaign';
   };
 
   return (
@@ -227,7 +227,7 @@ export const ImageGallery: React.FC = () => {
                       className="w-full appearance-none bg-slate-950 border border-slate-800 focus:border-indigo-500 text-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none transition pr-10"
                     >
                       <option value="">Select a campaign...</option>
-                      {(campaignsData?.data ?? []).map((c: any) => (
+                      {(campaignsData?.data ?? []).map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>

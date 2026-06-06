@@ -1,6 +1,13 @@
 import type { AuthProvider } from '@refinedev/core';
 
-export const createAuthProvider = (clerk: any): AuthProvider => {
+type ClerkUser = { id: string; fullName?: string | null; username?: string | null; imageUrl?: string };
+type ClerkInstance = {
+  signOut: () => Promise<void>;
+  user?: ClerkUser | null;
+  organization?: { role?: string } | null;
+};
+
+export const createAuthProvider = (clerk: ClerkInstance): AuthProvider => {
   return {
     login: async () => {
       // Clerk handles login via modal/redirection in views, so return success

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, CheckCircle2, AlertCircle, Activity } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Activity } from 'lucide-react';
 
 interface StatusPageProps { onNavigate: (path: string) => void; }
 

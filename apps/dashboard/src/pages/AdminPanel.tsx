@@ -51,7 +51,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     method: 'get',
     queryOptions: { staleTime: 0 },
   });
-  const { data: statsData, refetch: refetchStats } = useCustom({
+  const { data: _statsData, refetch: refetchStats } = useCustom({
     url: `${getApiBase()}/admin/stats`,
     method: 'get',
     queryOptions: { staleTime: 0 },
@@ -91,17 +91,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigate }) => {
     );
   }
 
-  const users: AdminUser[] = ((tenantsData?.data as any) ?? []).map((t: any) => ({
-    id: t.id,
+  type TenantRow = { id?: string; email?: string; ownerName?: string; name?: string; plan?: string; siteCount?: number; campaignCount?: number; createdAt?: string };
+  const users: AdminUser[] = ((tenantsData?.data ?? []) as TenantRow[]).map((t) => ({
+    id: t.id ?? '',
     email: t.email ?? '—',
     name: t.ownerName ?? t.name ?? '—',
     role: 'owner',
     plan: t.plan as PlanId,
-    orgName: t.name,
+    ...(t.name !== undefined ? { orgName: t.name } : {}),
     siteCount: t.siteCount ?? 0,
     campaignCount: t.campaignCount ?? 0,
-    createdAt: t.createdAt,
-  }));
+    ...(t.createdAt !== undefined ? { createdAt: t.createdAt } : {}),
+  } as AdminUser));
 
   const error = isError ? 'Failed to load tenant list. Check API logs.' : '';
 

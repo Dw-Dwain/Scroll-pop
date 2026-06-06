@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, User, Bot, Clock } from 'lucide-react';
+import { Send, Clock } from 'lucide-react';
 
 interface ChatMessage {
   id: string;

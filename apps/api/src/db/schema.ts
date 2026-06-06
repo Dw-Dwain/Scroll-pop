@@ -71,6 +71,9 @@ export const tenants = pgTable('tenants', {
   // Per-tenant notification channel + event preferences (e.g. { notif_channels_inapp: true,
   // notif_campaign_status: true, ... }). Gates which notifications get emitted.
   notificationPrefs: jsonb('notification_prefs').notNull().default({}),
+  // ESP integration credentials: { klaviyo: { enabled, apiKey, listId }, mailchimp: { ... } }.
+  // Added migration 0013 (P1-8 Klaviyo, P1-9 Mailchimp). API keys stored server-side, masked on reads.
+  integrations: jsonb('integrations').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),
@@ -263,6 +266,10 @@ export const campaigns = pgTable('campaigns', {
   endsAt: timestamp('ends_at', { withTimezone: true }),
   // Auto-responder config: { enabled, subject, htmlBody, replyTo? }. Added migration 0011.
   autoResponder: jsonb('auto_responder').notNull().default({}),
+  // Outbound webhook config: { enabled, url, secret?, events[] }. Added migration 0012.
+  outboundWebhook: jsonb('outbound_webhook').notNull().default({}),
+  // Per-campaign ESP opt-in: { klaviyo: bool, mailchimp: bool }. Added migration 0013.
+  espConfig: jsonb('esp_config').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),

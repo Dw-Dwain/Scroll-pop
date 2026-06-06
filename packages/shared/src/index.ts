@@ -93,10 +93,18 @@ export const DesignConfigSchema = z.object({
 
 // ─── Trigger Params ───────────────────────────────────────────────────────────
 
+// Optional per-device overrides for numeric trigger thresholds (P3-10).
+// When the snippet detects a mobile device it applies these values instead of the top-level
+// ones. Only the fields present in the override object are substituted.
+const MobileOverridesSchema = z.object({
+  pct: z.number().min(1).max(100).optional(),
+  seconds: z.number().min(1).max(3600).optional(),
+}).optional();
+
 export const TriggerParamsSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('scroll_pct'), pct: z.number().min(1).max(100).default(50) }),
-  z.object({ type: z.literal('dwell_time'), seconds: z.number().min(1).max(3600).default(30) }),
-  z.object({ type: z.literal('inactivity'), seconds: z.number().min(5).max(3600).default(60) }),
+  z.object({ type: z.literal('scroll_pct'), pct: z.number().min(1).max(100).default(50), mobileOverrides: MobileOverridesSchema }),
+  z.object({ type: z.literal('dwell_time'), seconds: z.number().min(1).max(3600).default(30), mobileOverrides: MobileOverridesSchema }),
+  z.object({ type: z.literal('inactivity'), seconds: z.number().min(5).max(3600).default(60), mobileOverrides: MobileOverridesSchema }),
   z.object({ type: z.literal('exit_intent_mouse'), sensitivity: z.number().min(5).max(100).default(20) }),
   z.object({ type: z.literal('click'), selector: z.string().min(1) }),
 ]);

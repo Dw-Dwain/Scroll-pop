@@ -36,7 +36,7 @@ export const NotificationBell: React.FC<{ onNavigate: (path: string) => void }> 
   });
   const { mutate } = useCustomMutation();
 
-  const payload = (res as any)?.data ?? { items: [], unread: 0 };
+  const payload = (res as { data?: { items?: NotificationItem[]; unread?: number } } | undefined)?.data ?? { items: [], unread: 0 };
   const items: NotificationItem[] = payload.items ?? [];
   const unread: number = payload.unread ?? 0;
 

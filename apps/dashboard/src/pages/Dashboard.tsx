@@ -1,10 +1,17 @@
 import React from 'react';
-import { Eye, MousePointerClick, Percent, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
+import { Eye, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
 
 interface DashboardProps {
   onNavigate: (path: string) => void;
 }
+
+type ApiCampaign = { id: string; name: string; status?: string; siteId?: string };
+type ApiSite = { id: string; verifiedAt?: string | null };
+type CampaignStatRow = { campaignId: string; impressions: number; views: number; clicks: number; conversions: number; ctr?: number };
+type RecentEvent = { eventType?: string; campaignId?: string; ts?: string; domain?: string };
+type DailyRow = { day: string; impressions: number; views: number; clicks: number; conversions: number };
+type OverviewData = { impressions: number; views: number; clicks: number; conversions: number; ctr?: number };
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
   if (!data.length) return null;
@@ -157,12 +164,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     queryOptions: liveOpts,
   });
 
-  const overview = (overviewResult as any)?.data ?? null;
-  const recentEvents = (recentEventsResult as any)?.data ?? [];
+  const overview = (overviewResult as { data?: OverviewData } | undefined)?.data ?? null;
+  const recentEvents: RecentEvent[] = React.useMemo(
+    () => (recentEventsResult as { data?: RecentEvent[] } | undefined)?.data ?? [],
+    [recentEventsResult],
+  );
 
   // Per-day data: last 60 days split into current 30 and previous 30
-  const dailyAll: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }> =
-    (dailyResult as any)?.data?.daily ?? [];
+  const dailyAll: DailyRow[] =
+    (dailyResult as { data?: { daily?: DailyRow[] } } | undefined)?.data?.daily ?? [];
   const prev30 = dailyAll.slice(0, 30);
   const curr30 = dailyAll.slice(30);
   // Data for the "Events over time" chart, sliced to the selected range.
@@ -180,32 +190,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const spark = (key: 'impressions' | 'views' | 'clicks') =>
     curr30.slice(-14).map((d) => d[key] ?? 0);
 
-  const campaignStats = React.useMemo<Record<string, any>>(() => {
-    const map: Record<string, any> = {};
-    const list = Array.isArray((statsResult as any)?.data) ? (statsResult as any).data : [];
+  const campaignStats = React.useMemo<Record<string, CampaignStatRow>>(() => {
+    const map: Record<string, CampaignStatRow> = {};
+    const list: CampaignStatRow[] = Array.isArray((statsResult as { data?: CampaignStatRow[] } | undefined)?.data)
+      ? (statsResult as { data: CampaignStatRow[] }).data : [];
     for (const s of list) map[s.campaignId] = s;
     return map;
   }, [statsResult]);
 
   const topCampaigns = React.useMemo(() => {
-    const list = Array.isArray((statsResult as any)?.data) ? (statsResult as any).data : [];
+    const list: CampaignStatRow[] = Array.isArray((statsResult as { data?: CampaignStatRow[] } | undefined)?.data)
+      ? (statsResult as { data: CampaignStatRow[] }).data : [];
     return list
-      .sort((a: any, b: any) => (b.impressions ?? 0) - (a.impressions ?? 0))
+      .sort((a, b) => (b.impressions ?? 0) - (a.impressions ?? 0))
       .slice(0, 5)
-      .map((s: any) => {
-        const c = campaignsData?.data?.find((x: any) => x.id === s.campaignId);
+      .map((s) => {
+        const c = (campaignsData?.data as ApiCampaign[] | undefined)?.find((x) => x.id === s.campaignId);
         return { ...s, name: c?.name ?? `Campaign ${s.campaignId?.slice(0, 8)}`, status: c?.status ?? 'draft' };
       });
   }, [statsResult, campaignsData]);
 
   const recentEventsList = React.useMemo(() => {
     const list = Array.isArray(recentEvents) ? recentEvents.slice(0, 10) : [];
-    return list.map((evt: any) => {
-      const campaign = campaignsData?.data?.find((c: any) => c.id === evt.campaignId);
+    return list.map((evt) => {
+      const campaign = (campaignsData?.data as ApiCampaign[] | undefined)?.find((c) => c.id === evt.campaignId);
       const name = campaign?.name ?? evt.campaignId?.slice(0, 12) ?? '—';
       let ts = '';
       try {
-        const diff = Date.now() - new Date(evt.ts).getTime();
+        const diff = Date.now() - new Date(evt.ts ?? '').getTime();
         const m = Math.floor(diff / 60000);
         ts = m < 1 ? 'now' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
       } catch { ts = '—'; }
@@ -254,11 +266,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     },
   ];
 
-  const activeCampaigns = campaignsData?.data?.filter((c: any) => c.status === 'active') ?? [];
+  const activeCampaigns = (campaignsData?.data as ApiCampaign[] | undefined)?.filter((c) => c.status === 'active') ?? [];
 
   // Setup checklist — shown until the operator has done the core 4 steps.
   const hasSite      = (sitesData?.data?.length ?? 0) > 0;
-  const hasVerified  = sitesData?.data?.some((s: any) => !!s.verifiedAt) ?? false;
+  const hasVerified  = (sitesData?.data as ApiSite[] | undefined)?.some((s) => !!s.verifiedAt) ?? false;
   const hasCampaign  = (campaignsData?.data?.length ?? 0) > 0;
   const hasLive      = activeCampaigns.length > 0;
   const setupDone    = hasSite && hasVerified && hasCampaign && hasLive;
@@ -466,7 +478,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </div>
           ) : (
             <div>
-              {topCampaigns.map((c: any, i: number) => (
+              {topCampaigns.map((c, i: number) => (
                 <button
                   key={c.campaignId}
                   onClick={() => onNavigate(`/campaigns/detail/${c.campaignId}`)}
@@ -581,7 +593,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               </button>
             </div>
           ) : (
-            campaignsData?.data?.slice(0, 6).map((c: any) => {
+            (campaignsData?.data as ApiCampaign[] | undefined)?.slice(0, 6).map((c) => {
               const s = campaignStats[c.id];
               return (
                 <button
@@ -610,7 +622,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     {c.name}
                   </span>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
-                    {s ? `${(s.ctr * 100).toFixed(1)}%` : '—'}
+                    {s ? `${((s.ctr ?? 0) * 100).toFixed(1)}%` : '—'}
                   </span>
                 </button>
               );

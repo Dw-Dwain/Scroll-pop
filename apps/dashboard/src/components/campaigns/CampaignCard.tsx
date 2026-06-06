@@ -1,9 +1,9 @@
 import React from 'react';
-import { Eye, Pause, Play, Sparkles, Trash2, MoreVertical } from 'lucide-react';
+import { Eye, Pause, Play, Sparkles, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface CampaignCardProps {
-  campaign: any;
+  campaign: { id: string; name: string; status?: string; kind?: string; createdAt?: string };
   stats: { impressions: number; clicks: number; ctr: number } | undefined;
   siteDomain: string;
   onToggleStatus: (id: string, currentStatus: string) => void;
@@ -22,7 +22,7 @@ export const CampaignCard = React.memo(function CampaignCard({
   onDelete,
 }: CampaignCardProps) {
   const isActive = campaign.status === 'active';
-  const [menuOpen, setMenuOpen] = React.useState(false);
+  // menu state reserved for future dropdown implementation
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 space-y-4 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow group relative flex flex-col h-full">
@@ -56,7 +56,7 @@ export const CampaignCard = React.memo(function CampaignCard({
 
       <div className="flex items-center justify-between pt-2">
         <button 
-          onClick={() => onToggleStatus(campaign.id, campaign.status)} 
+          onClick={() => onToggleStatus(campaign.id, campaign.status ?? '')} 
           className={cn(
             "px-4 py-2 rounded-xl text-xs font-semibold border transition-colors flex items-center justify-center w-28",
             isActive 

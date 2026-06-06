@@ -248,7 +248,7 @@ const RecursiveGroup = ({
             items={group.children.filter((c) => c.type === 'condition').map((c) => c.id)}
             strategy={verticalListSortingStrategy}
           >
-            {group.children.map((child, index) => {
+            {group.children.map((child, _index) => {
               if (child.type === 'condition') {
                 return (
                   <SortableCondition

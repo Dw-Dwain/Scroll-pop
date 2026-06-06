@@ -194,17 +194,35 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   });
 
   // ── Data extraction ────────────────────────────────────────────────────────
-  const overview   = (overviewResult   as any)?.data ?? null;
-  const breakdown  = (breakdownResult  as any)?.data ?? null;
-  const revenue    = (revenueResult    as any)?.data ?? null;
-  const funnel     = (funnelResult     as any)?.data ?? null;
-  const intel      = (intelligenceResult as any)?.data ?? null;
+  type ApiWrap<T> = { data?: T } | undefined;
+  type OverviewApiData = { impressions: number; views: number; clicks: number; conversions: number; ctr?: number };
+  type RevenueApiData = { totals?: { revenueDollars: number; purchases: number; emailCaptures: number; revenuePerVisitor?: number }; campaigns?: RevCampaign[] };
+  type FunnelApiData = {
+    steps?: Array<{ label: string; count: number; dropOffPct: number }>;
+    exitStats?: { closes: number; dismissals: number; rageCloseRate: number };
+  };
+  type TrafficSource = { source: string; impressions: number; ctr: number };
+  type IntelApiData = {
+    bestCampaign?: { campaignName: string; revenueDollars: number; ctr: number };
+    bestTrafficSource?: { source: string; ctr: number };
+    bestTrigger?: { triggerType: string };
+    bestDevice?: { device: string };
+    trafficSources?: TrafficSource[];
+  };
+  const overview   = (overviewResult   as ApiWrap<OverviewApiData>)?.data ?? null;
+  const breakdown  = (breakdownResult  as ApiWrap<Record<string, unknown>>)?.data ?? null;
+  const revenue    = (revenueResult    as ApiWrap<RevenueApiData>)?.data ?? null;
+  const funnel     = (funnelResult     as ApiWrap<FunnelApiData>)?.data ?? null;
+  const intel      = (intelligenceResult as ApiWrap<IntelApiData>)?.data ?? null;
 
-  const rawStats: CampaignStat[] = Array.isArray((statsResult as any)?.data) ? (statsResult as any).data : [];
+  const rawStats: CampaignStat[] = React.useMemo(
+    () => Array.isArray((statsResult as ApiWrap<CampaignStat[]>)?.data) ? (statsResult as ApiWrap<CampaignStat[]>)!.data! : [],
+    [statsResult],
+  );
   const isLoading = overviewLoading || statsLoading || dailyLoading;
 
   const dailyAll: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }> =
-    (dailyResult as any)?.data?.daily ?? [];
+    (dailyResult as ApiWrap<{ daily?: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }> }>)?.data?.daily ?? [];
   const curr30 = dailyAll.slice(30);
   const prev30 = dailyAll.slice(0, 30);
 
@@ -230,7 +248,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
     return arr;
   }, [rawStats, sortCol, sortAsc]);
 
-  const getCampaign = (id: string) => campaignsData?.data?.find((c: any) => c.id === id);
+  const getCampaign = (id: string) => campaignsData?.data?.find((c) => (c as { id?: string }).id === id);
   const toggleSort = (col: SortCol) => {
     if (sortCol === col) setSortAsc((v) => !v);
     else { setSortCol(col); setSortAsc(false); }
@@ -267,9 +285,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   if (intel?.bestDevice?.device)
     insights.push(`Best device: ${intel.bestDevice.device}`);
 
-  const revCampaigns: any[] = revenue?.campaigns ?? [];
-  const funnelSteps: any[] = funnel?.steps ?? [];
-  const funnelTop = funnelSteps.find((s: any) => s.label === 'Popup Shown')?.count ?? 0;
+  type RevCampaign = { campaignId: string; campaignName?: string; impressions: number; revenueCents: number; revenueDollars?: number; purchases?: number; conversionRate?: number; revenuePerPopup?: number; emailCaptures?: number; ctr?: number };
+  type FunnelStep = { label: string; count: number; dropOffPct: number };
+  const revCampaigns: RevCampaign[] = (revenue?.['campaigns'] as RevCampaign[] | undefined) ?? [];
+  const funnelSteps: FunnelStep[] = (funnel?.['steps'] as FunnelStep[] | undefined) ?? [];
+  const funnelTop = funnelSteps.find((s) => s.label === 'Popup Shown')?.count ?? 0;
 
   return (
     <div style={{ maxWidth: 1400, width: '100%' }}>
@@ -329,30 +349,30 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
             {
               icon: DollarSign,
               label: 'Revenue Generated',
-              value: revenue?.totals?.revenueDollars > 0 ? `$${revenue.totals.revenueDollars.toFixed(2)}` : '—',
-              sub: revenue?.totals?.purchases > 0 ? `${revenue.totals.purchases} purchases` : 'No Shopify data yet',
+              value: (revenue?.totals?.revenueDollars ?? 0) > 0 ? `$${(revenue?.totals?.revenueDollars ?? 0).toFixed(2)}` : '—',
+              sub: (revenue?.totals?.purchases ?? 0) > 0 ? `${revenue?.totals?.purchases ?? 0} purchases` : 'No Shopify data yet',
               color: 'var(--status-success)',
             },
             {
               icon: MousePointer,
               label: 'Best Campaign',
               value: intel?.bestCampaign?.campaignName ?? '—',
-              sub: intel?.bestCampaign?.ctr > 0 ? `${intel.bestCampaign.ctr}% CTR` : 'No campaign data yet',
+              sub: (intel?.bestCampaign?.ctr ?? 0) > 0 ? `${intel?.bestCampaign?.ctr ?? 0}% CTR` : 'No campaign data yet',
               color: 'var(--data-1)',
             },
             {
               icon: TrendingUp,
               label: 'Best Traffic Source',
               value: intel?.bestTrafficSource?.source ?? '—',
-              sub: intel?.bestTrafficSource?.ctr > 0 ? `${intel.bestTrafficSource.ctr}% CTR` : 'No traffic data yet',
+              sub: (intel?.bestTrafficSource?.ctr ?? 0) > 0 ? `${intel?.bestTrafficSource?.ctr ?? 0}% CTR` : 'No traffic data yet',
               color: 'var(--data-3)',
             },
             {
               icon: Mail,
               label: 'Emails Captured',
-              value: revenue?.totals?.emailCaptures > 0 ? revenue.totals.emailCaptures.toLocaleString() : '—',
+              value: (revenue?.totals?.emailCaptures ?? 0) > 0 ? (revenue?.totals?.emailCaptures ?? 0).toLocaleString() : '—',
               sub: impr > 0 && (revenue?.totals?.emailCaptures ?? 0) > 0
-                ? `${((revenue.totals.emailCaptures / impr) * 100).toFixed(1)}% of impressions`
+                ? `${(((revenue?.totals?.emailCaptures ?? 0) / impr) * 100).toFixed(1)}% of impressions`
                 : 'No email captures yet',
               color: 'var(--accent-300)',
             },
@@ -396,7 +416,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
       </div>
 
       {/* ── Revenue Dashboard ──────────────────────────────────────────────────── */}
-      {!revenueLoading && revCampaigns.some((c: any) => c.revenueCents > 0) && (
+      {!revenueLoading && revCampaigns.some((c) => c.revenueCents > 0) && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <DollarSign size={14} style={{ color: 'var(--status-success)' }} />
@@ -407,7 +427,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
               { label: 'Total Revenue', value: `$${(revenue?.totals?.revenueDollars ?? 0).toFixed(2)}`, color: 'var(--status-success)' },
-              { label: 'Revenue per Visitor', value: revenue?.totals?.revenuePerVisitor > 0 ? `$${revenue.totals.revenuePerVisitor.toFixed(4)}` : '—', color: 'var(--data-3)' },
+              { label: 'Revenue per Visitor', value: (revenue?.totals?.revenuePerVisitor ?? 0) > 0 ? `$${(revenue?.totals?.revenuePerVisitor ?? 0).toFixed(4)}` : '—', color: 'var(--data-3)' },
               { label: 'Total Purchases', value: (revenue?.totals?.purchases ?? 0).toLocaleString(), color: 'var(--data-1)' },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '14px 18px' }}>
@@ -428,20 +448,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                 </tr>
               </thead>
               <tbody>
-                {revCampaigns.filter((r: any) => r.revenueCents > 0 || r.impressions > 0).map((row: any) => (
+                {revCampaigns.filter((r) => r.revenueCents > 0 || r.impressions > 0).map((row) => (
                   <tr key={row.campaignId} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}
                     onClick={() => onNavigate(`/campaigns/detail/${row.campaignId}`)}>
                     <td style={{ padding: '9px 14px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-                      {row.campaignName}
+                      {row.campaignName ?? row.campaignId}
                     </td>
-                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: row.revenueDollars > 0 ? 'var(--status-success)' : 'var(--text-muted)' }}>
-                      ${row.revenueDollars.toFixed(2)}
+                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: (row.revenueDollars ?? 0) > 0 ? 'var(--status-success)' : 'var(--text-muted)' }}>
+                      ${(row.revenueDollars ?? 0).toFixed(2)}
                     </td>
-                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{row.purchases.toLocaleString()}</td>
-                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{row.conversionRate}%</td>
-                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>${row.revenuePerPopup.toFixed(4)}</td>
-                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{row.emailCaptures.toLocaleString()}</td>
-                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: row.ctr > 5 ? 'var(--status-success)' : 'var(--text-muted)' }}>{row.ctr}%</td>
+                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{(row.purchases ?? 0).toLocaleString()}</td>
+                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{row.conversionRate ?? 0}%</td>
+                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>${(row.revenuePerPopup ?? 0).toFixed(4)}</td>
+                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{(row.emailCaptures ?? 0).toLocaleString()}</td>
+                    <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: (row.ctr ?? 0) > 5 ? 'var(--status-success)' : 'var(--text-muted)' }}>{row.ctr ?? 0}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -638,8 +658,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         {/* Device split */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Device Split</div>
-          {breakdown?.devices?.length > 0 ? breakdown.devices.map((d: any) => {
-            const total = breakdown.devices.reduce((s: number, x: any) => s + x.count, 0);
+          {(() => { const devs = breakdown ? (breakdown['devices'] as Array<{ device: string; count: number }> | undefined) ?? [] : []; return devs.length > 0 ? devs.map((d) => {
+            const total = devs.reduce((s: number, x) => s + x.count, 0);
             const p = total > 0 ? Math.round((d.count / total) * 100) : 0;
             return (
               <div key={d.device} style={{ marginBottom: 10 }}>
@@ -650,10 +670,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                 <div className="usage-bar-track"><div className="usage-bar-fill" style={{ width: `${p}%`, background: 'var(--accent-500)' }} /></div>
               </div>
             );
-          }) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>}
+          }) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>; })()}
           {breakdown && (
             <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
-              Unique visitors: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{(breakdown.uniqueVisitors ?? 0).toLocaleString()}</span>
+              Unique visitors: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{((breakdown.uniqueVisitors as number) ?? 0).toLocaleString()}</span>
             </div>
           )}
         </div>
@@ -661,9 +681,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         {/* Traffic sources */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Traffic Sources</div>
-          {intel?.trafficSources?.filter((t: any) => t.source).slice(0, 6).length > 0 ? (
-            intel.trafficSources.filter((t: any) => t.source).slice(0, 6).map((t: any) => {
-              const max = intel.trafficSources[0]?.impressions ?? 1;
+          {(() => {
+            type TrafficSource = { source: string; impressions: number; ctr: number };
+            const sources = (intel?.['trafficSources'] as TrafficSource[] | undefined)?.filter((t) => t.source).slice(0, 6) ?? [];
+            return sources.length > 0 ? sources.map((t) => {
+              const max = sources[0]?.impressions ?? 1;
               const p = Math.round((t.impressions / max) * 100);
               return (
                 <div key={t.source} style={{ marginBottom: 10 }}>
@@ -674,17 +696,17 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                   <div className="usage-bar-track"><div className="usage-bar-fill" style={{ width: `${p}%`, background: 'var(--data-3)' }} /></div>
                 </div>
               );
-            })
-          ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>}
+            }) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>;
+          })()}
         </div>
 
         {/* Top countries */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Top Countries</div>
-          {breakdown?.countries?.length > 0 ? (
+          {(breakdown?.['countries'] as Array<{ country: string; count: number }> | undefined)?.length ?? 0 > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
-                {breakdown.countries.slice(0, 6).map((c: any, i: number) => (
+                {(breakdown!['countries'] as Array<{ country: string; count: number }>).slice(0, 6).map((c, i) => (
                   <tr key={i}>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '4px 0' }}>{c.country === 'unknown' || !c.country ? '—' : c.country}</td>
                     <td style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textAlign: 'right' }}>{c.count.toLocaleString()}</td>
@@ -698,10 +720,13 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         {/* Trigger breakdown */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Trigger Breakdown</div>
-          {breakdown?.triggerTypes?.length > 0 ? breakdown.triggerTypes.map((t: any) => {
-            const total = breakdown.triggerTypes.reduce((s: number, x: any) => s + x.count, 0);
+          {(() => {
+            type TriggerRow = { triggerType: string; count: number };
+            const triggerTypes = (breakdown?.['triggerTypes'] as TriggerRow[] | undefined) ?? [];
+            return triggerTypes.length > 0 ? triggerTypes.map((t) => {
+            const total = triggerTypes.reduce((s: number, x) => s + x.count, 0);
             const p = total > 0 ? Math.round((t.count / total) * 100) : 0;
-            const label = (t.triggerType as string).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+            const label = t.triggerType.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
             return (
               <div key={t.triggerType} style={{ marginBottom: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
@@ -711,7 +736,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                 <div className="usage-bar-track"><div className="usage-bar-fill" style={{ width: `${p}%`, background: 'var(--data-1)' }} /></div>
               </div>
             );
-          }) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>}
+          }) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No data yet</div>;
+          })()}
         </div>
       </div>
     </div>

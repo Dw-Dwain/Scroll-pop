@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sliders, Sun, Moon, Check, ChevronDown } from 'lucide-react';
+import { Sliders, Check, ChevronDown } from 'lucide-react';
 
 export const UIElements: React.FC = () => {
   const [toggle1, setToggle1] = React.useState(true);

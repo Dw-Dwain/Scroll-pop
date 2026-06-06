@@ -1,5 +1,14 @@
 import type { DataProvider, BaseRecord } from '@refinedev/core';
 
+// Extract method param types directly from the DataProvider interface so we stay in sync
+// with Refine's API without importing their internal param-type names (which vary across versions).
+type GetListP   = Parameters<DataProvider['getList']>[0];
+type GetOneP    = Parameters<DataProvider['getOne']>[0];
+type CreateP    = Parameters<DataProvider['create']>[0];
+type UpdateP    = Parameters<DataProvider['update']>[0];
+type DeleteP    = Parameters<DataProvider['deleteOne']>[0];
+type CustomP    = Parameters<NonNullable<DataProvider['custom']>>[0];
+
 export function getApiBase(): string {
   // VITE_API_URL is set at build time for the web dashboard (e.g. https://api.scrollpop.online)
   const configured = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
@@ -50,11 +59,11 @@ export const createDataProvider = (getToken: () => Promise<string | null>): Data
   };
 
   return {
-    getList: async <TData extends BaseRecord = BaseRecord>({ resource, pagination }: any): Promise<any> => {
+    getList: async <TData extends BaseRecord = BaseRecord>({ resource, pagination }: GetListP) => {
       const API_BASE = getApiBase();
       const base = API_BASE.startsWith('http') ? '' : window.location.origin;
       const url = new URL(`${base}${API_BASE}/${resource}`);
-      
+
       if (pagination?.current) {
         url.searchParams.append('page', pagination.current.toString());
       }
@@ -63,36 +72,36 @@ export const createDataProvider = (getToken: () => Promise<string | null>): Data
       }
 
       const res = await fetchWithAuth(url.toString());
-      if (res.status === 401) return { data: [], total: 0 };
+      if (res.status === 401) return { data: [] as TData[], total: 0 };
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const body = await res.json() as { data: unknown[]; meta?: { total?: number } };
+      const body = await res.json() as { data: TData[]; meta?: { total?: number } };
 
       return {
-        data: body.data as any[],
+        data: body.data,
         total: body.meta?.total ?? body.data.length,
       };
     },
 
-    getOne: async <TData extends BaseRecord = BaseRecord>({ resource, id }: any): Promise<any> => {
+    getOne: async <TData extends BaseRecord = BaseRecord>({ resource, id }: GetOneP) => {
       const API_BASE = getApiBase();
       const res = await fetchWithAuth(`${API_BASE}/${resource}/${id}`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const body = await res.json() as { data: unknown };
-      return { data: body.data as any };
+      const body = await res.json() as { data: TData };
+      return { data: body.data };
     },
 
-    create: async <TData extends BaseRecord = BaseRecord, TVariables = {}>({ resource, variables }: any): Promise<any> => {
+    create: async <TData extends BaseRecord = BaseRecord>({ resource, variables }: CreateP) => {
       const API_BASE = getApiBase();
       const res = await fetchWithAuth(`${API_BASE}/${resource}`, {
         method: 'POST',
         body: JSON.stringify(variables),
       });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const body = await res.json() as { data: unknown };
-      return { data: body.data as any };
+      const body = await res.json() as { data: TData };
+      return { data: body.data };
     },
 
-    update: async <TData extends BaseRecord = BaseRecord, TVariables = {}>({ resource, id, variables }: any): Promise<any> => {
+    update: async <TData extends BaseRecord = BaseRecord>({ resource, id, variables }: UpdateP) => {
       const API_BASE = getApiBase();
       const url = id ? `${API_BASE}/${resource}/${id}` : `${API_BASE}/${resource}`;
       const res = await fetchWithAuth(url, {
@@ -100,35 +109,33 @@ export const createDataProvider = (getToken: () => Promise<string | null>): Data
         body: JSON.stringify(variables),
       });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const body = await res.json() as { data: unknown };
-      return { data: body.data as any };
+      const body = await res.json() as { data: TData };
+      return { data: body.data };
     },
 
-    deleteOne: async <TData extends BaseRecord = BaseRecord, TVariables = {}>({ resource, id }: any): Promise<any> => {
+    deleteOne: async <TData extends BaseRecord = BaseRecord>({ resource, id }: DeleteP) => {
       const API_BASE = getApiBase();
       const url = id ? `${API_BASE}/${resource}/${id}` : `${API_BASE}/${resource}`;
-      const res = await fetchWithAuth(url, {
-        method: 'DELETE',
-      });
+      const res = await fetchWithAuth(url, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       try {
-        const body = await res.json() as { data: { id: string } };
-        return { data: body.data as any };
+        const body = await res.json() as { data: TData };
+        return { data: body.data };
       } catch {
-        return { data: { id } as any };
+        return { data: { id } as TData };
       }
     },
 
-    custom: async ({ url, method, payload }: any): Promise<any> => {
+    custom: async <TData extends BaseRecord = BaseRecord>({ url, method, payload }: CustomP) => {
       const API_BASE = getApiBase();
       const resolvedUrl = resolveUrl(API_BASE, url);
       const options: RequestInit = { method: (method as string).toUpperCase() };
       if (payload) options.body = JSON.stringify(payload);
       const res = await fetchWithAuth(resolvedUrl, options);
-      if (res.status === 401) return { data: null };
+      if (res.status === 401) return { data: null as unknown as TData };
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const body = await res.json();
-      return { data: body.data ?? body };
+      const body = await res.json() as { data: TData };
+      return { data: (body.data ?? body) as TData };
     },
 
     getApiUrl: () => getApiBase(),

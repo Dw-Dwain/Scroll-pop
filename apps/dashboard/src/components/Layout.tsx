@@ -41,7 +41,7 @@ function loadProfileFromStorage() {
   return null;
 }
 
-function getInitials(name: string) {
+function _getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
@@ -110,7 +110,8 @@ export const Layout: React.FC<LayoutProps> = ({
   const usagePct = maxViews === Infinity ? 0 : Math.min(100, Math.round((viewsUsed / maxViews) * 100));
   const usageColor = usagePct >= 95 ? 'var(--status-error)' : usagePct >= 80 ? 'var(--status-warning)' : 'var(--accent-500)';
 
-  const primaryNav = [
+  type NavItem = { label: string; path: string; icon: React.FC<{ size?: number }>; beta?: boolean };
+  const primaryNav: NavItem[] = [
     { label: 'Dashboard',   path: '/dashboard', icon: LayoutDashboard },
     { label: 'Sites',       path: '/sites',     icon: Globe },
     { label: 'Campaigns',   path: '/campaigns', icon: Megaphone },
@@ -212,7 +213,7 @@ export const Layout: React.FC<LayoutProps> = ({
               >
                 <Icon size={14} />
                 {item.label}
-                {(item as any).beta && (
+                {item.beta && (
                   <span style={{ fontSize: 9, color: 'var(--accent-500)', fontWeight: 500, letterSpacing: '0.03em' }}>β</span>
                 )}
               </button>
@@ -511,7 +512,7 @@ export const Layout: React.FC<LayoutProps> = ({
                 >
                   <Icon size={15} />
                   <span style={{ flex: 1 }}>{item.label}</span>
-                  {(item as any).beta && <span style={{ fontSize: 9, color: 'var(--accent-500)' }}>β</span>}
+                  {item.beta && <span style={{ fontSize: 9, color: 'var(--accent-500)' }}>β</span>}
                 </button>
               );
             })}

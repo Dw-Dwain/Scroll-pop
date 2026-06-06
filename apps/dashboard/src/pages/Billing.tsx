@@ -24,7 +24,7 @@ function formatLimit(val: number) {
   return val.toLocaleString();
 }
 
-export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
+export const Billing: React.FC<BillingProps> = ({ onNavigate: _onNavigate }) => {
   const { plan: currentPlan, isAdmin, limits } = usePlan();
   const [confirmPlan, setConfirmPlan] = React.useState<PlanId | null>(null);
   const [checkoutLoading, setCheckoutLoading] = React.useState(false);
@@ -38,7 +38,7 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
     method: 'get',
     queryOptions: { staleTime: 30_000 },
   });
-  const usage = (usageData?.data as any) ?? null;
+  const usage = (usageData?.data as { currentMonthViews?: number; monthlyViewLimit?: number } | undefined) ?? null;
   const currentMonthViews: number = usage?.currentMonthViews ?? 0;
   const monthlyViewLimit: number  = usage?.monthlyViewLimit  ?? limits.maxViews;
 
@@ -77,17 +77,17 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
           cancelUrl:  `${origin}/billing`,
         },
       });
-      const url = (result?.data as any)?.url;
+      const url = (result?.data as { url?: string } | undefined)?.url;
       if (url) {
         window.location.href = url; // hand off to Stripe
       } else {
         throw new Error('No checkout URL returned');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setCheckoutLoading(false);
       // Stripe keys not yet configured (server returns 500 / no URL) — show a friendly message
       // instead of surfacing a raw server error (P1-16).
-      const msg: string = err?.message ?? '';
+      const msg: string = err instanceof Error ? err.message : '';
       const isStripeNotConfigured = msg.includes('not configured') || msg.includes('No checkout URL') || msg.includes('500') || !msg;
       if (isStripeNotConfigured) {
         showToast('Paid plans are activating soon — we\'ll notify you the moment checkout goes live!');
@@ -106,11 +106,11 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate }) => {
         method: 'post',
         values: { returnUrl: `${window.location.origin}/billing` },
       });
-      const url = (result?.data as any)?.url;
+      const url = (result?.data as { url?: string } | undefined)?.url;
       if (url) window.location.href = url;
-    } catch (err: any) {
+    } catch (err: unknown) {
       setPortalLoading(false);
-      showToast(err?.message ?? 'Could not open subscription portal. Subscribe to a paid plan first.');
+      showToast(err instanceof Error ? err.message : 'Could not open subscription portal. Subscribe to a paid plan first.');
     }
   };
 

@@ -6,6 +6,7 @@ import { Webhook } from 'svix';
 import Stripe from 'stripe';
 import { PLAN_LIMITS } from '@scrollpop/shared';
 import { redis } from '../index.js';
+import { revokeAllUserSessions } from '../lib/auth.js';
 
 // ─── Clerk Webhook ────────────────────────────────────────────────────────────
 
@@ -138,7 +139,14 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
         case 'user.created':
         case 'user.updated': {
           const data = (evt as ClerkUserEvent).data;
-          const email = data.email_addresses[0]?.email_address ?? '';
+          // SR-14: phone-only or social-OAuth accounts may share no email. Storing ''
+          // silently breaks ESP sync, auto-responders, and admin display. Fall back to a
+          // synthetic, non-deliverable placeholder so the value is recognizable as "no email".
+          const email = data.email_addresses[0]?.email_address
+            ?? `${data.id}@noemail.scrollpop.local`;
+          if (!data.email_addresses[0]?.email_address) {
+            fastify.log.info({ clerkUserId: data.id }, '[webhook] user has no email — using placeholder');
+          }
           const name = [data.first_name, data.last_name].filter(Boolean).join(' ') || null;
 
           await db.insert(users)
@@ -152,6 +160,9 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
 
         case 'user.deleted': {
           const data = (evt as ClerkUserEvent).data;
+
+          // Revoke all active sessions first so any in-flight JWT cannot be replayed (P3-4).
+          await revokeAllUserSessions(data.id, fastify.log);
 
           const user = await db.query.users.findFirst({
             where: eq(users.clerkUserId, data.id),
@@ -170,7 +181,7 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
           // tenantMembers cascade-deletes automatically via FK, but we already cleared above.
           await db.delete(users).where(eq(users.id, user.id));
 
-          fastify.log.info({ clerkUserId: data.id }, 'User deleted from Clerk — DB cleaned up');
+          fastify.log.info({ clerkUserId: data.id }, 'User deleted from Clerk — sessions revoked, DB cleaned up');
           break;
         }
 

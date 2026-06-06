@@ -99,7 +99,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             return (
               <button
                 key={id}
-                onClick={() => { setActiveKind(id as any); if (id !== 'all' && onTypeChange) onTypeChange(id); }}
+                onClick={() => { setActiveKind(id as typeof id); if (id !== 'all' && onTypeChange) onTypeChange(id); }}
                 style={{
                   height: 30, padding: '0 10px', borderRadius: 5, fontSize: 11, fontWeight: 500,
                   fontFamily: 'var(--font-mono)', letterSpacing: '0.02em',

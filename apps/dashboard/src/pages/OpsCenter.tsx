@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, AlertTriangle, Gauge, Radio, TrendingUp, Users, Pause, Play } from 'lucide-react';
+import { Activity, AlertTriangle, Gauge, TrendingUp, Pause, Play } from 'lucide-react';
 import { useApiUrl, useCustom, useList } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
 
@@ -45,12 +45,15 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
   const { data: liveResult } = useCustom({ url: `${apiUrl}/ops/live-events?limit=20`, method: 'get' });
   const { data: healthResult } = useCustom({ url: `${apiUrl}/ops/campaign-health`, method: 'get' });
 
-  const overview = (overviewResult as any)?.data ?? {};
-  const baseLiveEvents: any[] = Array.isArray((liveResult as any)?.data) ? (liveResult as any).data : [];
-  const healthRows: any[] = Array.isArray((healthResult as any)?.data) ? (healthResult as any).data : [];
+  type OpsOverview = Record<string, unknown>;
+  type LiveEvent = { id?: string; ts?: string; eventType?: string; campaignId?: string; domain?: string; device?: string };
+  type HealthRow = { campaignId?: string; name?: string; impressions?: number; clicks?: number; ctr?: number; status?: string; dismissRate?: number; healthScore?: number };
+  const overview: OpsOverview = (overviewResult as { data?: OpsOverview } | undefined)?.data ?? {};
+  const baseLiveEvents: LiveEvent[] = Array.isArray((liveResult as { data?: LiveEvent[] } | undefined)?.data) ? (liveResult as { data: LiveEvent[] }).data : [];
+  const healthRows: HealthRow[] = Array.isArray((healthResult as { data?: HealthRow[] } | undefined)?.data) ? (healthResult as { data: HealthRow[] }).data : [];
 
-  const [streamEvents, setStreamEvents] = React.useState<any[]>([]);
-  const [streamOverview, setStreamOverview] = React.useState<any>(null);
+  const [streamEvents, setStreamEvents] = React.useState<LiveEvent[]>([]);
+  const [streamOverview, setStreamOverview] = React.useState<OpsOverview | null>(null);
   const [paused, setPaused] = React.useState(false);
   const [eventsPerSec, setEventsPerSec] = React.useState<number[]>(Array(24).fill(0));
 
@@ -58,9 +61,10 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
   const liveEvents = streamEvents.length > 0 ? streamEvents : baseLiveEvents;
 
   const campaignById = React.useMemo(() => {
-    const map: Record<string, any> = {};
+    const map: Record<string, { id: string; name?: string }> = {};
     for (const row of campaignsData?.data ?? []) {
-      if (row?.id) map[String(row.id)] = row;
+      const r = row as { id?: string; name?: string };
+      if (r?.id) map[String(r.id)] = r as { id: string; name?: string };
     }
     return map;
   }, [campaignsData]);
@@ -72,7 +76,7 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
       const apiBase = getApiBase().replace(/\/api\/v1$/, '');
       es = new EventSource(`${apiBase}/api/v1/ops/stream`);
       es.addEventListener('ops_kpi_update', (evt: MessageEvent) => {
-        try { setStreamOverview((p: any) => ({ ...(p ?? {}), ...JSON.parse(evt.data) })); } catch {}
+        try { setStreamOverview((p) => ({ ...(p ?? {}), ...(JSON.parse(evt.data) as OpsOverview) })); } catch {}
       });
       es.addEventListener('live_event', (evt: MessageEvent) => {
         try {
@@ -89,10 +93,10 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
   }, [paused]);
 
   const tiles = [
-    { label: 'Active Visitors',      value: mergedOverview.activeVisitorsNow ?? 0,    color: 'var(--data-2)' },
-    { label: 'Events / min',         value: mergedOverview.eventsPerMinute ?? 0,       color: 'var(--data-1)' },
-    { label: 'Active Campaigns',     value: mergedOverview.activeCampaigns ?? 0,       color: 'var(--status-success)' },
-    { label: 'Open Alerts',          value: mergedOverview.alertsOpen ?? 0,            color: mergedOverview.alertsOpen > 0 ? 'var(--status-warning)' : 'var(--text-muted)' },
+    { label: 'Active Visitors',      value: (mergedOverview.activeVisitorsNow as number) ?? 0,    color: 'var(--data-2)' },
+    { label: 'Events / min',         value: (mergedOverview.eventsPerMinute as number) ?? 0,       color: 'var(--data-1)' },
+    { label: 'Active Campaigns',     value: (mergedOverview.activeCampaigns as number) ?? 0,       color: 'var(--status-success)' },
+    { label: 'Open Alerts',          value: (mergedOverview.alertsOpen as number) ?? 0, color: ((mergedOverview.alertsOpen as number) ?? 0) > 0 ? 'var(--status-warning)' : 'var(--text-muted)' },
   ];
 
   const eventColor = (type: string) =>
@@ -117,7 +121,7 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
             <span style={{ fontSize: 11, color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>Live</span>
           </div>
           <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-            {mergedOverview.eventsPerMinute ?? 0} events/min
+            {(mergedOverview.eventsPerMinute as number) ?? 0} events/min
           </span>
         </div>
         <button
@@ -159,14 +163,14 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
             {liveEvents.length === 0 ? (
               <div style={{ color: 'var(--text-muted)', padding: '12px 0' }}>Waiting for events...</div>
             ) : (
-              liveEvents.map((evt: any, i: number) => {
+              liveEvents.map((evt, i) => {
                 let ts = '';
-                try { ts = new Date(evt.ts).toLocaleTimeString('en', { hour12: false }); } catch {}
-                const name = campaignById[evt.campaignId]?.name ?? evt.campaignId?.slice(0, 12) ?? '—';
+                try { ts = new Date(evt.ts ?? '').toLocaleTimeString('en', { hour12: false }); } catch {}
+                const name = (evt.campaignId ? campaignById[evt.campaignId] : undefined)?.name ?? evt.campaignId?.slice(0, 12) ?? '—';
                 return (
                   <div key={i} style={{ display: 'flex', gap: 8, padding: '3px 0', color: 'var(--text-secondary)' }}>
                     <span style={{ color: 'var(--text-muted)', minWidth: 60 }}>{ts}</span>
-                    <span style={{ color: eventColor(evt.eventType), minWidth: 80, textTransform: 'uppercase' }}>
+                    <span style={{ color: eventColor(evt.eventType ?? ''), minWidth: 80, textTransform: 'uppercase' }}>
                       {evt.eventType?.slice(0, 10)}
                     </span>
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -202,7 +206,7 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
           {healthRows.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>No health data yet.</div>
           ) : (
-            healthRows.slice(0, 6).map((row: any) => (
+            healthRows.slice(0, 6).map((row) => (
               <button
                 key={row.campaignId}
                 onClick={() => onNavigate(`/campaigns/detail/${row.campaignId}`)}
@@ -214,7 +218,7 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
               >
                 <div>
                   <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
-                    {campaignById[row.campaignId]?.name ?? row.campaignId?.slice(0, 12)}
+                    {(row.campaignId ? campaignById[row.campaignId] : undefined)?.name ?? row.campaignId?.slice(0, 12)}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {row.impressions} impr · {Math.round((row.dismissRate ?? 0) * 100)}% dismiss
@@ -241,8 +245,8 @@ export const OpsCenter: React.FC<OpsCenterProps> = ({ onNavigate }) => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[
-              { label: 'Error rate',   value: `${((mergedOverview.errorRate ?? 0) * 100).toFixed(2)}%`, ok: (mergedOverview.errorRate ?? 0) < 0.01 },
-              { label: 'Queue depth', value: mergedOverview.queueDepth ?? 0, ok: (mergedOverview.queueDepth ?? 0) < 1000 },
+              { label: 'Error rate',   value: `${(((mergedOverview.errorRate as number) ?? 0) * 100).toFixed(2)}%`, ok: ((mergedOverview.errorRate as number) ?? 0) < 0.01 },
+              { label: 'Queue depth', value: (mergedOverview.queueDepth as number) ?? 0, ok: ((mergedOverview.queueDepth as number) ?? 0) < 1000 },
               { label: 'Workers',     value: `${mergedOverview.workersActive ?? 0}/${mergedOverview.workersTotal ?? 3}`, ok: true },
               { label: 'p99 latency', value: `${mergedOverview.p99Latency ?? '—'}ms`, ok: true },
             ].map(({ label, value, ok }) => (

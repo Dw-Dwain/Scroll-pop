@@ -1,21 +1,24 @@
 import React from 'react';
 import {
-  Shield, Key, Bell, Puzzle, AlertTriangle, Copy, Check, Save, Code, Globe,
-  ChevronRight, RefreshCw, Eye, EyeOff, ExternalLink, Zap, BarChart2,
-  Webhook, Download, Pause, Trash2, Info, Clock, Mail, Smartphone,
-  Building2, Link2, Languages, CreditCard, Activity, Users, UserPlus, X,
+  Key, Bell, Puzzle, AlertTriangle, Copy, Check, Save, Code, Globe,
+  RefreshCw, Eye, EyeOff, Zap, BarChart2,
+  Download, Pause, Trash2, Info, Clock, Mail, Smartphone,
+  Building2, Users, UserPlus, X,
+  type LucideProps,
 } from 'lucide-react';
 import { useList, useUpdate, useCustomMutation, useCustom } from '@refinedev/core';
-import { useOrganization, useOrganizationList } from '@clerk/clerk-react';
+import { useOrganization } from '@clerk/clerk-react';
 import { getApiBase } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
 
 const STORAGE_KEY = '_sp_settings';
 
-function loadSettings() {
+type SettingsRecord = Record<string, unknown>;
+
+function loadSettings(): SettingsRecord {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Record<string, any>;
+    if (raw) return JSON.parse(raw) as SettingsRecord;
   } catch {}
   return {
     orgName: 'My Organization',
@@ -50,7 +53,7 @@ function slugify(str: string) {
 
 type Tab = 'general' | 'apikeys' | 'notifications' | 'integrations' | 'team' | 'danger';
 
-const TABS: { id: Tab; label: string; icon: React.FC<any>; danger?: boolean }[] = [
+const TABS: { id: Tab; label: string; icon: React.FC<LucideProps>; danger?: boolean }[] = [
   { id: 'general',       label: 'General',       icon: Building2 },
   { id: 'apikeys',       label: 'API Keys',       icon: Key },
   { id: 'notifications', label: 'Notifications',  icon: Bell },
@@ -60,16 +63,16 @@ const TABS: { id: Tab; label: string; icon: React.FC<any>; danger?: boolean }[] 
 ];
 
 function getSnippetJS(publicKey: string) {
-  return `<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
+  return `<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n</script>`;
 }
 function getWpFunctionsPhp(publicKey: string) {
-  return `<?php\nfunction scrollpop_embed_script() {\n    $public_key = '${publicKey}';\n    ?>\n    <script>\n    (function(w,d,s,p){\n      p=w.__sp=w.__sp||{};\n      if(p.loaded)return; p.loaded=true;\n      var el=d.createElement(s); el.async=true; el.defer=true;\n      el.src='https://cdn.scrollpop.online/v1/<?php echo esc_js( $public_key ); ?>/p.js';\n      d.head.appendChild(el);\n    })(window,document,'script');\n    <\/script>\n    <?php\n}\nadd_action( 'wp_head', 'scrollpop_embed_script' );`;
+  return `<?php\nfunction scrollpop_embed_script() {\n    $public_key = '${publicKey}';\n    ?>\n    <script>\n    (function(w,d,s,p){\n      p=w.__sp=w.__sp||{};\n      if(p.loaded)return; p.loaded=true;\n      var el=d.createElement(s); el.async=true; el.defer=true;\n      el.src='https://cdn.scrollpop.online/v1/<?php echo esc_js( $public_key ); ?>/p.js';\n      d.head.appendChild(el);\n    })(window,document,'script');\n    </script>\n    <?php\n}\nadd_action( 'wp_head', 'scrollpop_embed_script' );`;
 }
 function getShopifyThemeLiquid(publicKey: string) {
-  return `{%- comment -%} ScrollPop — place just before </head> {%- endcomment -%}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>`;
+  return `{%- comment -%} ScrollPop — place just before </head> {%- endcomment -%}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n</script>`;
 }
 function getShopifyAppEmbedBlock(publicKey: string) {
-  return `{% comment %} sections/scrollpop-embed.liquid {% endcomment %}\n{% if section.settings.public_key != blank %}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/{{ section.settings.public_key }}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n<\/script>\n{% endif %}\n\n{% schema %}\n{\n  "name": "ScrollPop",\n  "target": "head",\n  "settings": [\n    {\n      "type": "text",\n      "id": "public_key",\n      "label": "ScrollPop Public Key",\n      "default": "${publicKey}"\n    }\n  ]\n}\n{% endschema %}`;
+  return `{% comment %} sections/scrollpop-embed.liquid {% endcomment %}\n{% if section.settings.public_key != blank %}\n<script>\n(function(w,d,s,p){\n  p=w.__sp=w.__sp||{};\n  if(p.loaded)return; p.loaded=true;\n  var el=d.createElement(s); el.async=true; el.defer=true;\n  el.src='https://cdn.scrollpop.online/v1/{{ section.settings.public_key }}/p.js';\n  d.head.appendChild(el);\n})(window,document,'script');\n</script>\n{% endif %}\n\n{% schema %}\n{\n  "name": "ScrollPop",\n  "target": "head",\n  "settings": [\n    {\n      "type": "text",\n      "id": "public_key",\n      "label": "ScrollPop Public Key",\n      "default": "${publicKey}"\n    }\n  ]\n}\n{% endschema %}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
@@ -123,9 +126,9 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 
 function NotifRow({ label, desc, settingKey, settings, onChange, channels }: {
   label: string; desc: string; settingKey: string;
-  settings: any; onChange: (k: string, v: any) => void; channels?: boolean;
+  settings: SettingsRecord; onChange: (k: string, v: boolean) => void; channels?: boolean;
 }) {
-  const isOn = !!(settings as any)[settingKey];
+  const isOn = !!(settings[settingKey]);
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid var(--border-subtle)' }}>
       <div style={{ flex: 1, minWidth: 0, paddingRight: 24 }}>
@@ -190,8 +193,9 @@ function TeamTab() {
       setInviteEmail('');
       showToast('Invitation sent!');
       await invitations?.revalidate?.();
-    } catch (err: any) {
-      showToast(err?.errors?.[0]?.message ?? 'Failed to send invitation.');
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: Array<{ message?: string }> };
+      showToast(clerkErr?.errors?.[0]?.message ?? 'Failed to send invitation.');
     } finally {
       setInviting(false);
     }
@@ -200,7 +204,7 @@ function TeamTab() {
   const handleRevoke = async (invitationId: string) => {
     if (!organization) return;
     try {
-      const inv = invitations?.data?.find((i: any) => i.id === invitationId);
+      const inv = invitations?.data?.find((i: { id: string }) => i.id === invitationId);
       await inv?.revoke();
       showToast('Invitation revoked.');
       await invitations?.revalidate?.();
@@ -232,7 +236,7 @@ function TeamTab() {
           <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>No members yet.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {memberList.map((m: any, i: number, arr: any[]) => (
+            {(memberList as Array<{ id: string; publicUserData?: { firstName?: string; lastName?: string; identifier?: string }; role: string }>).map((m, i, arr) => (
               <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent-400)', flexShrink: 0 }}>
@@ -258,7 +262,7 @@ function TeamTab() {
       {pendingList.length > 0 && (
         <SectionCard title="Pending Invitations" subtitle="Waiting for recipients to accept">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {pendingList.map((inv: any, i: number, arr: any[]) => (
+            {(pendingList as unknown as Array<{ id: string; emailAddress: string; role: string; createdAt: string }>).map((inv, i, arr) => (
               <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
                 <div>
                   <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{inv.emailAddress}</div>
@@ -293,7 +297,7 @@ function TeamTab() {
             </div>
             <div style={{ minWidth: 140 }}>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 5 }}>Role</label>
-              <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as any)}>
+              <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'org:member' | 'org:admin')}>
                 <option value="org:member">Member</option>
                 <option value="org:admin">Admin</option>
               </select>
@@ -336,7 +340,7 @@ export const Settings: React.FC = () => {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  const [secretKey, setSecretKey] = React.useState(() => {
+  const [secretKey] = React.useState(() => {
     return localStorage.getItem('_sp_secret_key') ?? '';
   });
 
@@ -352,7 +356,7 @@ export const Settings: React.FC = () => {
     }
     setTestingWebhook(true);
     try {
-      const response = await fetch(settings.webhookUrl, {
+      const response = await fetch(settings.webhookUrl as string, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -370,8 +374,9 @@ export const Settings: React.FC = () => {
       } else {
         showToast("⚠️ Webhook returned status code: " + response.status);
       }
-    } catch (err: any) {
-      showToast("❌ Failed to connect to webhook: " + err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("❌ Failed to connect to webhook: " + msg);
     } finally {
       setTestingWebhook(false);
     }
@@ -423,29 +428,29 @@ export const Settings: React.FC = () => {
   const canManageOrg = meetsMinPlan('agency');
 
   const { data: sitesData } = useList({ resource: 'sites' });
-  const sites = (sitesData?.data ?? []) as any[];
+  const sites = (sitesData?.data ?? []) as Array<{ id: string; name: string; domain: string; publicKey?: string; isActive?: boolean }>;
   const selectedSite = sites.find((s) => s.id === selectedSiteId) ?? sites[0] ?? null;
   const publicKey = selectedSite?.publicKey ?? 'YOUR_PUBLIC_KEY';
 
   // Tenant (org) — name is real server data persisted via PATCH /tenants/:id
   const { data: tenantData } = useList({ resource: 'tenants' });
-  const tenant = (tenantData?.data?.[0] ?? null) as any;
+  const tenant = (tenantData?.data?.[0] ?? null) as { id?: string; name?: string } | null;
   const { mutateAsync: updateTenant } = useUpdate();
 
   // Campaigns — used by Pause-all
   const { data: campaignsData, refetch: refetchCampaigns } = useList({ resource: 'campaigns', pagination: { mode: 'off' } });
-  const campaigns = (campaignsData?.data ?? []) as any[];
+  const campaigns = (campaignsData?.data ?? []) as Array<{ id: string; status?: string }>;
   const { mutateAsync: customMutate } = useCustomMutation();
 
   // Seed org fields from the server tenant once it loads.
   React.useEffect(() => {
     if (tenant?.name && tenant.name !== settings.orgName) {
-      setSettings((s: Record<string, any>) => ({ ...s, orgName: tenant.name, orgSlug: slugify(tenant.name) }));
+      setSettings((s: SettingsRecord) => ({ ...s, orgName: tenant.name, orgSlug: slugify(tenant.name as string) }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant?.name]);
 
-  const persistSettings = (updated: Record<string, any>) => {
+  const persistSettings = (updated: SettingsRecord) => {
     setSettings(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
@@ -462,8 +467,9 @@ export const Settings: React.FC = () => {
       setIsSaved(true);
       showToast("Settings saved.");
       setTimeout(() => setIsSaved(false), 2500);
-    } catch (err: any) {
-      showToast(err?.message ?? "Couldn't save organization name to the server.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : undefined;
+      showToast(msg ?? "Couldn't save organization name to the server.");
     }
   };
 
@@ -482,11 +488,11 @@ export const Settings: React.FC = () => {
     queryOptions: { queryKey: ['notification-prefs'] },
   });
   React.useEffect(() => {
-    const serverPrefs = (notifPrefsRes as any)?.data;
+    const serverPrefs = (notifPrefsRes as { data?: SettingsRecord } | undefined)?.data;
     if (serverPrefs && typeof serverPrefs === 'object' && Object.keys(serverPrefs).length > 0) {
-      setSettings((s: Record<string, any>) => ({ ...s, ...serverPrefs }));
+      setSettings((s: SettingsRecord) => ({ ...s, ...serverPrefs }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [notifPrefsRes]);
 
   const handleNotifChange = (key: string, value: boolean) => {
@@ -494,6 +500,57 @@ export const Settings: React.FC = () => {
     // Persist notification prefs server-side so they gate real notification delivery.
     customMutate({ url: `${getApiBase()}/notification-prefs`, method: 'put', values: { [key]: value } })
       .catch(() => showToast("Couldn't save notification preference to the server."));
+  };
+
+  // ── ESP Integrations (Klaviyo + Mailchimp) ────────────────────────────────
+  type EspCfg = { enabled: boolean; apiKey: string; listId: string };
+  const [klaviyo, setKlaviyo] = React.useState<EspCfg>({ enabled: false, apiKey: '', listId: '' });
+  const [mailchimp, setMailchimp] = React.useState<EspCfg>({ enabled: false, apiKey: '', listId: '' });
+  const [espSaving, setEspSaving] = React.useState(false);
+  const [espTesting, setEspTesting] = React.useState<'klaviyo' | 'mailchimp' | null>(null);
+  const [testEmail, setTestEmail] = React.useState('');
+
+  const { data: integrationsRes, refetch: refetchIntegrations } = useCustom({
+    url: `${getApiBase()}/integrations`,
+    method: 'get',
+    queryOptions: { queryKey: ['integrations'] },
+  });
+  React.useEffect(() => {
+    const d = (integrationsRes as { data?: { klaviyo?: Partial<EspCfg>; mailchimp?: Partial<EspCfg> } })?.data;
+    if (!d) return;
+    if (d.klaviyo) setKlaviyo(k => ({ ...k, ...d.klaviyo, apiKey: d.klaviyo?.apiKey ?? k.apiKey }));
+    if (d.mailchimp) setMailchimp(m => ({ ...m, ...d.mailchimp, apiKey: d.mailchimp?.apiKey ?? m.apiKey }));
+  }, [integrationsRes]);
+
+  const saveEsp = async () => {
+    setEspSaving(true);
+    try {
+      await customMutate({
+        url: `${getApiBase()}/integrations`,
+        method: 'put',
+        values: {
+          klaviyo:   { enabled: klaviyo.enabled,   ...(klaviyo.apiKey   ? { apiKey: klaviyo.apiKey }   : {}), listId: klaviyo.listId },
+          mailchimp: { enabled: mailchimp.enabled, ...(mailchimp.apiKey ? { apiKey: mailchimp.apiKey } : {}), listId: mailchimp.listId },
+        },
+      });
+      void refetchIntegrations();
+      showToast('Integration settings saved');
+    } catch { showToast('Failed to save integration settings'); }
+    finally { setEspSaving(false); }
+  };
+
+  const testEsp = async (provider: 'klaviyo' | 'mailchimp') => {
+    if (!testEmail) { showToast('Enter a test email first'); return; }
+    setEspTesting(provider);
+    try {
+      await customMutate({
+        url: `${getApiBase()}/integrations/test`,
+        method: 'post',
+        values: { provider, testEmail },
+      });
+      showToast(`Test contact sent to ${provider === 'klaviyo' ? 'Klaviyo' : 'Mailchimp'} ✓`);
+    } catch { showToast(`Test failed — check your API key and list ID`); }
+    finally { setEspTesting(null); }
   };
 
   return (
@@ -557,7 +614,7 @@ export const Settings: React.FC = () => {
                     <input
                       className="input"
                       type="text"
-                      value={settings.orgName ?? ''}
+                      value={(settings.orgName as string) ?? ''}
                       onChange={(e) => {
                         const name = e.target.value;
                         setSettings({ ...settings, orgName: name, orgSlug: slugify(name) });
@@ -569,7 +626,7 @@ export const Settings: React.FC = () => {
                       <input
                         className="input"
                         type="text"
-                        value={settings.orgSlug ?? ''}
+                        value={(settings.orgSlug as string) ?? ''}
                         onChange={(e) => setSettings({ ...settings, orgSlug: slugify(e.target.value) })}
                         style={{ paddingLeft: 124, fontFamily: 'var(--font-mono)', fontSize: 12 }}
                       />
@@ -587,7 +644,7 @@ export const Settings: React.FC = () => {
                       className="input"
                       type="url"
                       placeholder="https://yourcompany.com"
-                      value={settings.website ?? ''}
+                      value={(settings.website as string) ?? ''}
                       onChange={(e) => setSettings({ ...settings, website: e.target.value })}
                     />
                   </FieldRow>
@@ -596,7 +653,7 @@ export const Settings: React.FC = () => {
                       className="input"
                       type="email"
                       placeholder="support@yourcompany.com"
-                      value={settings.supportEmail ?? ''}
+                      value={(settings.supportEmail as string) ?? ''}
                       onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })}
                     />
                   </FieldRow>
@@ -608,14 +665,14 @@ export const Settings: React.FC = () => {
               <SectionCard title="Localization" subtitle="Regional preferences for dates, times, and currency.">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                   <FieldRow label="Timezone">
-                    <select className="input" value={settings.timezone ?? 'UTC'} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}>
+                    <select className="input" value={(settings.timezone as string) ?? 'UTC'} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}>
                       {['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Singapore', 'Australia/Sydney'].map((tz) => (
                         <option key={tz} value={tz}>{tz}</option>
                       ))}
                     </select>
                   </FieldRow>
                   <FieldRow label="Date Format">
-                    <select className="input" value={settings.dateFormat ?? 'MMM D, YYYY'} onChange={(e) => setSettings({ ...settings, dateFormat: e.target.value })}>
+                    <select className="input" value={(settings.dateFormat as string) ?? 'MMM D, YYYY'} onChange={(e) => setSettings({ ...settings, dateFormat: e.target.value })}>
                       <option value="MMM D, YYYY">Jan 1, 2026</option>
                       <option value="MM/DD/YYYY">01/01/2026</option>
                       <option value="DD/MM/YYYY">01/01/2026 (EU)</option>
@@ -623,7 +680,7 @@ export const Settings: React.FC = () => {
                     </select>
                   </FieldRow>
                   <FieldRow label="Currency">
-                    <select className="input" value={settings.currency ?? 'USD'} onChange={(e) => setSettings({ ...settings, currency: e.target.value })}>
+                    <select className="input" value={(settings.currency as string) ?? 'USD'} onChange={(e) => setSettings({ ...settings, currency: e.target.value })}>
                       {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'].map((c) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -640,7 +697,7 @@ export const Settings: React.FC = () => {
                       className="input"
                       type="url"
                       placeholder="https://affiliate.example.com"
-                      value={settings.affiliateLink ?? ''}
+                      value={(settings.affiliateLink as string) ?? ''}
                       onChange={(e) => setSettings({ ...settings, affiliateLink: e.target.value })}
                     />
                   </FieldRow>
@@ -649,7 +706,7 @@ export const Settings: React.FC = () => {
                       className="input"
                       type="url"
                       placeholder="https://www.amazon.com/?tag=yourtag-20"
-                      value={settings.amazonAffiliate ?? ''}
+                      value={(settings.amazonAffiliate as string) ?? ''}
                       onChange={(e) => setSettings({ ...settings, amazonAffiliate: e.target.value })}
                     />
                   </FieldRow>
@@ -658,7 +715,7 @@ export const Settings: React.FC = () => {
                       className="input"
                       type="url"
                       placeholder="https://click.linksynergy.com/…"
-                      value={settings.rakutenAffiliate ?? ''}
+                      value={(settings.rakutenAffiliate as string) ?? ''}
                       onChange={(e) => setSettings({ ...settings, rakutenAffiliate: e.target.value })}
                     />
                   </FieldRow>
@@ -683,7 +740,7 @@ export const Settings: React.FC = () => {
                       or Google Consent Mode. Off by default (the snippet only honors Do-Not-Track and explicit denial).
                     </div>
                   </div>
-                  <Toggle checked={!!(settings as any).require_consent} onChange={(v) => handleNotifChange('require_consent', v)} label="Require visitor consent" />
+                  <Toggle checked={!!settings['require_consent']} onChange={(v) => handleNotifChange('require_consent', v)} label="Require visitor consent" />
                 </div>
               </SectionCard>
 
@@ -741,7 +798,7 @@ export const Settings: React.FC = () => {
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {sites.map((site: any) => (
+                    {sites.map((site) => (
                       <div key={site.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '12px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                           <Globe size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
@@ -777,7 +834,7 @@ export const Settings: React.FC = () => {
                         className="input"
                         type="url"
                         placeholder="https://your-server.com/webhooks/scrollpop"
-                        value={settings.webhookUrl ?? ''}
+                        value={(settings.webhookUrl as string) ?? ''}
                         onChange={(e) => persistSettings({ ...settings, webhookUrl: e.target.value })}
                         style={{ flex: 1 }}
                       />
@@ -800,12 +857,12 @@ export const Settings: React.FC = () => {
                       borderRadius: 8, padding: '10px 14px',
                     }}>
                       <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {showWebhookSecret ? settings.webhookSecret : `whsec_${'•'.repeat(28)}`}
+                        {showWebhookSecret ? (settings.webhookSecret as string) : `whsec_${'•'.repeat(28)}`}
                       </code>
                       <button className="btn btn-icon btn-sm" onClick={() => setShowWebhookSecret(v => !v)}>
                         {showWebhookSecret ? <EyeOff size={13} /> : <Eye size={13} />}
                       </button>
-                      <button className="btn btn-icon btn-sm" onClick={() => handleCopy(settings.webhookSecret ?? '', 'wh_secret')}>
+                      <button className="btn btn-icon btn-sm" onClick={() => handleCopy((settings.webhookSecret as string) ?? '', 'wh_secret')}>
                         {copiedKey === 'wh_secret' ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
                       </button>
                     </div>
@@ -844,7 +901,7 @@ export const Settings: React.FC = () => {
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{desc}</div>
                         </div>
                       </div>
-                      <Toggle checked={!!(settings as any)[key]} onChange={(v) => handleNotifChange(key, v)} label={label} />
+                      <Toggle checked={!!settings[key]} onChange={(v) => handleNotifChange(key, v)} label={label} />
                     </div>
                   ))}
                 </div>
@@ -882,6 +939,150 @@ export const Settings: React.FC = () => {
           {/* ── INTEGRATIONS ── */}
           {activeTab === 'integrations' && (
             <div>
+              {/* ── Email Service Providers ── */}
+              <SectionCard title="Email Service Providers" subtitle="Forward captured emails to your ESP automatically on every form submission.">
+                {/* Test email bar */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+                  <input
+                    type="email"
+                    value={testEmail}
+                    onChange={e => setTestEmail(e.target.value)}
+                    placeholder="test@yourdomain.com"
+                    className="input"
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center', whiteSpace: 'nowrap' }}>← Test email</span>
+                </div>
+
+                {/* Klaviyo */}
+                <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '16px 18px', marginBottom: 14, background: klaviyo.enabled ? 'rgba(99,102,241,0.03)' : 'var(--bg-raised)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: klaviyo.enabled ? 14 : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: '#1A1A2E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>K</span>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Klaviyo</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Add leads to a Klaviyo list</div>
+                      </div>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{klaviyo.enabled ? 'Enabled' : 'Disabled'}</span>
+                      <div style={{ position: 'relative', width: 40, height: 22 }}>
+                        <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} checked={klaviyo.enabled} onChange={e => setKlaviyo(k => ({ ...k, enabled: e.target.checked }))} />
+                        <div onClick={() => setKlaviyo(k => ({ ...k, enabled: !k.enabled }))} style={{ cursor: 'pointer', position: 'absolute', inset: 0, borderRadius: 11, background: klaviyo.enabled ? 'var(--accent-500)' : 'var(--border-subtle)', transition: 'background 150ms' }}>
+                          <div style={{ position: 'absolute', top: 3, left: klaviyo.enabled ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 150ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                  {klaviyo.enabled && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <FieldRow label="Private API Key">
+                        <input
+                          type="password"
+                          className="input"
+                          value={klaviyo.apiKey}
+                          onChange={e => setKlaviyo(k => ({ ...k, apiKey: e.target.value }))}
+                          placeholder="pk_live_••••••••"
+                          autoComplete="new-password"
+                        />
+                      </FieldRow>
+                      <FieldRow label="List ID">
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            type="text"
+                            className="input"
+                            value={klaviyo.listId}
+                            onChange={e => setKlaviyo(k => ({ ...k, listId: e.target.value }))}
+                            placeholder="AbCdEf"
+                          />
+                          <button
+                            onClick={() => testEsp('klaviyo')}
+                            disabled={espTesting === 'klaviyo'}
+                            style={{ padding: '0 14px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+                          >
+                            {espTesting === 'klaviyo' ? 'Sending…' : 'Send test'}
+                          </button>
+                        </div>
+                      </FieldRow>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Find your list ID in Klaviyo → Lists & Segments → select list → Settings. Private API key is under Account → Settings → API Keys.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mailchimp */}
+                <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '16px 18px', marginBottom: 20, background: mailchimp.enabled ? 'rgba(99,102,241,0.03)' : 'var(--bg-raised)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: mailchimp.enabled ? 14 : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FFE01B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#241C15', fontSize: 11, fontWeight: 700 }}>M</span>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Mailchimp</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Add leads to a Mailchimp audience</div>
+                      </div>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{mailchimp.enabled ? 'Enabled' : 'Disabled'}</span>
+                      <div style={{ position: 'relative', width: 40, height: 22 }}>
+                        <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} checked={mailchimp.enabled} onChange={e => setMailchimp(m => ({ ...m, enabled: e.target.checked }))} />
+                        <div onClick={() => setMailchimp(m => ({ ...m, enabled: !m.enabled }))} style={{ cursor: 'pointer', position: 'absolute', inset: 0, borderRadius: 11, background: mailchimp.enabled ? 'var(--accent-500)' : 'var(--border-subtle)', transition: 'background 150ms' }}>
+                          <div style={{ position: 'absolute', top: 3, left: mailchimp.enabled ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 150ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                  {mailchimp.enabled && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <FieldRow label="API Key">
+                        <input
+                          type="password"
+                          className="input"
+                          value={mailchimp.apiKey}
+                          onChange={e => setMailchimp(m => ({ ...m, apiKey: e.target.value }))}
+                          placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us1"
+                          autoComplete="new-password"
+                        />
+                      </FieldRow>
+                      <FieldRow label="Audience ID">
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            type="text"
+                            className="input"
+                            value={mailchimp.listId}
+                            onChange={e => setMailchimp(m => ({ ...m, listId: e.target.value }))}
+                            placeholder="a1b2c3d4e5"
+                          />
+                          <button
+                            onClick={() => testEsp('mailchimp')}
+                            disabled={espTesting === 'mailchimp'}
+                            style={{ padding: '0 14px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+                          >
+                            {espTesting === 'mailchimp' ? 'Sending…' : 'Send test'}
+                          </button>
+                        </div>
+                      </FieldRow>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Audience ID: Mailchimp → Audience → Settings → Audience name and defaults. API key: Account → Extras → API keys. The server prefix (e.g. <code style={{ fontFamily: 'var(--font-mono)' }}>us1</code>) is auto-detected from your API key.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={saveEsp}
+                  disabled={espSaving}
+                  className="btn btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Save size={14} />
+                  {espSaving ? 'Saving…' : 'Save ESP settings'}
+                </button>
+              </SectionCard>
+
               {/* Platform Setup */}
               <SectionCard title="Platform Setup" subtitle="Install the ScrollPop snippet on your platform.">
                 {/* Site selector */}
@@ -893,7 +1094,7 @@ export const Settings: React.FC = () => {
                       </div>
                     ) : (
                       <select className="input" value={selectedSiteId || selectedSite?.id || ''} onChange={(e) => setSelectedSiteId(e.target.value)}>
-                        {sites.map((s: any) => <option key={s.id} value={s.id}>{s.name} — {s.domain}</option>)}
+                        {sites.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.domain}</option>)}
                       </select>
                     )}
                   </FieldRow>
@@ -1000,8 +1201,8 @@ export const Settings: React.FC = () => {
                     { name: 'Clerk', desc: 'Authentication & users', status: 'connected', detail: 'Multi-tenant orgs' },
                     { name: 'Cloudflare', desc: 'CDN, Workers & KV', status: 'connected', detail: '23ms avg latency' },
                     { name: 'Upstash Redis', desc: 'Event ingest buffer', status: 'connected', detail: '~12k ops/day' },
-                    { name: 'PostHog', desc: 'Product analytics', status: 'pending', detail: 'Setup required' },
-                    { name: 'Sentry', desc: 'Error tracking', status: 'pending', detail: 'Setup required' },
+                    { name: 'PostHog', desc: 'Product analytics', status: 'connected', detail: 'Live analytics' },
+                    { name: 'Sentry', desc: 'Error tracking', status: 'connected', detail: 'Error reporting active' },
                     { name: 'Zapier', desc: 'Workflow automation', status: 'coming_soon', detail: 'Q3 2026' },
                     { name: 'Slack', desc: 'Team notifications', status: 'coming_soon', detail: 'Q3 2026' },
                     { name: 'Google Analytics', desc: 'UA / GA4 events', status: 'coming_soon', detail: 'Q4 2026' },

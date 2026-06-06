@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table as TableIcon, Edit3, Trash2, Check } from 'lucide-react';
+import { Table as TableIcon, Edit3, Trash2 } from 'lucide-react';
 
 interface MediaItem {
   id: string;

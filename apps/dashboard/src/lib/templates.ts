@@ -1,44 +1,45 @@
+import type React from 'react';
 import { TemplatePreset } from '../types/campaign';
 
-const createText = (content: string, size: string, weight: string, color: string, extraStyles: any = {}) => ({
+const createText = (content: string, size: string, weight: string, color: string, extraStyles: React.CSSProperties = {}) => ({
   id: Math.random().toString(36).substring(7),
   type: 'text',
   content,
-  styles: { fontSize: size, fontWeight: weight, color, textAlign: 'center', lineHeight: '1.2', ...extraStyles }
+  styles: { fontSize: size, fontWeight: weight, color, textAlign: 'center', lineHeight: '1.2', ...extraStyles } as Record<string, string>,
 });
 
-const createButton = (content: string, bg: string, color: string, extraStyles: any = {}) => ({
+const createButton = (content: string, bg: string, color: string, extraStyles: React.CSSProperties = {}) => ({
   id: Math.random().toString(36).substring(7),
   type: 'button',
   content,
-  styles: { backgroundColor: bg, color, width: '100%', padding: '16px', borderRadius: '12px', fontWeight: 'bold', border: 'none', cursor: 'pointer', ...extraStyles }
+  styles: { backgroundColor: bg, color, width: '100%', padding: '16px', borderRadius: '12px', fontWeight: 'bold', border: 'none', cursor: 'pointer', ...extraStyles } as Record<string, string>,
 });
 
-const createImage = (url: string, height: string, extraStyles: any = {}) => ({
+const createImage = (url: string, height: string, extraStyles: React.CSSProperties = {}) => ({
   id: Math.random().toString(36).substring(7),
   type: 'image',
   content: url,
-  styles: { width: '100%', height, objectFit: 'cover', ...extraStyles }
+  styles: { width: '100%', height, objectFit: 'cover', ...extraStyles } as Record<string, string>,
 });
 
 const createTimer = (color: string) => ({
   id: Math.random().toString(36).substring(7),
   type: 'timer',
-  styles: { color }
+  styles: { color } as Record<string, string>,
 });
 
 const createForm = (btnText: string, btnBg: string) => ({
   id: Math.random().toString(36).substring(7),
   type: 'form',
   content: btnText,
-  styles: { backgroundColor: btnBg, color: '#fff' }
+  styles: { backgroundColor: btnBg, color: '#fff' } as Record<string, string>,
 });
 
 const createCoupon = (code: string) => ({
   id: Math.random().toString(36).substring(7),
   type: 'coupon',
   content: code,
-  styles: {}
+  styles: {} as Record<string, string>,
 });
 
 const createSpacer = (height: string) => ({
@@ -886,7 +887,7 @@ interface StyleTheme {
   fontScale: string;
 }
 
-const PREMIUM_THEMES: StyleTheme[] = [
+const _PREMIUM_THEMES: StyleTheme[] = [
   { name: 'Luxury Obsidian', bg: '#0b0f19', text: '#f3f4f6', accent: '#f59e0b', borderRadius: 0, boxShadow: 'premium', fontScale: 'serif' },
   { name: 'Cyberpunk Neon', bg: '#090514', text: '#ffffff', accent: '#ec4899', borderRadius: 8, boxShadow: 'dark', fontScale: 'sans' },
   { name: 'Kawaii Pastel', bg: '#fff1f2', text: '#4c0519', accent: '#f43f5e', borderRadius: 24, boxShadow: 'soft', fontScale: 'sans' },
@@ -899,8 +900,8 @@ const PREMIUM_THEMES: StyleTheme[] = [
   { name: 'Royal Velvet', bg: '#1e1b4b', text: '#e0e7ff', accent: '#fbbf24', borderRadius: 16, boxShadow: 'floating', fontScale: 'serif' }
 ];
 
-const TEMPLATE_CATEGORIES = ['Ecommerce', 'Lead Capture', 'Gamified', 'Holiday', 'SaaS', 'Urgency', 'Social Proof', 'Events'];
-const PREVIEW_IMAGES = [
+const _TEMPLATE_CATEGORIES = ['Ecommerce', 'Lead Capture', 'Gamified', 'Holiday', 'SaaS', 'Urgency', 'Social Proof', 'Events'];
+const _PREVIEW_IMAGES = [
   'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=400&q=80',
   'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=400&q=80',
   'https://images.unsplash.com/photo-1512411831835-23c267b2d56a?auto=format&fit=crop&w=400&q=80',
@@ -910,10 +911,10 @@ const PREVIEW_IMAGES = [
   'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=400&q=80'
 ];
 
-const ANIMATION_TYPES = ['fade', 'slide_up', 'slide_down', 'zoom', 'none'] as const;
-const POSITION_TYPES = ['center', 'bottom-right', 'bottom-left', 'top', 'bottom'] as const;
-const SIZE_TYPES = ['sm', 'md', 'lg'] as const;
-const KIND_TYPES = ['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'floating_bubble', 'notification_toast'] as const;
+const _ANIMATION_TYPES = ['fade', 'slide_up', 'slide_down', 'zoom', 'none'] as const;
+const _POSITION_TYPES = ['center', 'bottom-right', 'bottom-left', 'top', 'bottom'] as const;
+const _SIZE_TYPES = ['sm', 'md', 'lg'] as const;
+const _KIND_TYPES = ['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'floating_bubble', 'notification_toast'] as const;
 
 // â”€â”€â”€ Open-Source Inspired Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Sourced from: Magnific-Popup (MIT), css-modal (MIT), exit-intent-popup (MIT),

@@ -1,13 +1,21 @@
 import React from 'react';
 import {
   Plus, Copy, Check, Trash2, Edit, Lock, X, Link2, Code2,
-  ShoppingBag, Globe, ArrowRight, AlertCircle, CheckCircle2,
+  ShoppingBag, Globe, AlertCircle, CheckCircle2,
   Download, RefreshCw, ExternalLink, Wifi, WifiOff,
 } from 'lucide-react';
 import { useList, useCreate, useDelete, useUpdate, useCustomMutation } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
 import { LimitBanner } from '../components/PlanGate';
+
+// ─── Site type ───────────────────────────────────────────────────────────────
+type SiteRecord = {
+  id: string; name: string; domain: string; platform: string;
+  publicKey?: string; isActive?: boolean; verifiedAt?: string | null;
+  shopifyShop?: string; wpSiteUrl?: string; lastSeenAt?: string;
+  totalViews?: number; campaignCount?: number;
+};
 
 // ─── Platform icons ───────────────────────────────────────────────────────────
 
@@ -28,7 +36,7 @@ const platformLabel = (p: string) => {
 // ─── Shopify Connect Panel ────────────────────────────────────────────────────
 
 const ShopifyConnectPanel: React.FC<{
-  site: any;
+  site: SiteRecord;
   onDisconnect: () => void;
 }> = ({ site, onDisconnect }) => {
   const [shopInput, setShopInput] = React.useState('');
@@ -56,8 +64,8 @@ const ShopifyConnectPanel: React.FC<{
       });
       // Redirect user to Shopify permission screen
       window.location.href = result.data.oauthUrl;
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to initiate Shopify OAuth');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to initiate Shopify OAuth');
     } finally {
       setLoading(false);
     }
@@ -143,7 +151,7 @@ const ShopifyConnectPanel: React.FC<{
 // ─── WordPress Connect Panel ──────────────────────────────────────────────────
 
 const WordPressConnectPanel: React.FC<{
-  site: any;
+  site: SiteRecord;
   onVerified: () => void;
 }> = ({ site, onVerified }) => {
   const [verifying, setVerifying] = React.useState(false);
@@ -185,8 +193,8 @@ const WordPressConnectPanel: React.FC<{
       });
       setVerifySuccess(true);
       onVerified();
-    } catch (err: any) {
-      setVerifyError(err?.message ?? 'Verification failed');
+    } catch (err: unknown) {
+      setVerifyError(err instanceof Error ? err.message : 'Verification failed');
     } finally {
       setVerifying(false);
     }
@@ -322,7 +330,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const { mutate: deleteSite } = useDelete();
   const { mutate: updateSite } = useUpdate();
   const { mutateAsync: customMutate } = useCustomMutation<{ disconnected: boolean }>();
-  const { withinLimit, limits, isAdmin } = usePlan();
+  const { withinLimit: _withinLimit, limits, isAdmin } = usePlan();
 
   const siteCount = sitesData?.data?.length ?? 0;
   const atSiteLimit = !isAdmin && siteCount >= limits.maxSites;
@@ -332,7 +340,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const [isCreating, setIsCreating] = React.useState(false);
   const [createError, setCreateError] = React.useState('');
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
-  const [selectedSite, setSelectedSite] = React.useState<any | null>(null);
+  const [selectedSite, setSelectedSite] = React.useState<SiteRecord | null>(null);
   const [activeTab, setActiveTab] = React.useState<'snippet' | 'shopify' | 'shopify-embed' | 'wordpress'>('snippet');
   const [embedMode, setEmbedMode] = React.useState<'cdn' | 'dev'>('cdn');
   const [devUrl, setDevUrl] = React.useState(''); // operator pastes their own tunnel URL
@@ -349,6 +357,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
       // Strip query params
       window.history.replaceState({}, '', window.location.pathname);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-open panel for newly selected platform
@@ -357,6 +366,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
     if (selectedSite.platform === 'shopify') setActiveTab('shopify');
     else if (selectedSite.platform === 'wordpress') setActiveTab('wordpress');
     else setActiveTab('snippet');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSite?.id]);
 
   const handleCreate = (e?: React.FormEvent) => {
@@ -373,7 +383,8 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
       values: newSite,
       successNotification: false,
     }, {
-      onSuccess: (data: any) => {
+      onSuccess: (raw: { data: unknown }) => {
+        const data = raw as { data?: SiteRecord };
         setIsCreating(false);
         setIsAddOpen(false);
         setCreateError('');
@@ -387,7 +398,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
           else setActiveTab('snippet');
         }
       },
-      onError: (error: any) => {
+      onError: (error: { message?: string }) => {
         setIsCreating(false);
         const msg = error?.message ?? '';
         if (msg.includes('409') || msg.toLowerCase().includes('duplicate')) {
@@ -419,7 +430,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
     });
   };
 
-  const handleShopifyDisconnect = async (site: any) => {
+  const handleShopifyDisconnect = async (site: SiteRecord) => {
     if (!confirm(`Disconnect ${site.shopifyShop} from ScrollPop? The script tag will be removed.`)) return;
     try {
       await customMutate({
@@ -449,7 +460,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   el.src='https://cdn.scrollpop.online/v1/${publicKey}/p.js';
   d.head.appendChild(el);
 })(window,document,'script');
-</\script>`;
+</script>`;
     }
     const cleanUrl = (tunnelUrl || '').replace(/\/$/, '');
     return `<script>
@@ -461,22 +472,22 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   el.src='${cleanUrl}/v1/${publicKey}/p.js';
   d.head.appendChild(el);
 })(window,document,'script');
-</\script>`;
+</script>`;
   };
 
   const handleConnectQuick = (e: React.FormEvent) => {
     e.preventDefault();
     if (!connectUrl.trim()) return;
-    let domain = connectUrl.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const domain = connectUrl.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
     setNewSite({ name: domain, domain, platform: 'html' });
     setConnectUrl('');
     setIsAddOpen(true);
   };
 
-  const liveSites = sitesData?.data?.filter((s: any) => s.verifiedAt)?.length ?? 0;
+  const liveSites = sitesData?.data?.filter((s) => (s as SiteRecord).verifiedAt)?.length ?? 0;
 
   // Available tabs for a given site
-  const tabsFor = (site: any) => {
+  const tabsFor = (site: SiteRecord) => {
     const tabs: { key: string; label: string }[] = [
       { key: 'snippet', label: 'Code Snippet' },
     ];
@@ -531,7 +542,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
       {/* Sites grid */}
       {sitesData?.data && sitesData.data.length > 0 ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginBottom: 24 }}>
-          {sitesData.data.map((site: any) => (
+          {(sitesData.data as SiteRecord[]).map((site) => (
             <div key={site.id} style={{
               background: 'var(--bg-surface)',
               border: `1px solid ${selectedSite?.id === site.id ? 'var(--accent-400)' : 'var(--border-subtle)'}`,
@@ -677,7 +688,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
               {tabsFor(selectedSite).map((tab) => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key as any)}
+                  onClick={() => setActiveTab(tab.key as 'snippet' | 'shopify' | 'shopify-embed' | 'wordpress')}
                   className={`btn btn-sm ${activeTab === tab.key ? 'btn-primary' : 'btn-ghost'}`}
                   style={{ borderRadius: '4px 4px 0 0', borderBottom: 'none', fontSize: 12 }}
                 >

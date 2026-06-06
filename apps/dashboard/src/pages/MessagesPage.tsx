@@ -12,7 +12,7 @@ interface DirectMessage {
 }
 
 export const MessagesPage: React.FC = () => {
-  const [messages, setMessages] = React.useState<DirectMessage[]>([
+  const [messages] = React.useState<DirectMessage[]>([
     {
       id: '1',
       sender: 'Victoria Campel',

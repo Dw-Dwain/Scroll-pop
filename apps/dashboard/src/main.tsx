@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ClerkProvider, SignedIn, SignedOut, useAuth, useClerk, useUser, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, useAuth, AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import { initObservability } from './lib/observability';
 
 // ── Mobile gate ───────────────────────────────────────────────────────────────
@@ -24,6 +24,7 @@ function useIsMobile(): boolean {
 
 const MOBILE_ALLOWED_PATHS = ['/sign-in', '/sign-up', '/sso-callback'];
 
+// eslint-disable-next-line react-refresh/only-export-components
 const MobileGate: React.FC<{ currentPath: string; children: React.ReactNode }> = ({
   currentPath,
   children,
@@ -128,13 +129,9 @@ const getCampaignDesignId = (path: string) => {
   return m ? m[1] : null;
 };
 
-// Glazzed showcase pages
-import { SupportChat } from './pages/SupportChat';
-import { ImageGallery } from './pages/ImageGallery';
-import { CalendarPage } from './pages/CalendarPage';
-import { MessagesPage } from './pages/MessagesPage';
-import { FormsPage } from './pages/FormsPage';
-import { TablesPage } from './pages/TablesPage';
+// Note: UI-kit showcase pages (SupportChat, ImageGallery, CalendarPage, MessagesPage,
+// FormsPage, TablesPage) exist in ./pages/ but are intentionally not routed —
+// they render hardcoded sample data with no real backing.
 
 import { createDataProvider } from './providers/dataProvider';
 import { isFeatureEnabled } from './lib/flags';
@@ -142,13 +139,14 @@ import './index.css';
 
 // Clerk Publishable Key mapping
 const PUBLISHABLE_KEY =
-  (import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY ||
-  (window as any).__ENV__?.VITE_CLERK_PUBLISHABLE_KEY;
+  (import.meta.env as Record<string, string | undefined>)['VITE_CLERK_PUBLISHABLE_KEY'] ||
+  (window as { __ENV__?: Record<string, string> }).__ENV__?.['VITE_CLERK_PUBLISHABLE_KEY'];
 
 const OPS_CENTER_ENABLED = isFeatureEnabled('ff_realtime_ops_dashboard');
 const JOURNEYS_ENABLED = isFeatureEnabled('ff_journeys_ui');
 const EXPERIMENTS_ENABLED = isFeatureEnabled('ff_experiments_v1');
 
+// eslint-disable-next-line react-refresh/only-export-components
 const ClerkAppContent: React.FC = () => {
   const { getToken, signOut } = useAuth();
   
@@ -234,6 +232,7 @@ const ClerkAppContent: React.FC = () => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 const Root: React.FC = () => {
   return (
     <ClerkProvider

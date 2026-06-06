@@ -69,7 +69,7 @@ export interface CampaignElement {
   animationDelay?: number; // in seconds, default is 0
   /** Affiliate / destination URL for button and close elements. Opens in new tab. */
   href?: string;
-  extraProps?: Record<string, any>;
+  extraProps?: Record<string, unknown>;
 }
 
 export type CampaignStep = 'teaser' | 'main' | 'success';

@@ -1892,7 +1892,7 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-decor`, type: 'shape', x: 0, y: 0, w: 42, h: 100, content: 'rect', backgroundColor: meta.palette.tint, zIndex: 1 } as CampaignElement,
           { id: `${meta.id}-img`,   type: 'image', x: 4, y: 6,  w: 34, h: 88, content: meta.image, borderRadius: 12, zIndex: 2 } as CampaignElement,
         );
-        const lx = 46, lw = 48, ta: 'left' = 'left';
+        const lx = 46, lw = 48, ta = 'left' as const;
         mainElementsList.push(
           { id: `${meta.id}-tag`,   type: 'text',    x: lx, y: 12, w: lw, h: 6,  content: `★ ${meta.category.toUpperCase()} SPECIAL`, color: meta.palette.primary, fontSize: 10, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: ta, zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-head`,  type: 'heading', x: lx, y: 18, w: lw, h: 18, content: meta.title,    color: textThemeColor, fontSize: 22, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: ta, zIndex: 3, animationType: 'fade-in', animationDuration: 0.5 } as CampaignElement,
@@ -1908,7 +1908,7 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-decor`, type: 'shape', x: 56, y: 0, w: 44, h: 100, content: 'rect', backgroundColor: meta.palette.tint, zIndex: 1 } as CampaignElement,
           { id: `${meta.id}-img`,   type: 'image', x: 60, y: 6, w: 36, h: 88,  content: meta.image, borderRadius: 12, zIndex: 2 } as CampaignElement,
         );
-        const lx = 6, lw = 48, ta: 'left' = 'left';
+        const lx = 6, lw = 48, ta = 'left' as const;
         mainElementsList.push(
           { id: `${meta.id}-tag`,   type: 'text',    x: lx, y: 12, w: lw, h: 6,  content: `★ ${meta.category.toUpperCase()} SPECIAL`, color: meta.palette.primary, fontSize: 10, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: ta, zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-head`,  type: 'heading', x: lx, y: 18, w: lw, h: 18, content: meta.title,    color: textThemeColor, fontSize: 22, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: ta, zIndex: 3, animationType: 'slide-in', animationDuration: 0.5 } as CampaignElement,

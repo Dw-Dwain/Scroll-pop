@@ -389,11 +389,25 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
   }
 }
 
+// Detect mobile once at module scope (navigator.maxTouchPoints covers iOS + Android).
+const isMobile = () =>
+  typeof navigator !== 'undefined' &&
+  (navigator.maxTouchPoints > 0 || /Mobi|Android/i.test(navigator.userAgent));
+
+// Apply mobileOverrides from trigger params when on a mobile device (P3-10).
+function effectiveParams(params: Record<string, unknown>): Record<string, unknown> {
+  if (!isMobile()) return params;
+  const overrides = params['mobileOverrides'] as Record<string, unknown> | undefined;
+  if (!overrides) return params;
+  return { ...params, ...overrides };
+}
+
 function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: string; scrollPct?: number }) => void): void {
+  const p = effectiveParams(trigger.params);
   switch (trigger.type) {
     // ✅ SAFE: scroll position — direction-aware (only fires on downward scroll)
     case 'scroll_pct': {
-      const targetPct = (trigger.params['pct'] as number) ?? 50;
+      const targetPct = (p['pct'] as number) ?? 50;
       let lastScrollY = window.scrollY;
       const onScroll = () => {
         const scrolled = window.scrollY;
@@ -414,15 +428,15 @@ function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: st
 
     // ✅ SAFE: time on page
     case 'dwell_time': {
-      const seconds = (trigger.params['seconds'] as number) ?? 30;
+      const seconds = (p['seconds'] as number) ?? 30;
       setTimeout(() => fire({ triggerType: 'dwell_time' }), seconds * 1000);
       break;
     }
 
     // ✅ SAFE: inactivity detection
     case 'inactivity': {
-      let t: any;
-      const ms = ((trigger.params['seconds'] as number) || 60) * 1000;
+      let t: ReturnType<typeof setTimeout>;
+      const ms = ((p['seconds'] as number) || 60) * 1000;
       const r = () => {
         clearTimeout(t);
         t = setTimeout(() => fire({ triggerType: 'inactivity' }), ms);
@@ -436,7 +450,7 @@ function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: st
 
     // ✅ SAFE: cursor leaving viewport toward top (NOT popstate/history)
     case 'exit_intent_mouse': {
-      const sensitivity = (trigger.params['sensitivity'] as number) ?? 20;
+      const sensitivity = (p['sensitivity'] as number) ?? 20;
       const onMouseMove = (e: MouseEvent) => {
         if (e.clientY <= sensitivity) {
           document.removeEventListener('mousemove', onMouseMove);
@@ -471,7 +485,7 @@ function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: st
 
     // ✅ SAFE: element click trigger
     case 'click': {
-      const selector = trigger.params['selector'] as string;
+      const selector = p['selector'] as string;
       if (!selector) break;
       const onDocClick = (e: Event) => {
         const target = e.target as Element;
@@ -1093,7 +1107,10 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       // Second click, or free/starter plan — instant close
       dismiss(true);
       sessionStorage.removeItem(`_sp_session_${campaign.id}`);
-      try { localStorage.removeItem(`_sp_fr_${campaign.id}`); } catch {}
+      // SR-11: must match the key written by setFrequencyCap (`_sp_${id}`). The old
+      // `_sp_fr_` infix never matched, so this removeItem was always a silent no-op and
+      // the frequency cap was never cleared on the two-click dismiss flow.
+      try { localStorage.removeItem(`_sp_${campaign.id}`); } catch {}
     }
   });
   // Overlay/dismiss-text clicks are passive dismissals, not intentional close

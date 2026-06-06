@@ -2,15 +2,12 @@ import React from 'react';
 import {
   Type,
   Paintbrush,
-  Settings,
   AlignLeft,
   AlignCenter,
   AlignRight,
   Trash2,
   Layout,
   CornerDownRight,
-  Sparkles,
-  Play
 } from 'lucide-react';
 import { CampaignElement, CampaignStepConfig, PopupType, CanvasPosition } from './types';
 
@@ -53,8 +50,8 @@ interface SidebarRightProps {
   stepConfig: CampaignStepConfig;
   selectedElementId: string | null;
   activeStep?: 'teaser' | 'main' | 'success';
-  onUpdateStepConfig: (key: string, value: any) => void;
-  onUpdateElement: (id: string, keyOrObj: string | Record<string, any>, value?: any) => void;
+  onUpdateStepConfig: (key: string, value: unknown) => void;
+  onUpdateElement: (id: string, keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
   onDeleteElement: (id: string) => void;
   onSelectElement?: (id: string | null) => void;
 }
@@ -74,7 +71,7 @@ export default function SidebarRight({
   onDeleteElement,
 }: SidebarRightProps) {
   const elements = stepConfig.elements;
-  const activeElement = elements.find((el: any) => el.id === selectedElementId);
+  const activeElement = elements.find((el: CampaignElement) => el.id === selectedElementId);
 
   return (
     <div
@@ -119,7 +116,7 @@ export default function SidebarRight({
                 type="url"
                 className="w-full text-xs p-2 border border-zinc-200 rounded bg-zinc-50/50 focus:bg-white focus:outline-none font-mono"
                 placeholder="https://affiliate-link.com/product?tag=..."
-                value={activeElement.href ?? activeElement.extraProps?.href ?? ''}
+                value={activeElement.href ?? (activeElement.extraProps?.href as string) ?? ''}
                 onChange={(e) => onUpdateElement(activeElement.id, 'href', e.target.value)}
               />
               <div className="text-[9px] text-zinc-400 leading-relaxed">
@@ -419,13 +416,13 @@ export default function SidebarRight({
                 <div className="space-y-1 text-left">
                   <div className="flex justify-between items-center text-[10px]">
                     <label className="font-semibold text-zinc-500 font-mono">Rotation</label>
-                    <span className="font-mono font-medium text-pink-600">{activeElement.extraProps?.rotation || 0}°</span>
+                    <span className="font-mono font-medium text-pink-600">{(activeElement.extraProps?.rotation as number) || 0}°</span>
                   </div>
                   <input
                     type="range"
                     min="0"
                     max="360"
-                    value={activeElement.extraProps?.rotation || 0}
+                    value={(activeElement.extraProps?.rotation as number) || 0}
                     onChange={(e) => onUpdateElement(activeElement.id, 'extraProps', {
                       ...(activeElement.extraProps || {}),
                       rotation: parseInt(e.target.value)
@@ -512,7 +509,7 @@ export default function SidebarRight({
               <div className="space-y-1.5">
                 <label className="text-[10px] font-semibold text-zinc-500 font-mono">Target Duration (Minutes)</label>
                 <NumInput
-                  value={Math.round((activeElement.extraProps.targetSeconds || 600) / 60)}
+                  value={Math.round(((activeElement.extraProps.targetSeconds as number) || 600) / 60)}
                   min={5} max={1440}
                   onChange={(v) => onUpdateElement(activeElement.id, 'extraProps', {
                     ...activeElement.extraProps,
@@ -531,7 +528,7 @@ export default function SidebarRight({
                 <label className="text-[10px] font-semibold text-zinc-500 font-mono">Placeholder Text</label>
                 <input
                   type="text"
-                  value={activeElement.extraProps.placeholder || ''}
+                  value={(activeElement.extraProps.placeholder as string) || ''}
                   onChange={(e) => onUpdateElement(activeElement.id, 'extraProps', {
                     ...activeElement.extraProps,
                     placeholder: e.target.value

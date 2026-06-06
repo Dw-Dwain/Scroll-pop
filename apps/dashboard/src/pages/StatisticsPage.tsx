@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, TrendingUp, DollarSign, Wallet, RefreshCw } from 'lucide-react';
+import { BarChart3, Wallet, RefreshCw } from 'lucide-react';
 
 export const StatisticsPage: React.FC = () => {
   return (

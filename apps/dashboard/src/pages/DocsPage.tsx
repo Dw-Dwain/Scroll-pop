@@ -2,8 +2,8 @@ import React from 'react';
 import {
   ArrowLeft, ArrowRight, BookOpen, Zap, Globe, Megaphone, BarChart2,
   Target, RefreshCw, Code2, CreditCard, ChevronRight, ChevronDown,
-  ShoppingBag, FileCode, Copy, Check, Layers, Shield, Users, Bell,
-  TrendingUp, Settings, HelpCircle, ExternalLink,
+  ShoppingBag, FileCode, Copy, Check, Layers, Shield,
+  TrendingUp, Settings, HelpCircle,
 } from 'lucide-react';
 
 interface DocsPageProps { onNavigate: (path: string) => void; }
@@ -872,7 +872,7 @@ const SECTION_COMPONENTS: Record<string, React.FC> = {
 
 export const DocsPage: React.FC<DocsPageProps> = ({ onNavigate }) => {
   const [activeSection, setActiveSection] = React.useState('overview');
-  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [_sidebarOpen, setSidebarOpen] = React.useState(false);
   const contentRef = React.useRef<HTMLDivElement>(null);
 
   const SectionContent = SECTION_COMPONENTS[activeSection] ?? SectionOverview;

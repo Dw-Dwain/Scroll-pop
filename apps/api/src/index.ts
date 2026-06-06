@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
+import sanitizeHtml from 'sanitize-html';
 import { db } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
@@ -14,6 +15,8 @@ import { ensureAuditLogSchema } from './db/ensure-audit-log.js';
 import { ensureLeadsSchema } from './db/ensure-leads.js';
 import { ensureVariantsSchema } from './db/ensure-variants.js';
 import { ensureCouponsSchema } from './db/ensure-coupons.js';
+import { ensureWebhooksSchema } from './db/ensure-webhooks.js';
+import { ensureIntegrationsSchema } from './db/ensure-integrations.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, leads, coupons } from './db/schema.js';
 import { eq, and, isNull, sql as drizzleSql } from 'drizzle-orm';
@@ -34,6 +37,10 @@ import { leadRoutes } from './routes/leads.js';
 import { variantRoutes } from './routes/variants.js';
 import { couponRoutes } from './routes/coupons.js';
 import { autoResponderRoutes } from './routes/auto-responder.js';
+import { outboundWebhookRoutes, fireOutboundWebhook } from './routes/outbound-webhook.js';
+import { integrationRoutes } from './routes/integrations.js';
+import { espConfigRoutes } from './routes/esp-config.js';
+import { dispatchToEsps } from './lib/esp.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
@@ -149,6 +156,9 @@ async function bootstrap() {
   await app.register(variantRoutes, { prefix: '/api/v1' });
   await app.register(couponRoutes, { prefix: '/api/v1' });
   await app.register(autoResponderRoutes, { prefix: '/api/v1' });
+  await app.register(outboundWebhookRoutes, { prefix: '/api/v1' });
+  await app.register(integrationRoutes, { prefix: '/api/v1' });
+  await app.register(espConfigRoutes, { prefix: '/api/v1' });
   await app.register(opsRoutes, { prefix: '/api/v1' });
   await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });
@@ -360,12 +370,23 @@ async function bootstrap() {
   }
 
   // Conversion milestones: notify when cumulative conversions cross 100 / 1k / 10k / 100k.
-  // The Redis counter is incremented atomically, so an exact-match on the new total
-  // fires each milestone exactly once (counts from feature launch, not historically).
+  // Counter is seeded from DB on first increment so milestones reflect historical totals,
+  // not just conversions since feature launch (P3-12).
   async function checkConversionMilestone(tenantId: string): Promise<void> {
     if (!redis) return;
     try {
-      const total = await redis.incr(`sp_conv:${tenantId}`);
+      let total = await redis.incr(`sp_conv:${tenantId}`);
+      if (total === 1) {
+        const [row] = await db
+          .select({ count: drizzleSql<number>`count(*)::int` })
+          .from(events)
+          .where(and(eq(events.tenantId, tenantId), eq(events.eventType, 'conversion')));
+        const historical = (row?.count ?? 0) as number;
+        if (historical > 1) {
+          await redis.set(`sp_conv:${tenantId}`, historical);
+          total = historical;
+        }
+      }
       if (total === 100 || total === 1000 || total === 10000 || total === 100000) {
         await emitNotification(tenantId, {
           type: 'notif_conversion',
@@ -430,8 +451,35 @@ async function bootstrap() {
   const campaignMetaCache = new Map<string, CampaignMeta & { exp: number }>();
   async function resolveCampaignMeta(campaignId: string): Promise<CampaignMeta | null> {
     const now = Date.now();
+    // L1: in-process Map (zero network latency)
     const hit = campaignMetaCache.get(campaignId);
     if (hit && hit.exp > now) return hit;
+
+    // L2: Redis hash — shared across Render instances so a second instance doesn't cold-miss
+    // every campaign on startup (P3-7). Falls through to DB on any Redis error.
+    if (redis) {
+      try {
+        const h = await redis.hgetall(`sp_campaign_meta:${campaignId}`);
+        // SR-12: require all three identity fields to be present strings. A partially
+        // written hash (e.g. an HSET interrupted mid-write) would otherwise coerce an
+        // undefined siteId/platform to the literal string "undefined" and cache it.
+        if (h && typeof h['tenantId'] === 'string' &&
+                 typeof h['siteId'] === 'string' &&
+                 typeof h['platform'] === 'string') {
+          const meta: CampaignMeta = {
+            tenantId: h['tenantId'],
+            siteId: h['siteId'],
+            platform: h['platform'],
+            domain: (h['domain'] as string) || null,
+            shopifyShop: (h['shopifyShop'] as string) || null,
+            wpSiteUrl: (h['wpSiteUrl'] as string) || null,
+          };
+          campaignMetaCache.set(campaignId, { ...meta, exp: now + 300_000 });
+          return meta;
+        }
+      } catch { /* non-fatal — fall through to DB */ }
+    }
+
     const campaign = await db.query.campaigns.findFirst({ where: eq(campaigns.id, campaignId) });
     if (!campaign) return null;
     const site = await db.query.sites.findFirst({
@@ -446,6 +494,22 @@ async function bootstrap() {
       shopifyShop: site?.shopifyShop ?? null,
       wpSiteUrl: site?.wpSiteUrl ?? null,
     };
+
+    // Write to Redis L2 + in-process L1
+    if (redis) {
+      try {
+        // hset expects alternating key/value pairs — write each field individually
+        await redis.hset(`sp_campaign_meta:${campaignId}`, {
+          tenantId: meta.tenantId,
+          siteId: meta.siteId,
+          platform: meta.platform,
+          domain: meta.domain ?? '',
+          shopifyShop: meta.shopifyShop ?? '',
+          wpSiteUrl: meta.wpSiteUrl ?? '',
+        });
+        await redis.expire(`sp_campaign_meta:${campaignId}`, 300);
+      } catch { /* non-fatal */ }
+    }
     campaignMetaCache.set(campaignId, { ...meta, exp: now + 300_000 });
     // Bound memory by evicting the oldest entries one at a time, NOT clearing the whole map.
     // A full clear caused a thundering herd — every concurrent request then re-hit the DB at
@@ -484,23 +548,42 @@ async function bootstrap() {
   }
 
   function eventOriginAllowed(pageUrl: string | null, meta: CampaignMeta): boolean {
-    // Only enforce for platforms where the registered domain reliably equals the serving
-    // domain. Shopify storefronts run on custom domains we don't store, donation platforms
-    // (donorbox/gofundme) and "other" are likewise served from domains we can't predict — so
-    // enforcing there would drop legitimate traffic. Those rely on the per-IP flood gate.
-    if (meta.platform !== 'html' && meta.platform !== 'wordpress') return true;
-    if (!pageUrl) return true;
+    // SR-10: previously this auto-allowed every non-html/wordpress platform, letting an
+    // attacker forge events against any Shopify/donation/"other" campaign whose UUID they
+    // could read from the served config. Now we enforce against whatever domain we *do*
+    // know (stored domain, Shopify shop, WP site URL) for every platform, and only fail
+    // open when we genuinely have no known domain to check against. The per-IP flood gate
+    // remains the primary quota control.
+    if (!pageUrl) return true; // no URL to check — fail open
     let host: string;
     try { host = new URL(pageUrl).hostname; } catch { return true; }
-    const candidates = [meta.domain, meta.shopifyShop, meta.wpSiteUrl]
-      .map((c) => {
-        if (!c) return null;
-        try { return c.includes('://') ? new URL(c).hostname : c; } catch { return c; }
-      })
-      .filter((c): c is string => !!c);
-    if (candidates.length === 0) return true; // no known domain — fail open
     const target = registrableDomain(host);
-    return candidates.some((c) => registrableDomain(c) === target);
+
+    // Stored site domain (all platforms).
+    if (meta.domain && registrableDomain(meta.domain) === target) return true;
+
+    // Shopify: also accept the shop's myshopify.com host.
+    if (meta.shopifyShop) {
+      const shopHost = meta.shopifyShop.includes('.')
+        ? meta.shopifyShop
+        : `${meta.shopifyShop}.myshopify.com`;
+      if (registrableDomain(shopHost) === target) return true;
+    }
+
+    // WordPress: also accept the configured site URL host.
+    if (meta.wpSiteUrl) {
+      try {
+        const wpHost = meta.wpSiteUrl.includes('://')
+          ? new URL(meta.wpSiteUrl).hostname
+          : meta.wpSiteUrl;
+        if (registrableDomain(wpHost) === target) return true;
+      } catch { /* unparseable — ignore this candidate */ }
+    }
+
+    // No known domain of any kind — fail open so legitimate traffic is never dropped.
+    if (!meta.domain && !meta.shopifyShop && !meta.wpSiteUrl) return true;
+
+    return false;
   }
 
   // Per-(campaign, IP) impression flood gate. Returns false once the per-minute cap is exceeded.
@@ -656,10 +739,92 @@ async function bootstrap() {
                     if (recipientEmail) {
                       const subject = typeof ar['subject'] === 'string' && ar['subject']
                         ? ar['subject'] : 'Thank you for subscribing!';
-                      const htmlBody = typeof ar['htmlBody'] === 'string' && ar['htmlBody']
+                      const rawHtml = typeof ar['htmlBody'] === 'string' && ar['htmlBody']
                         ? ar['htmlBody'] : '<p>Thanks for joining our list — we\'ll be in touch!</p>';
+                      // SR-07: the htmlBody is operator-supplied (stored JSONB, up to 50KB)
+                      // and goes straight to subscribers' inboxes. Strip to an allowlist so a
+                      // malicious/compromised operator can't deliver <script>, tracking pixels,
+                      // or phishing markup as stored XSS in outbound email.
+                      const htmlBody = sanitizeHtml(rawHtml, {
+                        allowedTags: ['p', 'br', 'b', 'i', 'strong', 'em', 'a', 'ul', 'ol', 'li',
+                                      'h1', 'h2', 'h3', 'img', 'div', 'span', 'table', 'tr', 'td'],
+                        allowedAttributes: {
+                          a: ['href', 'target', 'rel'],
+                          img: ['src', 'alt', 'width', 'height'],
+                          '*': ['style'],
+                        },
+                        allowedSchemes: ['https', 'http', 'mailto'],
+                      });
                       await sendEmail({ to: recipientEmail, subject, html: htmlBody });
                     }
+                  }
+                } catch { /* best-effort */ }
+              })();
+            }
+
+            // ESP sync: on email_capture, forward lead to Klaviyo / Mailchimp if configured.
+            // P1-8 (Klaviyo) + P1-9 (Mailchimp). Best-effort — never blocks ingest.
+            if (eventType === 'email_capture') {
+              void (async () => {
+                try {
+                  const md5 = (metadata ?? meta ?? {}) as Record<string, unknown>;
+                  const leadEmail = extractLeadEmail(md5);
+                  if (!leadEmail) return;
+
+                  // Batch-load campaign esp_config + tenant integrations in one query each
+                  const espCam = await db.query.campaigns.findFirst({
+                    where: eq(campaigns.id, campaignId),
+                    columns: { espConfig: true, tenantId: true },
+                  });
+                  if (!espCam) return;
+
+                  const espTenant = await db.query.tenants.findFirst({
+                    where: eq(tenants.id, espCam.tenantId),
+                    columns: { integrations: true },
+                  });
+                  if (!espTenant) return;
+
+                  const fullName = typeof md5['name'] === 'string' ? (md5['name'] as string) : null;
+                  const contact: { email: string; firstName?: string | undefined; lastName?: string | undefined } = {
+                    email: leadEmail,
+                    ...(fullName ? { firstName: fullName.split(' ')[0] } : {}),
+                    ...(fullName?.includes(' ') ? { lastName: fullName.split(' ').slice(1).join(' ') } : {}),
+                  };
+
+                  await dispatchToEsps(
+                    (espTenant.integrations ?? {}) as Parameters<typeof dispatchToEsps>[0],
+                    (espCam.espConfig ?? {}) as Parameters<typeof dispatchToEsps>[1],
+                    contact,
+                  );
+                } catch { /* best-effort */ }
+              })();
+            }
+
+            // Outbound webhook: fire for email_capture and conversion (configurable). P2-14.
+            if (eventType === 'email_capture' || eventType === 'conversion' ||
+                eventType === 'click' || eventType === 'dismiss') {
+              void (async () => {
+                try {
+                  const wCam = await db.query.campaigns.findFirst({
+                    where: eq(campaigns.id, campaignId),
+                    columns: { outboundWebhook: true },
+                  });
+                  if (wCam?.outboundWebhook) {
+                    const md4 = (metadata ?? meta ?? {}) as Record<string, unknown>;
+                    await fireOutboundWebhook({
+                      config: wCam.outboundWebhook as Record<string, unknown>,
+                      event: eventType as 'email_capture' | 'conversion' | 'click' | 'dismiss',
+                      campaignId,
+                      tenantId: campaign.tenantId,
+                      data: {
+                        email: extractLeadEmail(md4) ?? undefined,
+                        pageUrl: safePageUrl ?? undefined,
+                        visitorId: safeVisitorId ?? undefined,
+                        device: safeDevice ?? undefined,
+                        revenueCents: safeRevenueCents ?? undefined,
+                        ...md4,
+                      },
+                    });
                   }
                 } catch { /* best-effort */ }
               })();
@@ -673,16 +838,21 @@ async function bootstrap() {
               if (couponCode) {
                 void (async () => {
                   try {
-                    const coupon = await db.query.coupons.findFirst({
-                      where: and(eq(coupons.tenantId, campaign.tenantId), eq(coupons.code, couponCode)),
-                      columns: { id: true, maxUses: true, uses: true, expiresAt: true },
-                    });
-                    if (!coupon) return; // unknown code — ignore
-                    if (coupon.expiresAt && coupon.expiresAt < new Date()) return; // expired
-                    if (coupon.maxUses != null && coupon.uses >= coupon.maxUses) return; // exhausted
-                    await db.update(coupons)
+                    // SR-06: a separate read-then-increment lets concurrent duplicate
+                    // events both pass the `uses < maxUses` guard and both increment,
+                    // pushing the count past maxUses (a single-use coupon redeemed twice).
+                    // Do the guard and the increment atomically in one UPDATE … WHERE and
+                    // reject when 0 rows are affected.
+                    const redeemed = await db.update(coupons)
                       .set({ uses: drizzleSql`${coupons.uses} + 1` })
-                      .where(eq(coupons.id, coupon.id));
+                      .where(and(
+                        eq(coupons.tenantId, campaign.tenantId),
+                        eq(coupons.code, couponCode),
+                        drizzleSql`(${coupons.maxUses} IS NULL OR ${coupons.uses} < ${coupons.maxUses})`,
+                        drizzleSql`(${coupons.expiresAt} IS NULL OR ${coupons.expiresAt} > NOW())`,
+                      ))
+                      .returning({ id: coupons.id });
+                    if (redeemed.length === 0) return; // unknown, expired, or exhausted — atomic
                   } catch { /* best-effort — never block ingest */ }
                 })();
               }
@@ -719,24 +889,43 @@ async function bootstrap() {
   // Health check
   app.get('/health', async () => ({ ok: true }));
 
-  // Ensure this month's (and next month's) events partition exists before serving.
-  // Prevents the recurring "analytics silently dies at month rollover" outage on Neon,
-  // where inserts for a missing partition are dropped with no error. Safe no-op locally.
-  await ensureEventPartitions(app.log);
-  // Ensure notifications schema (migration 0006) so notification_prefs / notifications
-  // exist before serving — prevents tenant-lookup 500s if the migration wasn't applied.
-  await ensureNotificationsSchema(app.log);
-  // Ensure admin_audit_log schema (migration 0007) so audit writes never fail on a prod DB
-  // that hasn't had the migration applied yet.
-  await ensureAuditLogSchema(app.log);
-  // Ensure leads schema (migration 0009) so lead capture + the Leads page work even if the
-  // migration hasn't been applied to prod by hand yet.
-  await ensureLeadsSchema(app.log);
-  // Ensure variants schema (migration 0010) so A/B testing works even if the migration
-  // hasn't been applied to prod by hand yet.
-  await ensureVariantsSchema(app.log);
-  // Ensure coupons + auto_responder + spin_wheel (migration 0011).
-  await ensureCouponsSchema(app.log);
+  // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
+  // a Redis flag after first successful run so warm restarts in the same deployment skip
+  // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
+  const SCHEMA_VERSION = '13';
+  const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
+  const schemaAlreadyRan = redis
+    ? await redis.get(schemaBootKey).catch(() => null)
+    : null;
+
+  if (schemaAlreadyRan) {
+    app.log.info('[schema] ensure-* scripts skipped (already ran this version)');
+  } else {
+    // Ensure this month's (and next month's) events partition exists before serving.
+    // Prevents the recurring "analytics silently dies at month rollover" outage on Neon,
+    // where inserts for a missing partition are dropped with no error. Safe no-op locally.
+    await ensureEventPartitions(app.log);
+    // Ensure notifications schema (migration 0006).
+    await ensureNotificationsSchema(app.log);
+    // Ensure admin_audit_log schema (migration 0007).
+    await ensureAuditLogSchema(app.log);
+    // Ensure leads schema (migration 0009).
+    await ensureLeadsSchema(app.log);
+    // Ensure variants schema (migration 0010).
+    await ensureVariantsSchema(app.log);
+    // Ensure coupons + auto_responder + spin_wheel (migration 0011).
+    await ensureCouponsSchema(app.log);
+    // Ensure outbound_webhook column on campaigns (migration 0012, P2-14).
+    await ensureWebhooksSchema(app.log);
+    // Ensure integrations column on tenants + esp_config on campaigns (migration 0013, P1-8/P1-9).
+    await ensureIntegrationsSchema(app.log);
+
+    if (redis) {
+      // 24h TTL — long enough to cover normal redeploys, short enough that a schema version
+      // bump propagates within a day even if Redis isn't explicitly flushed.
+      await redis.set(schemaBootKey, '1', { ex: 86400 }).catch(() => {});
+    }
+  }
 
   const port = parseInt(process.env['PORT'] ?? '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });

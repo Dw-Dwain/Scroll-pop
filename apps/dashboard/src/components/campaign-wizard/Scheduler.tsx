@@ -50,7 +50,7 @@ export const Scheduler: React.FC<SchedulerProps> = ({ scheduler, setScheduler })
             </div>
           )}
           
-          {scheduler.map((w, i) => {
+          {scheduler.map((w, _i) => {
             const isOverlapping = hasOverlap(scheduler, w);
             return (
               <div 
@@ -64,7 +64,7 @@ export const Scheduler: React.FC<SchedulerProps> = ({ scheduler, setScheduler })
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Day</label>
                   <select 
                     value={w.day} 
-                    onChange={(e) => setScheduler(prev => prev.map(x => x.id === w.id ? { ...x, day: e.target.value as any } : x))}
+                    onChange={(e) => setScheduler(prev => prev.map(x => x.id === w.id ? { ...x, day: e.target.value as SchedulerWindow['day'] } : x))}
                     className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-300 outline-none focus:border-indigo-500 w-full"
                   >
                     {DAYS.map(d => <option key={d} value={d}>{d === 'all' ? 'Everyday' : d.toUpperCase()}</option>)}

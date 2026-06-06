@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Check, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Check, Sparkles, RefreshCw } from 'lucide-react';
 import { useList, useUpdate } from '@refinedev/core';
 
 interface ScheduledEvent {
@@ -38,7 +38,7 @@ export const CalendarPage: React.FC = () => {
   // Load from local storage on mount — only show user-created schedules, not seeded defaults
   React.useEffect(() => {
     const storedSync = localStorage.getItem('_sp_calendar_sync');
-    if (storedSync) setSyncStatus(storedSync as any);
+    if (storedSync) setSyncStatus(storedSync as 'none' | 'google' | 'apple');
 
     const stored = localStorage.getItem('_sp_calendar');
     if (stored) {
@@ -86,7 +86,7 @@ export const CalendarPage: React.FC = () => {
       return;
     }
 
-    const campaign = campaignsData?.data.find((c: any) => c.id === form.campaignId);
+    const campaign = campaignsData?.data.find((c) => (c as { id: string; name: string }).id === form.campaignId);
     if (!campaign) return;
 
     const newEvt: ScheduledEvent = {
@@ -316,9 +316,9 @@ export const CalendarPage: React.FC = () => {
                   className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 text-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none transition"
                 >
                   <option value="">Select campaign to schedule...</option>
-                  {campaignsData?.data?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                  {campaignsData?.data?.map((c) => { const r = c as { id: string; name: string }; return (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ); })}
                 </select>
               </div>
 

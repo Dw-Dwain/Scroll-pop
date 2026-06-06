@@ -111,8 +111,9 @@ function ClerkSignInForm() {
       if (result.status === 'complete') {
         window.location.href = '/dashboard';
       }
-    } catch (err: any) {
-      setError(err?.errors?.[0]?.message ?? 'Sign in failed.');
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: Array<{ message?: string }> };
+      setError(clerkErr?.errors?.[0]?.message ?? 'Sign in failed.');
     } finally {
       setLoading(false);
     }
@@ -130,8 +131,9 @@ function ClerkSignInForm() {
         redirectUrl: `${window.location.origin}/sso-callback`,
         redirectUrlComplete: `${window.location.origin}/dashboard`,
       });
-    } catch (err: any) {
-      setError(err?.errors?.[0]?.message ?? 'Could not continue with that provider. Please try again.');
+    } catch (err: unknown) {
+      const clerkOauthErr = err as { errors?: Array<{ message?: string }> };
+      setError(clerkOauthErr?.errors?.[0]?.message ?? 'Could not continue with that provider. Please try again.');
     }
   };
   const handleGoogle = () => { void oauth('oauth_google'); };

@@ -86,7 +86,7 @@ export const triggerRoutes: FastifyPluginAsync = async (fastify) => {
 
     await db.delete(triggers).where(and(eq(triggers.campaignId, request.params.id), eq(triggers.tenantId, request.tenantId)));
 
-    let newTriggers: any[] = [];
+    let newTriggers: (typeof triggers.$inferSelect)[] = [];
     if (body.length > 0) {
       newTriggers = await db.insert(triggers).values(body.map(t => ({
         campaignId: request.params.id,

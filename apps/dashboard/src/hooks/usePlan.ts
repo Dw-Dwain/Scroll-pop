@@ -151,8 +151,9 @@ export function usePlan() {
     queryOptions: { staleTime: 60_000, retry: false },
   });
 
-  const apiPlan  = (meData?.data as any)?.tenant?.plan  as string | undefined;
-  const apiEmail = (meData?.data as any)?.user?.email   as string | undefined;
+  const mePayload = meData?.data as { tenant?: { plan?: string }; user?: { email?: string } } | undefined;
+  const apiPlan  = mePayload?.tenant?.plan;
+  const apiEmail = mePayload?.user?.email;
 
   // API data wins; fall back to localStorage while loading or in desktop mode.
   const plan: PlanId = (apiPlan && (PLAN_ORDER as string[]).includes(apiPlan))

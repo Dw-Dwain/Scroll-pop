@@ -86,8 +86,9 @@ function ClerkSignUpForm() {
       });
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       setPendingVerification(true);
-    } catch (err: any) {
-      setError(err?.errors?.[0]?.longMessage ?? err?.errors?.[0]?.message ?? 'Sign up failed.');
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: Array<{ longMessage?: string; message?: string }> };
+      setError(clerkErr?.errors?.[0]?.longMessage ?? clerkErr?.errors?.[0]?.message ?? 'Sign up failed.');
     } finally {
       setLoading(false);
     }
@@ -106,8 +107,9 @@ function ClerkSignUpForm() {
       } else {
         setError('Verification incomplete. Please check the code and try again.');
       }
-    } catch (err: any) {
-      setError(err?.errors?.[0]?.longMessage ?? err?.errors?.[0]?.message ?? 'Verification failed.');
+    } catch (err: unknown) {
+      const clerkVerErr = err as { errors?: Array<{ longMessage?: string; message?: string }> };
+      setError(clerkVerErr?.errors?.[0]?.longMessage ?? clerkVerErr?.errors?.[0]?.message ?? 'Verification failed.');
     } finally {
       setLoading(false);
     }
@@ -124,8 +126,9 @@ function ClerkSignUpForm() {
         redirectUrl: `${window.location.origin}/sso-callback`,
         redirectUrlComplete: `${window.location.origin}/dashboard`,
       });
-    } catch (err: any) {
-      setError(err?.errors?.[0]?.message ?? 'Could not continue with that provider. Please try again.');
+    } catch (err: unknown) {
+      const clerkOauthErr = err as { errors?: Array<{ message?: string }> };
+      setError(clerkOauthErr?.errors?.[0]?.message ?? 'Could not continue with that provider. Please try again.');
     }
   };
   const handleGoogle = () => { void oauth('oauth_google'); };
