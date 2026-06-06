@@ -1,0 +1,2 @@
+# Git hooks are shell scripts — must use LF so they run on Linux/macOS (and CI).
+.githooks/** text eol=lf

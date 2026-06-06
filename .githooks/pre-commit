@@ -1,0 +1,28 @@
+#!/bin/sh
+# ScrollPop pre-commit hook.
+#
+# The Cloudflare Worker serves a pre-built copy of the snippet at
+# apps/worker/src/p.txt. CI (snippet-size-check) rebuilds the snippet and fails
+# if that committed artifact differs from a fresh build — which happens whenever
+# someone edits packages/snippet/src/** but forgets to rebuild.
+#
+# This hook closes that gap: if a commit touches snippet source, it rebuilds the
+# bundle and re-stages p.txt so the artifact is always in sync.
+#
+# Enabled via `git config core.hooksPath .githooks` (run automatically by the
+# root "prepare" script on `pnpm install`).
+
+set -e
+
+# Only act when staged changes include snippet source.
+if git diff --cached --name-only | grep -q '^packages/snippet/src/'; then
+  echo "[pre-commit] Snippet source changed — rebuilding bundle…"
+  pnpm --filter snippet build >/dev/null
+
+  # Re-stage the synced artifact so it lands in this commit.
+  git add apps/worker/src/p.txt
+
+  if ! git diff --cached --quiet -- apps/worker/src/p.txt; then
+    echo "[pre-commit] apps/worker/src/p.txt rebuilt and staged."
+  fi
+fi
