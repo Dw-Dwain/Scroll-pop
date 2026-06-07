@@ -586,16 +586,37 @@ async function bootstrap() {
     return false;
   }
 
+  // In-memory fallback flood gate, used only when Redis is unavailable. Bounds per-IP
+  // impressions per minute on this instance so a forged-event flood can't burn a tenant's
+  // quota unbounded while Redis is down (previously this path failed fully open). Fixed
+  // 60s window; entries are pruned opportunistically to cap memory.
+  const memImpGate = new Map<string, { count: number; resetAt: number }>();
+  function memImpressionWithinIpQuota(campaignId: string, ip: string): boolean {
+    const now = Date.now();
+    if (memImpGate.size > 50_000) {
+      for (const [key, v] of memImpGate) if (now >= v.resetAt) memImpGate.delete(key);
+    }
+    const k = `${campaignId}:${ip}`;
+    const e = memImpGate.get(k);
+    if (!e || now >= e.resetAt) {
+      memImpGate.set(k, { count: 1, resetAt: now + 60_000 });
+      return true;
+    }
+    e.count += 1;
+    return e.count <= IMPRESSION_PER_IP_PER_MIN;
+  }
+
   // Per-(campaign, IP) impression flood gate. Returns false once the per-minute cap is exceeded.
-  // Fails OPEN (allows) if Redis is unavailable — the billing counter needs Redis anyway.
+  // Prefers the Redis counter (shared across instances + reused for billing); falls back to the
+  // in-memory gate when Redis is unavailable or errors, so the cap is still enforced per instance.
   async function impressionWithinIpQuota(campaignId: string, ip: string): Promise<boolean> {
-    if (!redis) return true;
+    if (!redis) return memImpressionWithinIpQuota(campaignId, ip);
     try {
       const k = `sp_imp_gate:${campaignId}:${ip}`;
       const n = await redis.incr(k);
       if (n === 1) await redis.expire(k, 60);
       return typeof n !== 'number' || n <= IMPRESSION_PER_IP_PER_MIN;
-    } catch { return true; }
+    } catch { return memImpressionWithinIpQuota(campaignId, ip); }
   }
 
   app.post<{ Body: { events?: any[] } }>('/e', {
@@ -817,12 +838,17 @@ async function bootstrap() {
                       campaignId,
                       tenantId: campaign.tenantId,
                       data: {
+                        // Spread raw client metadata FIRST so the server-sanitized fields below
+                        // always win. (Previously ...md4 came last, letting a forged /e event
+                        // override email/pageUrl/revenueCents with spoofed values in the payload
+                        // delivered to the operator's webhook/CRM.) Explicit `undefined` here
+                        // overrides any raw key and is dropped by JSON.stringify.
+                        ...md4,
                         email: extractLeadEmail(md4) ?? undefined,
                         pageUrl: safePageUrl ?? undefined,
                         visitorId: safeVisitorId ?? undefined,
                         device: safeDevice ?? undefined,
                         revenueCents: safeRevenueCents ?? undefined,
-                        ...md4,
                       },
                     });
                   }
@@ -898,13 +924,17 @@ async function bootstrap() {
     ? await redis.get(schemaBootKey).catch(() => null)
     : null;
 
+  // Partition creation is TIME-sensitive: next month's events partition must exist before
+  // the calendar rollover, so this runs on EVERY boot and is deliberately NOT gated behind
+  // the schema-version skip flag. A warm restart inside the 24h skip window that straddled a
+  // month boundary would otherwise skip creating the next partition, and inserts for the new
+  // month would be silently dropped ("analytics dies at month rollover"). It's an idempotent
+  // cheap no-op when the partitions already exist. Safe no-op locally.
+  await ensureEventPartitions(app.log);
+
   if (schemaAlreadyRan) {
     app.log.info('[schema] ensure-* scripts skipped (already ran this version)');
   } else {
-    // Ensure this month's (and next month's) events partition exists before serving.
-    // Prevents the recurring "analytics silently dies at month rollover" outage on Neon,
-    // where inserts for a missing partition are dropped with no error. Safe no-op locally.
-    await ensureEventPartitions(app.log);
     // Ensure notifications schema (migration 0006).
     await ensureNotificationsSchema(app.log);
     // Ensure admin_audit_log schema (migration 0007).

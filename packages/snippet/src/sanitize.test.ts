@@ -76,6 +76,12 @@ describe('cssFont', () => {
     expect(cssFont('x;color:red')).toBe('xcolorred');
     expect(cssFont(123)).toBe('inherit');
   });
+  it('strips the double quote so it cannot break out of style="…"', () => {
+    // The value is rendered inside a double-quoted style attribute; a surviving " would
+    // terminate the attribute and inject markup. (Regression for cssFont allowlist fix.)
+    expect(cssFont('a" autofocus tabindex=0 x')).not.toContain('"');
+    expect(cssFont('"')).toBe('inherit');
+  });
 });
 
 describe('cssAlign / cssWeight', () => {

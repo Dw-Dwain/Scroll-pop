@@ -13,15 +13,31 @@ type WebhookEvent = typeof WEBHOOK_EVENTS[number];
 // SSRF guard — reject URLs whose hostname resolves to a private/loopback/link-local
 // address. Checked at fire time (not just write time) to defeat DNS rebinding.
 const PRIVATE_RANGES = [
+  // IPv4 private / loopback / link-local / "this host"
   /^127\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./,
-  /^169\.254\./, /^::1$/, /^fc00:/i, /^fe80:/i, /^0\.0\.0\.0$/,
+  /^169\.254\./, /^0\./,
+  // IPv6 loopback, unspecified, unique-local (fc00::/7 → fc/fd), link-local (fe80::/10)
+  /^::1$/, /^::$/, /^fc/i, /^fd/i, /^fe80:/i,
 ];
+
+function isPrivateAddress(address: string): boolean {
+  // Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) down to the embedded IPv4
+  // so the IPv4 ranges above catch it.
+  const addr = address.replace(/^::ffff:/i, '');
+  return PRIVATE_RANGES.some((r) => r.test(addr));
+}
 
 async function isPublicUrl(rawUrl: string): Promise<boolean> {
   try {
-    const { hostname } = new URL(rawUrl);
-    const { address } = await dns.lookup(hostname);
-    return !PRIVATE_RANGES.some((r) => r.test(address));
+    const { hostname, protocol } = new URL(rawUrl);
+    if (protocol !== 'https:' && protocol !== 'http:') return false;
+    // Resolve ALL addresses (both families). A hostname with multiple A/AAAA records — one
+    // public, one private — must be rejected: dns.lookup() without {all} returns only the
+    // first record, letting an attacker hide 169.254.169.254 behind a public record. If ANY
+    // resolved address is private, refuse to fire.
+    const records = await dns.lookup(hostname, { all: true });
+    if (records.length === 0) return false;
+    return records.every((r) => !isPrivateAddress(r.address));
   } catch {
     return false;
   }
@@ -36,7 +52,10 @@ const OutboundWebhookBody = z.object({
   // HMAC-SHA256 secret — used to sign the payload so the receiver can verify authenticity.
   // Operators should treat this like a password. We never return it in GET responses.
   secret: z.string().max(256).optional(),
-  events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).max(WEBHOOK_EVENTS.length).default(['email_capture', 'conversion']),
+  // Optional (no default): on a PUT, an omitted `events` must preserve the previously-saved
+  // selection, not silently reset it. fireOutboundWebhook defaults to ['email_capture',
+  // 'conversion'] at fire time when none is stored.
+  events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).max(WEBHOOK_EVENTS.length).optional(),
 });
 
 export type OutboundWebhookConfig = z.infer<typeof OutboundWebhookBody>;
@@ -135,7 +154,12 @@ export const outboundWebhookRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
     const prev = (existing.outboundWebhook ?? {}) as Record<string, unknown>;
+    // Merge onto the previous config so a partial update (e.g. just toggling `enabled`)
+    // preserves fields the operator didn't send. `...body` only carries keys that were
+    // actually supplied (url/events/secret are optional in the schema), so omitted fields
+    // fall back to prev rather than being overwritten with undefined/defaults.
     const merged = {
+      ...prev,
       ...body,
       // Keep previous secret unless a new one is explicitly supplied.
       secret: body.secret ?? prev['secret'],

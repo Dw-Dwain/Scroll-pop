@@ -81,9 +81,10 @@ export async function syncToKlaviyo(opts: {
     });
     // 202 Accepted is the success response for this bulk endpoint
     if (!res.ok && res.status !== 202) {
-      const body = await res.text().catch(() => '');
-      if (testMode) return { ok: false, error: `Klaviyo ${res.status}: ${body.slice(0, 200)}` };
-      console.warn(`[esp] Klaviyo sync failed (${res.status}): ${body.slice(0, 200)}`);
+      // Never surface or log the provider's raw response body — it can echo back the
+      // submitted API key or contact PII. Report the status code only.
+      if (testMode) return { ok: false, error: `Klaviyo returned HTTP ${res.status}` };
+      console.warn(`[esp] Klaviyo sync failed (HTTP ${res.status})`);
       return { ok: false, error: `Klaviyo ${res.status}` };
     }
   } catch (err) {
@@ -155,8 +156,10 @@ export async function syncToMailchimp(opts: {
       const isMemberExists = res.status === 400 &&
         (title === 'Member Exists' || body.includes('Member Exists'));
       if (!isMemberExists) {
-        if (testMode) return { ok: false, error: `Mailchimp ${res.status}: ${body.slice(0, 200)}` };
-        console.warn(`[esp] Mailchimp sync failed (${res.status}): ${body.slice(0, 200)}`);
+        // Body is parsed only to detect the benign "Member Exists" case above; never
+        // surface or log it — a Mailchimp error body can reflect the key or contact PII.
+        if (testMode) return { ok: false, error: `Mailchimp returned HTTP ${res.status}` };
+        console.warn(`[esp] Mailchimp sync failed (HTTP ${res.status})`);
         return { ok: false, error: `Mailchimp ${res.status}` };
       }
     }
@@ -196,13 +199,17 @@ export async function dispatchToEsps(
   // the adapters. Test mode surfaces results via /integrations/test instead.
   const promises: Promise<EspSyncResult>[] = [];
 
+  // Opt-IN per campaign: only sync when the campaign's esp_config explicitly enables the
+  // provider (=== true). A campaign with the default empty config ({}) must NOT inherit a
+  // tenant's global credentials, otherwise enabling Klaviyo once would silently leak every
+  // campaign's captured leads into it. (Was `!== false`, which treated the default as opted-in.)
   const kl = tenantIntegrations.klaviyo;
-  if (campaignEspConfig.klaviyo !== false && kl?.enabled && kl.apiKey && kl.listId) {
+  if (campaignEspConfig.klaviyo === true && kl?.enabled && kl.apiKey && kl.listId) {
     promises.push(syncToKlaviyo({ apiKey: kl.apiKey, listId: kl.listId, contact }));
   }
 
   const mc = tenantIntegrations.mailchimp;
-  if (campaignEspConfig.mailchimp !== false && mc?.enabled && mc.apiKey && mc.listId) {
+  if (campaignEspConfig.mailchimp === true && mc?.enabled && mc.apiKey && mc.listId) {
     promises.push(syncToMailchimp({ apiKey: mc.apiKey, listId: mc.listId, contact }));
   }
 

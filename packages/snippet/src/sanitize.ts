@@ -59,12 +59,16 @@ export function cssNum(val: unknown, fallback: number): number {
 }
 
 /**
- * font-family — strip everything except letters, digits, spaces, commas, quotes, hyphens.
- * Blocks " (attribute breakout) and ; } : ( (CSS declaration / url() breakout).
+ * font-family — strip everything except letters, digits, spaces, commas, single
+ * quotes, underscores, hyphens.
+ * Blocks " (style-attribute breakout) and ; } : ( (CSS declaration / url() breakout).
+ * The double quote is intentionally NOT in the allowlist: the value is rendered inside
+ * a double-quoted style="…" attribute, so permitting " would let a font-family escape
+ * the attribute and inject markup. Single quotes are safe there and valid CSS quoting.
  */
 export function cssFont(val: unknown): string {
   if (typeof val !== 'string') return 'inherit';
-  const cleaned = val.replace(/[^a-zA-Z0-9 ,'"_-]/g, '').slice(0, 60);
+  const cleaned = val.replace(/[^a-zA-Z0-9 ,'_-]/g, '').slice(0, 60);
   return cleaned || 'inherit';
 }
 
