@@ -357,6 +357,25 @@ Plus `DraftBuilderElement` exported from `types/campaign.ts` and `lib/templates.
 
 ---
 
+## 🧪 Billing Webhook Verification — Real-SDK Dry-Run — ✅ June 7, 2026
+
+> The main suite mocked the `stripe` module, so the actual signature-verification path had never been exercised. New test `apps/api/src/stripe-webhook.test.ts` runs the **real** Stripe SDK. Commit `b65a23b`.
+
+| # | Test | Result | Proves |
+|---|---|---|---|
+| 1 | Valid signature over a **non-canonical (whitespace) raw payload** | ✅ 200 `received:true` | `request.rawBody` is captured + used — the `JSON.stringify(request.body)` fallback would fail on these bytes (closes the P0-1 footgun concern) |
+| 2 | Tampered body, original signature | ✅ 400 `INVALID_SIGNATURE` | Forged/modified events rejected |
+| 3 | Signature signed with wrong secret | ✅ 400 `INVALID_SIGNATURE` | Only the real `STRIPE_WEBHOOK_SECRET` verifies |
+| 4 | Missing `stripe-signature` header | ✅ 400 `INVALID_SIGNATURE` | No unsigned events accepted |
+
+**API suite now 75/75** (was 71). Typecheck clean.
+
+**Scope of this proof:** it validates cryptographic signature verification + forgery resistance in isolation with a test secret. It does **not** exercise the end-to-end money flow (real checkout → `checkout.session.completed`/`customer.subscription.created` → price-ID→plan mapping → tenant row update → cache bust). That still needs the **one live test charge** under P0-2, and depends on the 4 `STRIPE_PRICE_*` env vars matching the actual Stripe price IDs (a mismatch would verify the signature but silently skip the plan update). Verify `request.rawBody` populates in the Render runtime during that test.
+
+**Conclusion:** billing webhook is cryptographically sound. Remaining billing risk is config (price IDs / env), not vulnerability.
+
+---
+
 ## 🔐 Security Remediation Sprint — ✅ Completed June 6, 2026
 
 > Full plan with code snippets: **`SECURITY-REMEDIATION.md`**  
