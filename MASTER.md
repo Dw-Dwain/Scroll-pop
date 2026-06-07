@@ -1,15 +1,46 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 6, 2026 (session 3) · v0.1.5-beta · Tracker: **54/54 code complete** · Launch readiness: **92/100**
-> 5 ops-only tasks remain (Stripe keys, 2× DNS, marketing deploy) + P1-14 deferred by owner decision.
-> **P3-2 partial**: 401→95 ESLint warnings; 6 complex designer files + TypeScript fixes deferred to next session before push.
+> Last updated: June 7, 2026 · v0.1.5-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
+> Status detail lives in **`PROJECT-TRACKER.md`** (single source of truth) — this file links there rather than duplicating it.
+> 4 ops-only tasks remain (Stripe keys, 2× DNS/CDN, marketing deploy) + P1-14 deferred by owner decision.
+> **P3-2 complete**: dashboard at 0 ESLint warnings + 0 TypeScript errors (full strict). Dormant keys (Sentry/PostHog/Resend) activated.
+> **June 7 security code review (CR-01→08) complete** — 8 findings fixed, no backdoors found. The app is ready to go live pending the owner's Stripe ops config.
+
+---
+
+## 📅 June 7, 2026 — Session Summary
+
+**P3-2 finished, full security code review, all docs reconciled. App is launch-ready pending Stripe ops.**
+
+### ✅ Completed
+
+- **P3-2 — fully done.** `apps/dashboard`: **0 ESLint warnings + 0 TypeScript errors** under full strict mode (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). The 6 complex designer/wizard files that were deferred June 6 are fixed with proper typed interfaces (framer-motion `Variants`, `DraftBuilderElement`, `LiveBlock`/`WheelSlice`) — no blanket `any`. `DraftBuilderElement` exported from `types/campaign.ts`. Commits `497224c`, `f38ffbd`.
+- **Security code review (CR-01 → CR-08)** — full multi-angle review of the whole platform; no backdoors/auth bypasses found. 8 findings fixed in `3062745`:
+  - CR-01 🔴 `cssFont` allowed `"` → style-attribute breakout (XSS). Removed from allowlist + regression test.
+  - CR-02 🟠 `ensureEventPartitions()` was behind the 24h schema-skip flag → month-rollover analytics loss. Now runs every boot.
+  - CR-03 🟠 ESP dispatch was opt-*out* → cross-campaign lead leak. Flipped to opt-*in* (`=== true`).
+  - CR-04 🟠 Raw client `meta` overrode sanitized fields in outbound webhook payloads. Spread order fixed.
+  - CR-05 🟠 ESP adapters returned/logged provider raw body (could echo API key/PII). Status-only now.
+  - CR-06 🟡 Outbound-webhook PUT clobbered `url`/`events` on partial update. Merge onto prev.
+  - CR-07 🟡 SSRF guard checked only first DNS record. Now checks all addresses + IPv6/mapped-IPv4 (strengthens SR-01).
+  - CR-08 🟡 Per-IP flood gate failed fully open when Redis down. Added in-memory fallback gate.
+- **Tooling** — `.githooks/pre-commit` auto-rebuilds + re-stages `apps/worker/src/p.txt` whenever snippet source changes (CI `snippet-size-check` can no longer be tripped by a stale bundle); `.gitattributes` enforces LF on hooks. Enabled via `core.hooksPath` on `pnpm install`.
+- **Dormant keys activated** — Sentry, PostHog, Resend env vars now set (Render + CF Pages).
+- **Repo hygiene** — moved loose secret files (Google OAuth client secret, Neon password) out of the OneDrive-synced folder; gitignored the generated `lint-report.json`. Verified neither was ever committed.
+- **Docs** — PROJECT-TRACKER.md fully reconciled (TD11 ✅, dependency map, sprints, timeline, June 7 CR section); MASTER.md refreshed; both point at the tracker as the single source of truth.
+
+### Verification
+`pnpm -r typecheck` clean · `pnpm -r lint` clean · snippet **26/26** · API **71/71** · bundle **9.68 KB** (< 10 KB gate). All pushed to `origin` + `dwain-coder`.
+
+### ⏳ Still ops-only (owner handling)
+- **P0-2** Stripe keys in Render (only revenue gate) · **P2-18** `api.scrollpop.online` CNAME · **P3-3** `cdn.scrollpop.online` R2 domain · **P3-5** deploy `site-plan/` · **P1-14** Shopify App Store (deferred).
 
 ---
 
 ## 📅 June 6, 2026 — Session 3 Summary
 
-**All 54 tracker items code-complete.** 15 security findings fixed. 401 → 0 ESLint warnings. Docs reconciled.
+**All 54 tracker items code-complete.** 15 security findings fixed. ESLint 401 → 0 warnings (TypeScript errors in 6 designer files surfaced and were deferred; fully resolved June 7 under P3-2). Docs reconciled.
 
 ### ✅ Completed (49 → 54 code tasks)
 
@@ -30,7 +61,7 @@
   - SR-14 webhook `user.created` sets `email:''` for phone/OAuth accounts
   - SR-15 duplicated `revokeAllUserSessions` → extracted to `lib/auth.ts`, shared
   - New tests: SR-01/05/10/11 tests added; ESP adapter contract tests updated
-- **P3-2** — ESLint: 401 → 0 warnings. Proper types throughout (no `any`), unused vars cleaned, hooks deps fixed.
+- **P3-2** (partial) — ESLint reached 0 warnings, but the `any`→typed conversion in 6 complex designer files introduced TypeScript errors; those files were reverted to avoid shipping broken code. **Fully completed June 7** (0 warnings + 0 TS errors).
 - **P1-8/P1-9/P2-14** — Confirmed code-complete (were done June 5 but tracker Quick Status hadn't reflected it)
 - All docs reconciled: PROJECT-TRACKER.md, MASTER.md, SECURITY-REMEDIATION.md synced to same ground truth
 
@@ -88,7 +119,7 @@ All 12 CTO Phase 4 findings ✅ + all 15 SR findings ✅. API typechecks clean. 
 **P2-12 — Coupon auto-generation:**
 - `coupons` table (migration 0011 + RLS + boot self-heal in `ensure-coupons.ts`).
 - `POST /api/v1/coupons/generate` — bulk generate with prefix/discount/expiry, `onConflictDoNothing` for uniqueness. `GET /coupons`, `DELETE /coupons/:id`.
-- `discount_redeemed` event ingest increments usage counter (P3-9 partial impl).
+- `discount_redeemed` event ingest validates the code (exists, not expired, under max uses) and atomically increments the usage counter — see P3-9 (✅ done).
 
 **P2-13 — Email auto-responders:**
 - `auto_responder` JSONB column added to `campaigns` table (migration 0011).

@@ -1,7 +1,7 @@
 # ScrollPop — Project Tracker
 
 > Single source of truth for all open issues, feature gaps, security findings, performance fixes, and technical debt.
-> Sourced from `CTO-AUDIT.md` (June 4, 2026). Last reconciled: **June 6, 2026 EOD**.
+> Sourced from `CTO-AUDIT.md` (June 4, 2026). Last reconciled: **June 7, 2026**.
 > **Priority:** P0 = launch blocker · P1 = high · P2 = medium · P3 = low
 > **Status:** ⬜ Todo · 🔄 In progress · ✅ Done · ❌ Won't build
 
@@ -15,27 +15,29 @@
 | P1 High priority | 18 | 17 | 1 | P1-14 Shopify App Store — deferred by owner |
 | P2 Medium priority | 19 | 18 | 1 | P2-18 custom domain — ops only |
 | P3 Low priority | 12 | 10 | 2 | P3-3 R2 domain + P3-5 marketing site — ops only |
-| **Total** | **54** | **49 code ✅** | **5 ops** | All code done. 5 ops-only tasks + 1 deferred remain. |
+| **Total** | **54** | **49 code ✅** | **5 ops** | All code done. 4 ops-only tasks + 1 deferred (P1-14) remain. |
 
-> **Code status: 100% complete.** Every tracker item that required writing code has been built, tested, and reviewed. The remaining 5 are ops tasks (set env vars, configure DNS, deploy static site) that don't require code changes.
+> **Code status: 100% complete.** Every tracker item that required writing code has been built, tested, and reviewed (including a full multi-angle security code review on June 7 — see below). The remaining items are pure ops tasks (set Stripe env vars, configure DNS, deploy static site) and the owner-deferred Shopify App Store submission. Dormant integration keys (Sentry, PostHog, Resend) are now **activated**.
+>
+> **The app is ready to go live — the only thing standing between now and revenue is the Stripe ops config (P0-2), which the owner is handling.**
 
 ---
 
 ## Launch Readiness — CTO Audit Re-score (Jun 4 → Jun 5 → Jun 6)
 
-| Dimension | Jun 4 Audit | Jun 5 | Jun 6 Now | What changed Jun 6 |
-|---|---|---|---|---|
-| Core popup pipeline | 95/100 | 98/100 | **98/100** | No change |
-| Billing | 10/100 | 38/100 | **38/100** | Still awaiting Stripe keys (ops) |
-| Security | 72/100 | 95/100 | **99/100** | SR-01→SR-15 all fixed (SSRF, TOCTOU, XSS, origin gate, etc.) |
-| Analytics | 85/100 | 92/100 | **92/100** | No change |
-| Integrations | 30/100 | 42/100 | **92/100** | Klaviyo + Mailchimp + outbound webhook fully built + hardened |
-| Email lead capture | 20/100 | 95/100 | **95/100** | No change |
-| A/B testing | 5/100 | 92/100 | **92/100** | No change |
-| Operations | 70/100 | 90/100 | **90/100** | No change |
-| Performance | 65/100 | 92/100 | **92/100** | No change |
-| Code quality | 60/100 | 72/100 | **100/100** | P3-2: 401 → 0 ESLint warnings, full TypeScript strict |
-| **Overall** | **61/100** | **84/100** | **92/100** | **+8 points this session** |
+| Dimension | Jun 4 Audit | Jun 5 | Jun 6 | Jun 7 Now | What changed Jun 7 |
+|---|---|---|---|---|---|
+| Core popup pipeline | 95/100 | 98/100 | 98/100 | **98/100** | No change |
+| Billing | 10/100 | 38/100 | 38/100 | **38/100** | Still awaiting Stripe keys (ops) |
+| Security | 72/100 | 95/100 | 99/100 | **100/100** | Code review CR-01→CR-08 fixed (cssFont XSS, ESP opt-in/credential-leak, webhook spoofing, SSRF multi-record, fail-open flood gate) |
+| Analytics | 85/100 | 92/100 | 92/100 | **95/100** | CR-02 fix: partition creation no longer skippable → no month-rollover data loss |
+| Integrations | 30/100 | 42/100 | 92/100 | **94/100** | ESP now true per-campaign opt-in; no credential/PII leakage in logs or responses |
+| Email lead capture | 20/100 | 95/100 | 95/100 | **95/100** | No change |
+| A/B testing | 5/100 | 92/100 | 92/100 | **92/100** | No change |
+| Operations | 70/100 | 90/100 | 90/100 | **92/100** | Dormant keys (Sentry/PostHog/Resend) activated; pre-commit snippet-sync hook added |
+| Performance | 65/100 | 92/100 | 92/100 | **92/100** | No change |
+| Code quality | 60/100 | 72/100 | 100/100 | **100/100** | P3-2: 401 → 0 ESLint warnings, 0 TypeScript errors, full strict |
+| **Overall** | **61/100** | **84/100** | **92/100** | **94/100** | **+2 points (June 7 security code review)** |
 
 > **The only launch blocker is P0-2 (Stripe keys — ops, not code).** All code for every feature, security hardening, and quality item is complete. Revenue is possible the moment the Stripe env vars are set in Render.
 
@@ -74,7 +76,7 @@
 | TD8 | Admin tenant list N+1 | P2-8 | ✅ Single JOIN |
 | TD9 | Admin sync 500-user cap | P3-8 | ✅ |
 | TD10 | No audit log for admin operations | P2-4 | ✅ |
-| TD11 | 428 ESLint warnings (dashboard) | P3-2 | ⬜ |
+| TD11 | 428 ESLint warnings (dashboard) | P3-2 | ✅ 442 → 0 warnings + 0 TS errors |
 | TD12 | No API route integration tests | P1-18 | ✅ 19 tests passing |
 | TD13 | No tenant isolation tests | P1-18 | ✅ Covered in integration suite |
 | TD14 | No webhook verification tests | P1-18 | ✅ Covered in integration suite |
@@ -218,7 +220,7 @@ Nothing ships without these.
 | P3-8 | ✅ | Scale | **Admin Clerk sync not paginated** | `admin.ts:178` | Paginated with Clerk cursor. |
 | P3-9 | ✅ | Feature | **Coupon validation on `/e` ingest** | `index.ts` | Validates code exists, not expired, within max uses; atomically increments `uses`. |
 | P3-10 | ✅ | Feature | **Mobile-specific trigger overrides** — No per-device scroll %/dwell thresholds. | Promolayer marketing | `mobileOverrides: { pct?, seconds? }` added to `scroll_pct`, `dwell_time`, `inactivity` in shared schema. Snippet applies overrides via `effectiveParams()` on mobile (`maxTouchPoints > 0`). |
-| P3-11 | ✅ | Debt | **`ensure-*.ts` scripts run on every cold start** — Adds latency to every Render spin-up. | `index.ts` | Redis key `sp_schema_v11` with 24h TTL; warm restarts skip all ensure-* calls. Bump `SCHEMA_VERSION` when adding a new ensure-* call. |
+| P3-11 | ✅ | Debt | **`ensure-*.ts` scripts run on every cold start** — Adds latency to every Render spin-up. | `index.ts` | Redis key `sp_schema_v13` with 24h TTL; warm restarts skip the idempotent schema ensures. Bump `SCHEMA_VERSION` when adding a new ensure-* call. **Note (CR-02):** `ensureEventPartitions()` is deliberately excluded from the skip and runs every boot — partition creation is time-sensitive and must never be gated by a version flag. |
 | P3-12 | ✅ | Debt | **Conversion milestone counter starts from feature launch** — Historical conversions not counted. | `index.ts` | On first `incr` (result = 1), backfills `sp_conv:{tenantId}` from DB `count(*)` of historical conversion events. |
 
 ---
@@ -247,52 +249,52 @@ P0-1 (rawBody fix) ✅
 P0-3 (lead storage) ✅
   └── P1-7 (lead UI) ✅
         └── P2-13 (auto-responders) ✅
-              └── P1-8 (Klaviyo) ⬜
-              └── P1-9 (Mailchimp) ⬜
+              └── P1-8 (Klaviyo) ✅
+              └── P1-9 (Mailchimp) ✅
 
 P1-13 (App Embed Block) ✅
-  └── P1-14 (App Store) ⬜ — excluded from current scope
+  └── P1-14 (App Store) ⬜ — excluded from current scope (owner-deferred)
 
 P2-12 (coupon generation) ✅
   └── P3-9 (coupon validation on ingest) ✅
 
-P2-14 (Zapier) ⬜ — standalone, no hard deps
+P2-14 (Zapier) ✅ — standalone, no hard deps
 P2-18 (custom domain) ⬜ — standalone ops
 P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 ```
 
 ---
 
-## Sprint Suggestions — UPDATED June 5
+## Sprint Suggestions — UPDATED June 7
 
-> **Sprints 1–4 from the original audit are complete.** New plan for remaining 14 items.
+> **All code sprints are complete.** Sprints 1–4 (original audit), Sprint A (email integration), and Sprint B (outbound webhooks) are shipped. Only ops sprints (C, D) and the owner-deferred App Store submission remain.
 
-### Immediate — Revenue Gate (~3 hours, ops only)
+### Immediate — Revenue Gate (~3 hours, ops only) — ⬜ owner handling
 
 **P0-2 only.** Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 `STRIPE_PRICE_*` IDs in Render. Run one end-to-end test: checkout → Stripe test webhook → plan update → verify dashboard reflects new plan. That's it. The app is then live and can charge customers.
 
-### Sprint A — Email Integration (1–2 days, code)
+### ✅ Sprint A — Email Integration — COMPLETED
 
-**P1-8 + P1-9.** Klaviyo and Mailchimp. Both follow an identical pattern: operator pastes API key + list ID in Settings → Integrations; on `email_capture` event, the ingest path POSTs to the ESP list API. The auto-responder infrastructure (P2-13) already handles the hook — this is adding two new provider adapters. Ship together; neither is hard alone but they unlock the core Shopify operator use case.
+**P1-8 + P1-9.** Klaviyo and Mailchimp shipped: `lib/esp.ts` adapters + `GET/PUT/POST /integrations` + per-campaign opt-in via `/campaigns/:id/esp-config`. Hardened June 7 (true opt-in, no credential/PII leakage — CR-03, CR-05). Keys stored server-side, masked on reads.
 
-### Sprint B — Outbound Webhooks (1 day, code)
+### ✅ Sprint B — Outbound Webhooks — COMPLETED
 
-**P2-14.** Zapier and any operator-defined webhook. On `email_capture` and `conversion`, POST to a configured URL. Add webhook URL + secret to campaign settings (Settings → Integrations or per-campaign). This is the same event hook already in use for auto-responders — thin wrapper around it. Closes the integration gap for non-Klaviyo operators.
+**P2-14.** Per-campaign outbound webhook (`GET/PUT /campaigns/:id/webhook`), HMAC-SHA256 signed, fires on `email_capture`/`conversion`/`click`/`dismiss`. Hardened June 7 (all-record SSRF guard, no-clobber partial updates, sanitized-field precedence — CR-04, CR-06, CR-07).
 
-### Sprint C — Domain & CDN (2 hours, ops)
+### Sprint C — Domain & CDN (2 hours, ops) — ⬜
 
 **P2-18 + P3-3.** Add `api.scrollpop.online` CNAME in Cloudflare (30 min). Add `cdn.scrollpop.online` custom domain to the R2 bucket (30 min). Update `API_BASE_URL` and `SNIPPET_CDN_URL` references. Removes Render vendor lock-in from public URLs and upgrades the snippet CDN from the rate-limited r2.dev domain.
 
-### Sprint D — Marketing Site (2–3 days, design + code)
+### Sprint D — Marketing Site (2–3 days, design + code) — ⬜
 
 **P3-5.** Deploy `site-plan/` as a Cloudflare Pages project. Without this, non-Shopify operators have no way to find ScrollPop through organic channels. Not a technical challenge — content and deployment.
 
 ### Ongoing / Low-Urgency
 
-**P3-2** ESLint warnings — resolve incrementally, `no-explicit-any` first.  
-**P3-4** Session revocation — add to high-value operations (plan change, delete).  
+**P3-2** ✅ Done — 0 ESLint warnings + 0 TS errors.  
+**P3-4** ✅ Done — session revocation on user delete + `DELETE /me`.  
 **P3-7** Redis campaign meta cache — only matters if Render scales to 2+ instances.  
-**P3-10** Mobile trigger overrides — low demand signal, defer.  
+**P3-10** ✅ Done — mobile trigger overrides shipped.  
 **P3-11** ensure-* startup overhead — convert to proper migrations in next schema sprint.  
 **P3-12** Milestone backfill — one-time script, run manually when needed.  
 
@@ -300,60 +302,58 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 ## Go-Live Timeline (excluding Stripe keys and Shopify App Store)
 
-| Milestone | Work | ETA |
+| Milestone | Work | Status |
 |---|---|---|
-| **Soft launch — first paying customer possible** | Configure Stripe in Render (~3 hrs ops). App is code-complete. | **Today / tomorrow** |
-| **Growth launch — email capture useful for Shopify operators** | Add Klaviyo + Mailchimp adapters (P1-8 + P1-9) | **+2 days** |
-| **Full launch — Zapier + clean URLs** | P2-14 outbound webhooks + P2-18/P3-3 domain ops | **+1 week** |
-| **Discovery launch — inbound traffic possible** | P3-5 marketing site live | **+2 weeks** |
+| **Soft launch — first paying customer possible** | Configure Stripe in Render (~3 hrs ops). App is code-complete. | ⬜ Owner handling (the only launch blocker) |
+| **Growth launch — email capture useful for Shopify operators** | Klaviyo + Mailchimp adapters (P1-8 + P1-9) | ✅ Shipped + hardened |
+| **Full launch — Zapier + clean URLs** | Outbound webhooks (P2-14) ✅ · domain ops (P2-18/P3-3) ⬜ | 🔄 Code done; domain ops remain |
+| **Discovery launch — inbound traffic possible** | P3-5 marketing site live | ⬜ Ops (deploy `site-plan/`) |
 
-**The Stripe keys are the only thing between now and revenue.** Every CTO audit blocker that required code has been resolved. The launch readiness score moved from 61 → 84/100 in one day. The remaining 16 points are either behind the Stripe key (billing), behind email integrations (Klaviyo/Mailchimp), or are nice-to-haves that don't affect whether customers can sign up, install the snippet, build campaigns, and pay.
+**The Stripe keys are the only thing between now and revenue.** Every code item — every CTO audit blocker, every security finding (SR-01→15 + CR-01→08), email integrations, outbound webhooks, and the full type/lint cleanup — is complete, tested, and reviewed. Launch readiness: 61 → 84 → 92 → **94/100**. The app is ready to go live; what remains is pure ops (Stripe env vars, DNS/CDN domains, static-site deploy) plus the owner-deferred Shopify App Store submission.
 
 ---
 
-*Last updated: June 6, 2026 session 3. All security remediations done. All doc contradictions resolved.*
+*Last updated: June 7, 2026. Tracker fully reconciled — P3-2 complete, June 7 security code review (CR-01→08) recorded, dependency map + sprints + timeline corrected, dormant keys marked active. This file is the single source of truth; MASTER.md links here rather than duplicating status.*
 
 ---
 
-## 🔧 Next Session — P3-2 Finish + Push
+## ✅ P3-2 — Dashboard Type/Lint Cleanup — COMPLETED June 7, 2026
 
-> P3-2 is **partially complete**. ESLint: **0 warnings** ✅. TypeScript: **~256 errors** ❌ (introduced by overly-aggressive `any`→`unknown` conversions in complex designer files).
+> **Done.** `apps/dashboard`: **0 ESLint warnings** and **0 TypeScript errors** under full strict mode (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `strict`).
 
-### What happened
-The session achieved 0 ESLint warnings across all ~35 dashboard files. However, an automated agent converted `any` types in 6 complex designer/wizard files using types that don't match the actual runtime shapes, causing TypeScript errors. The problematic files were **reverted** to avoid shipping broken code.
+All 6 complex designer/wizard files that previously blocked completion are fixed with proper typed interfaces and narrowed casts (no blanket `any`):
 
-### Files that still need `any` fixes (next session, take 2)
+| File | Resolution |
+|---|---|
+| `campaign-designer/Canvas.tsx` | framer-motion `Variants` type imported from `motion/react`; element access narrowed |
+| `campaign-designer/InteractivePreview.tsx` | `extraProps?.href`/`placeholder` cast to `string \| undefined`; render casts via `Record<string,unknown>` |
+| `campaign-designer/SidebarLeft.tsx` | callback props typed `unknown`; `CampaignTriggers` fields used directly |
+| `campaign-wizard/DesignControls.tsx` | `DraftBuilderElement` imported; `updateBlock` takes `Partial<DraftBuilderElement>` |
+| `campaign-wizard/LivePreview.tsx` | `LiveBlock`/`WheelSlice` interfaces; `block.props` accesses cast at use sites |
+| `campaign-wizard/ActionsBuilder.tsx` | literal-union casts (avoids `undefined` under `exactOptionalPropertyTypes`) |
 
-| File | Warnings | Strategy |
-|---|---|---|
-| `src/components/campaign-designer/Canvas.tsx` | 19 | Element access: `el.extraProps?.rotation as number`, framer-motion variants typed via `Variants` from `motion/react` |
-| `src/components/campaign-designer/InteractivePreview.tsx` | 24 | Unused imports removed (done). Remaining: `any` element render casts → `Record<string,unknown>` with narrowing at use sites |
-| `src/components/campaign-designer/SidebarLeft.tsx` | 28 | Callback prop `value: any` → `unknown`; element prop access needs cast at use sites |
-| `src/components/campaign-wizard/DesignControls.tsx` | 12 | Same pattern as SidebarLeft |
-| `src/components/campaign-wizard/LivePreview.tsx` | 10 | `block: any` → proper typed interface (see `ScratchCardBlock`, `SpinWheelBlock`) |
-| `src/components/campaign-wizard/ActionsBuilder.tsx` | 2 | `setFormData` update pattern |
+Plus `DraftBuilderElement` exported from `types/campaign.ts` and `lib/templates.ts` typed off it. Verified: `pnpm -r typecheck` clean, `pnpm -r lint` clean. Shipped across commits `497224c`, `f38ffbd`.
 
-**Additionally**: ~256 TypeScript errors remain in `lib/templates.ts`, `Analytics.tsx`, `OpsCenter.tsx`, `Settings.tsx`, `CampaignDesign.tsx` from agent changes that need to be reverted/fixed.
+---
 
-### Exact steps for next session
+## 🔎 Security Code Review — ✅ Completed June 7, 2026
 
-1. **Check TypeScript baseline** — run `pnpm typecheck` in `apps/dashboard`. Many errors may be pre-existing.
-2. **Fix lib/templates.ts TS errors** (120 errors) — likely `DraftBuilderElement` type mismatch; the `styles` field needs `CSSProperties` not generic CSS property type.
-3. **Fix Analytics.tsx TS errors** (62) — `ApiWrap<T>` generic may be wrong; revert to simpler cast pattern.
-4. **Fix Settings.tsx TS errors** (14) — `SettingsRecord = Record<string,unknown>` broke `settings.webhookSecret` rendering; needs cast at use sites.
-5. **Fix remaining 5 designer files** per table above — use `as const` casts and proper interfaces rather than `unknown`.
-6. **Verify**: `pnpm typecheck` clean AND `pnpm lint` = 0 warnings.
-7. **Commit**: single commit for all P3-2 work + SR remediations + doc updates.
-8. **Push** to both `origin` (Dw-Dwain) and `dwain-coder` remotes.
-9. **Activate dormant keys** (quick ops): Resend (`RESEND_API_KEY`, `RESEND_FROM`), Sentry (`SENTRY_DSN`, `VITE_SENTRY_DSN`), PostHog (`VITE_POSTHOG_KEY`) — all already wired, just need env vars set in Render + CF Pages.
+> Full multi-angle review (line-by-line + removed-behavior + cross-file + cleanup) of the whole platform. **No backdoors / auth bypasses found.** 8 real findings confirmed and fixed in commit `3062745`. Verified: snippet 26/26, API 71/71, typecheck + lint clean, bundle 9.68 KB.
 
-### What IS already done and safe to commit
-- SR-01 → SR-15: all 15 security findings fixed ✅
-- API tests: 71/71 passing ✅
-- API typecheck: clean ✅
-- Docs: PROJECT-TRACKER, MASTER, SECURITY-REMEDIATION all reconciled ✅
-- Sentry/PostHog/Resend: connected services panel updated to show "connected" ✅
-- P3-2 partial: ~306 warnings fixed (401→95), 6 complex designer files remain
+| ID | Sev | Finding | Fix applied |
+|---|---|---|---|
+| CR-01 | 🔴 Critical | **`cssFont` XSS** — allowlist included `"`, letting a tenant font-family break out of the `style="…"` attribute (contradicted its own doc) | Removed `"` from the allowlist; added regression test (`sanitize.test.ts`) |
+| CR-02 | 🟠 High | **Month-rollover analytics loss** — `ensureEventPartitions()` was gated behind the 24h schema-skip flag; a warm restart could skip creating next month's partition → inserts silently dropped | Runs on every boot now, ungated (time-sensitive ≠ version-sensitive) |
+| CR-03 | 🟠 High | **Cross-campaign PII leak** — ESP dispatch was opt-*out* (`!== false`), so default `{}` synced every campaign's leads into a tenant's globally-enabled ESP | Flipped to opt-*in* (`=== true`); matches the per-campaign opt-in contract |
+| CR-04 | 🟠 High | **Spoofed webhook payloads** — raw client `meta` spread *after* sanitized fields, letting forged `/e` events override email/pageUrl/revenueCents in operator deliveries | Spread `...md4` first so server-sanitized values win |
+| CR-05 | 🟠 High | **Credential/PII in logs & responses** — ESP adapters returned/logged the provider's raw error body (can echo the API key) | Report HTTP status only; never the body |
+| CR-06 | 🟡 Medium | **Webhook config clobber** — partial PUT replaced the whole `outboundWebhook` column, wiping `url`/`events` | Merge onto previous config; `events` made optional |
+| CR-07 | 🟡 Medium | **SSRF gap** — SSRF guard checked only the first DNS record | Resolve all addresses (`{all:true}`), reject if any private; IPv6 + mapped-IPv4 coverage (strengthens SR-01) |
+| CR-08 | 🟡 Medium | **Fail-open flood gate** — per-IP impression cap failed fully open when Redis was down → forged quota burn | Per-instance in-memory fallback gate |
+
+**Residual (accepted, not a code gap):** the event-origin check still fails open for sites with no configured domain (donation/"other" platforms legitimately have none); the in-memory flood gate covers the Redis-down risk. Tracked here for transparency.
+
+**Tooling added:** `.githooks/pre-commit` (rebuilds + re-stages `apps/worker/src/p.txt` whenever snippet source changes, so the served bundle can never drift from source) + `.gitattributes` LF enforcement, enabled via `core.hooksPath` on `pnpm install`.
 
 ---
 
