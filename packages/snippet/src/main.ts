@@ -1193,12 +1193,12 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
 function getPositionStyles(design: DesignConfig): string {
   switch (design.position) {
-    case 'center': return 'top: 50%; left: 50%; transform: translate(-50%, -50%);';
+    case 'center': return 'top:50%;left:50%;translate:-50% -50%;';
     case 'bottom-left': return 'bottom: 16px; left: 16px;';
     case 'bottom-right': return 'bottom: 16px; right: 16px;';
     case 'top': return 'top: 0; left: 0; right: 0; width: 100%; max-width: 100%; border-radius: 0;';
     case 'bottom': return 'bottom: 0; left: 0; right: 0; width: 100%; max-width: 100%; border-radius: 0;';
-    default: return 'top: 50%; left: 50%; transform: translate(-50%, -50%);';
+    default: return 'top:50%;left:50%;translate:-50% -50%;';
   }
 }
 
