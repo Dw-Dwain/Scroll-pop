@@ -17,7 +17,7 @@
 | P3 Low priority | 12 | 10 | 2 | P3-3 R2 domain + P3-5 marketing site — ops only |
 | **Total** | **54** | **49 code ✅** | **5 ops** | All code done. 4 ops-only tasks + 1 deferred (P1-14) remain. |
 
-> **Code status: 100% complete.** Every tracker item that required writing code has been built, tested, and reviewed (including a full multi-angle security code review on June 7 — see below). The remaining items are pure ops tasks (set Stripe env vars, configure DNS, deploy static site) and the owner-deferred Shopify App Store submission. Dormant integration keys (Sentry, PostHog, Resend) are now **activated**.
+> **Code status: 100% complete.** Every tracker item that required writing code has been built, tested, and reviewed (including a full multi-angle security code review on June 7 — see below). The remaining items are pure ops tasks (set Stripe env vars, configure DNS, deploy static site, re-upload the corrected WP plugin zip — see OPS-WP1 / BUG-1) and the owner-deferred Shopify App Store submission. Dormant integration keys (Sentry, PostHog, Resend) are now **activated**.
 >
 > **The app is ready to go live — the only thing standing between now and revenue is the Stripe ops config (P0-2), which the owner is handling.**
 
@@ -411,7 +411,16 @@ Plus `DraftBuilderElement` exported from `types/campaign.ts` and `lib/templates.
 | ID | Status | Item | Est. |
 |---|---|---|---|
 | P0-2  | ⬜ | Set Stripe keys in Render env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs) | 2h |
+| OPS-WP1 | ⬜ | **Re-upload corrected WP plugin zip to R2** (fixes BUG-1): `npx wrangler r2 object put scrollpop-assets/scrollpop-wp.zip --file packages/wp-plugin/dist/scrollpop-wp.zip --content-type application/zip` (rebuild first via `pnpm --filter @scrollpop/wp-plugin package`) | 10 min |
 | P2-18 | ⬜ | `api.scrollpop.online` CNAME → Render in Cloudflare DNS | 30 min |
 | P3-3  | ⬜ | `cdn.scrollpop.online` custom domain on R2 bucket `scrollpop-assets` | 30 min |
 | P3-5  | ⬜ | `pnpm build` + `wrangler pages deploy dist --project-name scrollpop-marketing` | 30 min |
 | P1-14 | ⬜ | Shopify App Store submission (App Embed Block already built) — deferred by owner | 2h |
+
+---
+
+## 🐛 Known Issues & Fixes
+
+| ID | Status | Severity | Issue | Fix |
+|---|---|---|---|---|
+| BUG-1 | 🔄 Code fixed; ops pending | High | **WordPress plugin unactivatable** — the `scrollpop-wp.zip` on R2 was built on Windows with **backslash** path separators (`scrollpop\scrollpop.php`). WordPress (Linux/ZIP-spec, forward-slash only) can't read them as a folder, so upload resolves to `scrollpop-wp/scrollpop/scrollpop.php` and activation fails with **"Plugin file does not exist."** Observed on brewers-cafe.jp Jun 7. PHP code was correct — packaging defect only. | Rebuilt the zip with forward-slash entries under a single `scrollpop/` root via new `build-zip.py` (verifies separators); added `package` npm script + README warning (commit `c07dcf0`). **Pending ops:** re-upload to R2 (OPS-WP1) + on the affected site, delete the stale `wp-content/plugins/scrollpop-wp/` folder via FTP before reinstalling the corrected zip. |
