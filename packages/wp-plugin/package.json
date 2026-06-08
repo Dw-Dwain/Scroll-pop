@@ -5,7 +5,8 @@
   "scripts": {
     "lint": "echo 'PHP linting not configured yet'",
     "typecheck": "echo 'No TS in wp-plugin'",
-    "build": "echo 'No build step for wp-plugin'",
+    "build": "echo 'No build step for wp-plugin (run the package script to repackage the zip)'",
+    "package": "python build-zip.py",
     "test": "echo 'No tests yet'"
   }
 }
