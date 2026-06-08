@@ -640,6 +640,13 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
   const elColor   = (raw: unknown, fb: string) => safeCssColor(raw, fb);
   const elBgColor = (raw: unknown, fb: string) => safeCssColor(raw, fb);
   const elBorderR = (raw: unknown, fb: number) => safeCssInt(raw, 0, 999, fb);
+  // Map a saved text alignment to a flex justify-content. Text/heading elements use
+  // display:flex (for vertical centering), where `text-align` alone can't position a
+  // single line horizontally — justify-content is what actually honors el.align.
+  const elJustify = (a: unknown, fb: string) => {
+    const v = cssAlign(a, fb);
+    return v === 'right' ? 'flex-end' : v === 'center' ? 'center' : 'flex-start';
+  };
 
   for (const el of els) {
     const ff = cssFont(el.fontFamily);
@@ -651,10 +658,10 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
 
     switch (el.type) {
       case 'heading':
-        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:center;text-align:${cssAlign(el.align, 'center')};color:${elColor(el.color, '#111827')};font-size:${cssNum(el.fontSize, 24)}px;font-weight:${cssWeight(el.fontWeight, '700')};font-family:${ff};line-height:1.2;">${escapeHtml(content)}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:${elJustify(el.align, 'center')};text-align:${cssAlign(el.align, 'center')};color:${elColor(el.color, '#111827')};font-size:${cssNum(el.fontSize, 24)}px;font-weight:${cssWeight(el.fontWeight, '700')};font-family:${ff};line-height:1.2;">${escapeHtml(content)}</div>`);
         break;
       case 'text':
-        out.push(`<div style="${pos}display:flex;align-items:center;text-align:${cssAlign(el.align, 'left')};color:${elColor(el.color, '#4B5563')};font-size:${cssNum(el.fontSize, 13)}px;font-weight:${cssWeight(el.fontWeight, '400')};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${elBgColor(el.backgroundColor, 'transparent')};` : ''}${el.borderRadius ? `border-radius:${elBorderR(el.borderRadius, 0)}px;` : ''}${el.padding ? `padding:${cssLen(el.padding, '0')};` : ''}">${escapeHtml(content)}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:${elJustify(el.align, 'left')};text-align:${cssAlign(el.align, 'left')};color:${elColor(el.color, '#4B5563')};font-size:${cssNum(el.fontSize, 13)}px;font-weight:${cssWeight(el.fontWeight, '400')};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${elBgColor(el.backgroundColor, 'transparent')};` : ''}${el.borderRadius ? `border-radius:${elBorderR(el.borderRadius, 0)}px;` : ''}${el.padding ? `padding:${cssLen(el.padding, '0')};` : ''}">${escapeHtml(content)}</div>`);
         break;
       case 'button': {
         const isSubmit = hasInput && !usedCtaId;
@@ -1080,22 +1087,21 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       return;
     }
 
+    // Element mode: if the operator designed a custom Success step in the builder,
+    // render THOSE elements (so the live success screen matches the design) instead
+    // of the built-in coupon card below. Wire any CTA/close the design includes.
+    if (elementMode && successStep?.elements?.length && popupViewMain) {
+      popupViewMain.innerHTML = buildElementsHTML(successStep, design, slot, smartProduct);
+      popupViewMain.querySelector('#cta-link')?.addEventListener('click', () => beaconEvent(campaign, 'click', slot?.id));
+      popupViewMain.querySelector('#close-btn')?.addEventListener('click', () => dismiss(true));
+      return;
+    }
+
     const couponTxt = slot?.coupon || 'WELCOME50';
     const trackerUrl = slot?.click_tracker_url || slot?.product_url || '#';
 
-    // Construct beautiful success HTML
-    popupViewMain!.innerHTML = `
-      <div class="success-icon">✓</div>
-      <h2 class="headline" style="text-align: center;">Congratulations! Voucher active!</h2>
-      <p class="subheadline" style="text-align: center; margin-bottom: 12px;">Your custom campaign promocode was copied safely.</p>
-      <div class="success-coupon-box" id="success-coupon-box" title="Click to copy voucher code">
-        <span>${escapeHtml(couponTxt)}</span>
-      </div>
-      <a class="cta-btn" href="${escapeHtml(safeHref(trackerUrl))}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top: 10px;">
-        SHOP WITH VOUCHER CODE
-      </a>
-      ${sitePlan === 'free' ? '<p class="powered-by" style="margin-top: 6px;">Powered by ScrollPop</p>' : ''}
-    `;
+    // Construct beautiful success HTML (built-in fallback when no custom Success step)
+    popupViewMain!.innerHTML = `<div class="success-icon">✓</div><h2 class="headline" style="text-align:center">Congratulations! Voucher active!</h2><p class="subheadline" style="text-align:center;margin-bottom:12px">Your promo code is ready below.</p><div class="success-coupon-box" id="success-coupon-box" title="Copy code"><span>${escapeHtml(couponTxt)}</span></div><a class="cta-btn" href="${escapeHtml(safeHref(trackerUrl))}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top:10px">SHOP WITH VOUCHER CODE</a>${sitePlan === 'free' ? '<p class="powered-by" style="margin-top:6px">Powered by ScrollPop</p>' : ''}`;
 
     // Wire up clipboard copy trigger
     shadow.getElementById('success-coupon-box')?.addEventListener('click', () => {
