@@ -217,6 +217,31 @@ export default function Canvas({
     });
   };
 
+  // Keyboard nudging — select an element, then use arrow keys for precise, snap-free
+  // placement (the mouse drag snaps to alignment guides, which can feel "sticky"). Arrow =
+  // 1%, Shift+Arrow = 5%. Ignored while typing in an input/textarea so text editing is safe.
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (!selectedElementId) return;
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const el = stepConfig.elements.find((item) => item.id === selectedElementId);
+      if (!el) return;
+      e.preventDefault();
+      const step = e.shiftKey ? 5 : 1;
+      const clamp = (n: number) => Math.max(0, Math.min(100, n));
+      let { x, y } = el;
+      if (e.key === 'ArrowUp') y = clamp(y - step);
+      else if (e.key === 'ArrowDown') y = clamp(y + step);
+      else if (e.key === 'ArrowLeft') x = clamp(x - step);
+      else if (e.key === 'ArrowRight') x = clamp(x + step);
+      onUpdateElement(selectedElementId, { x, y });
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [selectedElementId, stepConfig.elements, onUpdateElement]);
+
   // Drag & Motion Tracker Event Loop
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -249,7 +274,9 @@ export default function Canvas({
         // Precision visual alignment snap helpers
         const snapsX = [10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90];
         const snapsY = [10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90];
-        const snapThreshold = 2.5;
+        // Lower threshold = less "magnetic" snapping, so dragging feels free-flowing and only
+        // snaps when you're genuinely close to an alignment line (was 2.5, which felt sticky).
+        const snapThreshold = 1.2;
         
         let snapX: number | undefined;
         let snapY: number | undefined;
