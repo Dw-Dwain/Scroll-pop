@@ -411,7 +411,7 @@ Plus `DraftBuilderElement` exported from `types/campaign.ts` and `lib/templates.
 | ID | Status | Item | Est. |
 |---|---|---|---|
 | P0-2  | ⬜ | Set Stripe keys in Render env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs) | 2h |
-| OPS-WP1 | ⬜ | **Re-upload corrected WP plugin zip to R2** (fixes BUG-1): `npx wrangler r2 object put scrollpop-assets/scrollpop-wp.zip --file packages/wp-plugin/dist/scrollpop-wp.zip --content-type application/zip` (rebuild first via `pnpm --filter @scrollpop/wp-plugin package`) | 10 min |
+| OPS-WP1 | ✅ | **Re-uploaded corrected WP plugin zip to R2** (Jun 8) — verified live: `pub-0a090ba944…r2.dev/scrollpop-wp.zip` now serves forward-slash `scrollpop/` entries. | done |
 | P2-18 | ⬜ | `api.scrollpop.online` CNAME → Render in Cloudflare DNS | 30 min |
 | P3-3  | ⬜ | `cdn.scrollpop.online` custom domain on R2 bucket `scrollpop-assets` | 30 min |
 | P3-5  | ⬜ | `pnpm build` + `wrangler pages deploy dist --project-name scrollpop-marketing` | 30 min |
@@ -423,4 +423,4 @@ Plus `DraftBuilderElement` exported from `types/campaign.ts` and `lib/templates.
 
 | ID | Status | Severity | Issue | Fix |
 |---|---|---|---|---|
-| BUG-1 | 🔄 Code fixed; ops pending | High | **WordPress plugin unactivatable** — the `scrollpop-wp.zip` on R2 was built on Windows with **backslash** path separators (`scrollpop\scrollpop.php`). WordPress (Linux/ZIP-spec, forward-slash only) can't read them as a folder, so upload resolves to `scrollpop-wp/scrollpop/scrollpop.php` and activation fails with **"Plugin file does not exist."** Observed on brewers-cafe.jp Jun 7. PHP code was correct — packaging defect only. | Rebuilt the zip with forward-slash entries under a single `scrollpop/` root via new `build-zip.py` (verifies separators); added `package` npm script + README warning (commit `c07dcf0`). **Pending ops:** re-upload to R2 (OPS-WP1) + on the affected site, delete the stale `wp-content/plugins/scrollpop-wp/` folder via FTP before reinstalling the corrected zip. |
+| BUG-1 | ✅ Fixed + live (Jun 8) | High | **WordPress plugin unactivatable** — the `scrollpop-wp.zip` on R2 was built on Windows with **backslash** path separators (`scrollpop\scrollpop.php`). WordPress (Linux/ZIP-spec, forward-slash only) can't read them as a folder, so upload resolves to `scrollpop-wp/scrollpop/scrollpop.php` and activation fails with **"Plugin file does not exist."** Observed on brewers-cafe.jp Jun 7. PHP code was correct — packaging defect only. | Rebuilt the zip with forward-slash entries under a single `scrollpop/` root via new `build-zip.py` (verifies separators); added `package` npm script + README warning (commit `c07dcf0`). Corrected zip **re-uploaded to R2 and verified live** (OPS-WP1, Jun 8). **Per-site action** on any site that installed the broken zip: delete the stale `wp-content/plugins/scrollpop-wp/` folder via FTP, then reinstall the corrected zip. |
