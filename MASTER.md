@@ -1,11 +1,35 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 7, 2026 · v0.1.5-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
+> Last updated: June 8, 2026 · v0.1.5-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
 > Status detail lives in **`PROJECT-TRACKER.md`** (single source of truth) — this file links there rather than duplicating it.
 > 4 ops-only tasks remain (Stripe keys, 2× DNS/CDN, marketing deploy) + P1-14 deferred by owner decision.
 > **P3-2 complete**: dashboard at 0 ESLint warnings + 0 TypeScript errors (full strict). Dormant keys (Sentry/PostHog/Resend) activated.
-> **June 7 security code review (CR-01→08) complete** — 8 findings fixed, no backdoors found. The app is ready to go live pending the owner's Stripe ops config.
+> **June 7 security code review (CR-01→08) complete** — 8 findings fixed, no backdoors found.
+> **June 8:** deploy pipeline fixed (pushes now auto-deploy), end-to-end lead capture verified live, DNT→GPC, marketing-consent checkbox shipped. Open: requireConsent toggle, snippet size pass, marketing CI deploy, **legal review of docs/consent posture**.
+
+---
+
+## 📅 June 8, 2026 — Session Summary
+
+**Production debugging + deploy pipeline + privacy/consent. Lead capture verified working end-to-end on a live site.**
+
+### What happened
+- **"Leads/analytics not recording" was NOT a bug** — the operator QA'd in Firefox with Do-Not-Track on; the snippet honored DNT and suppressed all events. Confirmed end-to-end works in Chrome (popup → `/e` conversion+email → lead row + analytics). Real visitors were never affected.
+- **Fixed the deploy pipeline** — CI deploy jobs were *failing* (under-permissioned Cloudflare API token), so git pushes never published the snippet/dashboard. Recreated the token with Workers Scripts + KV + R2 + Pages (Edit) + Account Settings (Read) + Zone Workers Routes (Edit). **Pushes now auto-deploy.** Verified live `p.js` by hash.
+- **WP plugin** (carryover from Jun 7): backslash-zip fix re-uploaded to R2, verified live.
+
+### Shipped
+- **`email_capture` payload fix** (`f3992eb`) — ESP/auto-responder/Zapier now receive the captured email (were silently no-op'ing).
+- **DNT → GPC** (`56a321c`) — dropped deprecated Do-Not-Track (was silently dropping real leads), honor Global Privacy Control (CCPA/CPRA). + scrollpop.online GPC compliance copy.
+- **Targeting rule builder UX** (`4befd10`) — readable, accessible page-rule editor.
+- **Marketing-consent checkbox** (`03d6eca`) — opt-in "Consent Box" builder element; gates submit, records consent on the lead (GDPR/CASL/APPI).
+
+### Open follow-ups (paused)
+- **FU-1** `requireConsent` site-settings toggle (EU GDPR opt-in enforcement).
+- **FU-2** snippet size pass — bundle at 9.93 KB / 10 KB (75 bytes headroom).
+- **FU-3** `deploy-marketing` CI job (scrollpop.online still deployed by hand).
+- **FU-4** **legal review** of privacy/Terms/DPA + default consent posture (EU/GDPR + Japan APPI). See tracker "Legal/Compliance posture".
 
 ---
 

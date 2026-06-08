@@ -1,7 +1,7 @@
 # ScrollPop — Project Tracker
 
 > Single source of truth for all open issues, feature gaps, security findings, performance fixes, and technical debt.
-> Sourced from `CTO-AUDIT.md` (June 4, 2026). Last reconciled: **June 7, 2026**.
+> Sourced from `CTO-AUDIT.md` (June 4, 2026). Last reconciled: **June 8, 2026**.
 > **Priority:** P0 = launch blocker · P1 = high · P2 = medium · P3 = low
 > **Status:** ⬜ Todo · 🔄 In progress · ✅ Done · ❌ Won't build
 
@@ -20,6 +20,43 @@
 > **Code status: 100% complete.** Every tracker item that required writing code has been built, tested, and reviewed (including a full multi-angle security code review on June 7 — see below). The remaining items are pure ops tasks (set Stripe env vars, configure DNS, deploy static site, re-upload the corrected WP plugin zip — see OPS-WP1 / BUG-1) and the owner-deferred Shopify App Store submission. Dormant integration keys (Sentry, PostHog, Resend) are now **activated**.
 >
 > **The app is ready to go live — the only thing standing between now and revenue is the Stripe ops config (P0-2), which the owner is handling.**
+
+---
+
+## 🚀 June 8, 2026 — Production Debugging, Deploy Pipeline & Privacy/Consent
+
+> Live-site debugging on a real customer install (gourmet-meat.com), fixing the deploy pipeline, and shipping privacy/consent features. **End-to-end lead capture verified working on a live site.**
+
+### Root cause: "leads/analytics not recording" → it was browser Do-Not-Track, not a bug
+The operator's own QA browser (Firefox) was sending `navigator.doNotTrack="1"`; the snippet honored it and suppressed all events. The popup rendered but no `view`/`conversion` fired → no leads/analytics. **Verified the full pipeline works in Chrome:** popup → `POST /e` (conversion + email) → lead row + analytics. Nothing was ever broken for real visitors.
+
+### Deploy pipeline fixed (this was the real "my pushes don't go live" cause)
+CI's `deploy-worker`/`deploy-dashboard` jobs were **failing** (not skipping) because the `CLOUDFLARE_API_TOKEN` was under-permissioned. Recreated the token with the correct scope (**Workers Scripts, Workers KV Storage, Workers R2 Storage, Cloudflare Pages — all Edit; Account Settings — Read; Zone → Workers Routes — Edit**). Pushes now auto-deploy the snippet (R2/Worker) and dashboard (Pages). Verified the live `p.js` byte-for-byte against the build.
+
+### Shipped
+| Item | Commit | What |
+|---|---|---|
+| `email_capture` payload | `f3992eb` | The event now carries the captured email, so ESP sync (Klaviyo/Mailchimp), auto-responder, and Zapier webhook actually receive it (they were silently no-op'ing). |
+| DNT → GPC | `56a321c` | Stop honoring the deprecated, non-binding Do-Not-Track signal (was silently dropping a large share of real leads); honor **Global Privacy Control** instead (legally recognized under CCPA/CPRA). Explicit consent mode + admin suppression unchanged. + GPC bullet added to scrollpop.online Security/Compliance copy. |
+| Targeting rule builder UX | `4befd10` | Restructured the page-targeting rule UI: full-width controls (no truncation), URL field on its own line, plain-English preview, aria-labels. |
+| Marketing-consent checkbox | `03d6eca` | New opt-in "Consent Box" builder element — gates submit until ticked, records `consent: true/false` on the lead. Covers GDPR/CASL/APPI marketing-consent. |
+| WP plugin zip | `c07dcf0` / OPS-WP1 | (June 7–8) Backslash-zip fix + corrected zip re-uploaded to R2, verified live. |
+
+### ⚠️ Open follow-ups (paused June 8)
+| ID | Status | Item |
+|---|---|---|
+| FU-1 | ⬜ | **`requireConsent` site-settings toggle** — surface it in the dashboard (default-on for EU/UK audiences) so EU GDPR opt-in is enforceable per-site. Needs tracing where `requireConsent` is stored before wiring. |
+| FU-2 | ⬜ | **Snippet size-optimization pass** — bundle is at **9.93 KB / 10 KB** (75 bytes headroom). Reclaim space (shared helpers, shorter identifiers) before adding more snippet logic. |
+| FU-3 | ⬜ | **`deploy-marketing` CI job** — scrollpop.online (`site-plan/`) is the only artifact still deployed by hand; add it to CI so the GPC copy + future content auto-publish. |
+| FU-4 | ⬜ | **Legal review** — privacy policy, Terms, DPA, and the default consent posture reviewed by privacy counsel (esp. EU/GDPR + Japan APPI cross-border transfer to US ESPs). See "Legal/Compliance Posture" below. |
+
+### ⚖️ Legal / Compliance posture (current code behavior — NOT legal advice)
+- **US / California (CCPA/CPRA):** opt-out model; snippet honors **GPC**. ✅ Aligned.
+- **EU / UK (GDPR / ePrivacy):** requires **prior explicit opt-in** before non-essential tracking. Compliant **only** when the tenant sets `requireConsent` (suppress until their cookie banner grants) — the default is opt-out, which is **not** GDPR-compliant for EU visitors. → FU-1.
+- **Japan (APPI + anti-spam):** lighter than GDPR — needs a clear privacy notice stating purpose, processors, and overseas transfer; marketing email is opt-in (the consent checkbox covers this).
+- **Email marketing (all regions):** the new consent checkbox provides explicit opt-in; CAN-SPAM still needs an unsubscribe path.
+- **Responsibility split:** ScrollPop is the data **processor** (provides GPC, consent hooks, DPA); the operator is the **controller** (must wire a CMP, set `requireConsent` for EU, publish a privacy policy, honor deletion/DSAR).
+- **Action:** have counsel review the docs + default posture (FU-4) before scaling EU traffic.
 
 ---
 
@@ -313,7 +350,7 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 ---
 
-*Last updated: June 7, 2026. Tracker fully reconciled — P3-2 complete, June 7 security code review (CR-01→08) recorded, dependency map + sprints + timeline corrected, dormant keys marked active. This file is the single source of truth; MASTER.md links here rather than duplicating status.*
+*Last updated: June 8, 2026. June 8 work added — deploy pipeline fixed (auto-deploy now works), live lead-capture verified end-to-end, DNT→GPC, marketing-consent checkbox, targeting-rule UX, email_capture payload fix. Open follow-ups: FU-1 requireConsent toggle, FU-2 snippet size pass, FU-3 marketing CI deploy, FU-4 legal review. This file is the single source of truth; MASTER.md links here rather than duplicating status.*
 
 ---
 
