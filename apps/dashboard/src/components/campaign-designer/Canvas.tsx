@@ -794,6 +794,17 @@ export default function Canvas({
                       </div>
                     )}
 
+                    {/* CONSENT CHECKBOX TYPE */}
+                    {el.type === 'consent' && (
+                      <div
+                        className="w-full h-full flex items-start gap-2 select-none pointer-events-none leading-snug"
+                        style={{ fontSize: `${el.fontSize ?? 11}px`, color: el.color || '#6B7280' }}
+                      >
+                        <input type="checkbox" disabled className="shrink-0 mt-0.5" style={{ width: 14, height: 14 }} />
+                        <span>{el.content || 'I agree to receive marketing emails.'}</span>
+                      </div>
+                    )}
+
                     {/* COUNTDOWN TIMER TYPE */}
                     {el.type === 'countdown' && (
                       <div className="w-full h-full flex items-center justify-center gap-1.5">

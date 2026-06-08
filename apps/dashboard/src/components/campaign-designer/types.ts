@@ -28,6 +28,7 @@ export type ElementType =
   | 'text'
   | 'button'
   | 'input'
+  | 'consent'
   | 'countdown'
   | 'product'
   | 'review'

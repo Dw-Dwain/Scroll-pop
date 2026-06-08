@@ -960,7 +960,7 @@ export default function InteractivePreview({
                         {/* Text inputs inside modal */}
                         {el.type === 'input' && (
                           <div className="w-full h-full relative">
-                            <input 
+                            <input
                               type="email"
                               value={viewerInputs[el.id] || ''}
                               onChange={(e) => setViewerInputs({ ...viewerInputs, [el.id]: e.target.value })}
@@ -969,6 +969,23 @@ export default function InteractivePreview({
                               style={{ borderRadius: `${el.borderRadius ?? 8}px` }}
                             />
                           </div>
+                        )}
+
+                        {/* Marketing-consent checkbox (interactive in the simulator) */}
+                        {el.type === 'consent' && (
+                          <label
+                            className="w-full h-full flex items-start gap-2 cursor-pointer leading-snug"
+                            style={{ fontSize: `${el.fontSize ?? 11}px`, color: el.color || '#6B7280' }}
+                          >
+                            <input
+                              type="checkbox"
+                              className="shrink-0 mt-0.5"
+                              style={{ width: 14, height: 14 }}
+                              checked={!!viewerInputs[`consent-${el.id}`]}
+                              onChange={(e) => setViewerInputs({ ...viewerInputs, [`consent-${el.id}`]: e.target.checked ? '1' : '' })}
+                            />
+                            <span>{el.content || 'I agree to receive marketing emails.'}</span>
+                          </label>
                         )}
 
                         {/* Real physics color segment Spin Wheel */}

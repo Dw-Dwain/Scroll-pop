@@ -634,6 +634,16 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
           label: 'Email Address'
         };
         break;
+      case 'consent':
+        // Marketing-consent checkbox. Required by default; submit is blocked until ticked.
+        baseNewElem.w = 70;
+        baseNewElem.h = 8;
+        baseNewElem.content = 'I agree to receive marketing emails.';
+        baseNewElem.color = '#6B7280';
+        baseNewElem.fontSize = 11;
+        baseNewElem.align = 'left';
+        baseNewElem.extraProps = { required: true };
+        break;
       case 'countdown': {
         // content = ISO datetime 30 minutes from now (the snippet counts down to this target).
         // The operator edits content in the right-panel to set a different target date/time.

@@ -677,6 +677,13 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
         out.push(`<input${idAttr} type="email" placeholder="${escapeHtml(injectMacros(ph))}" required style="${pos}padding:0 12px;font-size:13px;color:#1f2937;background:#fff;border:${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, '#E4E4E7')};border-radius:${elBorderR(el.borderRadius, 8)}px;outline:none;">`);
         break;
       }
+      case 'consent': {
+        // Marketing-consent checkbox. Submit is gated on it in executeLeadSubmit when
+        // data-required is set; consent state is recorded in the lead event metadata.
+        const reqAttr = el.extraProps?.['required'] === false ? '' : ' data-required="1"';
+        out.push(`<label style="${pos}display:flex;align-items:flex-start;gap:8px;font-size:${cssNum(el.fontSize, 11)}px;color:${elColor(el.color, '#6B7280')};font-family:${ff};line-height:1.35;cursor:pointer;"><input type="checkbox" id="consent-checkbox"${reqAttr} style="flex-shrink:0;width:15px;height:15px;margin-top:1px;cursor:pointer;"><span>${escapeHtml(content || 'I agree to receive marketing emails.')}</span></label>`);
+        break;
+      }
       case 'image': {
         const imgSrc = safeHref((smartProduct && smartProduct.image) ? smartProduct.image : content);
         out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${elBorderR(el.borderRadius, 8)}px;">`);
@@ -1050,14 +1057,18 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
   // Switch to success congratulations screen state
   const transitionToSuccess = (email: string) => {
+    // Record marketing-consent state for proof of consent. (The exact label shown is
+    // stored on the campaign design, so consent + the event timestamp is sufficient.)
+    const consentEl = shadow.getElementById('consent-checkbox') as HTMLInputElement | null;
+    const consentMeta: Record<string, unknown> = consentEl ? { consent: consentEl.checked } : {};
     // email_capture = lead collected; conversion = outcome (covers popup_submit).
     // The email MUST be in the email_capture metadata — the API's ESP sync, auto-responder,
     // and Zapier/outbound webhook all read the address from this event (extractLeadEmail).
     // Previously this sent only { hasEmail: true }, so those integrations silently no-op'd.
     if (email && email !== 'anonymous@scrollpop.online') {
-      beaconEvent(campaign, 'email_capture', slot?.id, { email, hasEmail: true });
+      beaconEvent(campaign, 'email_capture', slot?.id, { email, hasEmail: true, ...consentMeta });
     }
-    beaconEvent(campaign, 'conversion', slot?.id, { email });
+    beaconEvent(campaign, 'conversion', slot?.id, { email, ...consentMeta });
 
     const successStep = getStep('success');
     if (successStep?.enabled === false) {
@@ -1148,6 +1159,13 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
         emailInput.style.borderColor = '#ef4444';
         emailInput.focus();
       }
+      return;
+    }
+    // Marketing-consent gate: if a required consent checkbox is present and unticked, block submit.
+    const consentBox = shadow.getElementById('consent-checkbox') as HTMLInputElement | null;
+    if (consentBox && consentBox.getAttribute('data-required') === '1' && !consentBox.checked) {
+      consentBox.style.outline = '2px solid #ef4444';
+      consentBox.focus();
       return;
     }
     transitionToSuccess(emailVal || 'anonymous@scrollpop.online');

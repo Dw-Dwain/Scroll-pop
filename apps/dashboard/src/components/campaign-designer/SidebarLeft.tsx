@@ -23,7 +23,8 @@ import {
   ArrowUp,
   ArrowDown,
   Eye,
-  EyeOff
+  EyeOff,
+  CheckSquare
 } from 'lucide-react';
 import { Campaign, CampaignElement, ElementType, PopupType, BrandStyle, CampaignTriggers } from './types';
 import { PREBUILT_TEMPLATES } from './data/templates';
@@ -1310,6 +1311,16 @@ export default function SidebarLeft({
                   <FormInput className="h-5 w-5 text-zinc-300 mb-1.5 group-hover:scale-105 transition-transform" />
                   <span className="text-xs font-semibold">Email Input</span>
                   <span className="text-[9px] text-zinc-500 mt-0.5">Collect addresses</span>
+                </button>
+
+                {/* 4b. Consent Checkbox */}
+                <button
+                  onClick={() => onAddElement('consent')}
+                  className="flex flex-col items-center justify-center p-3 border border-zinc-700 rounded-md bg-zinc-800 hover:bg-zinc-700 hover:border-zinc-500 transition-all duration-150 text-zinc-100 cursor-pointer text-center group"
+                >
+                  <CheckSquare className="h-5 w-5 text-zinc-300 mb-1.5 group-hover:scale-105 transition-transform" />
+                  <span className="text-xs font-semibold">Consent Box</span>
+                  <span className="text-[9px] text-zinc-500 mt-0.5">Opt-in checkbox</span>
                 </button>
 
                 {/* 5. Countdown Timer */}
