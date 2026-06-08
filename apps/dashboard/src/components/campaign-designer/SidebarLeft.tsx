@@ -1605,22 +1605,43 @@ export default function SidebarLeft({
                   <MapPin className="h-4 w-4 text-zinc-400" />
                   <span className="text-xs font-semibold text-zinc-100">Geo Targeting Regions</span>
                 </div>
-                <select
-                  value={campaign.triggers.geoTargeting}
-                  onChange={(e) => onUpdateTriggers('geoTargeting', e.target.value)}
-                  className="w-full p-2 border border-zinc-700 rounded-md text-xs bg-zinc-800 text-zinc-100 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden font-medium"
-                >
-                  <option value="All Countries">🌍 All Worldwide Markets</option>
-                  <option value="US">🇺🇸 United States Only</option>
-                  <option value="CA">🇨🇦 Canada Only</option>
-                  <option value="GB">🇬🇧 United Kingdom Only</option>
-                  <option value="AU">🇦🇺 Australia Only</option>
-                  <option value="DE">🇩🇪 Germany Only</option>
-                  <option value="FR">🇫🇷 France Only</option>
-                  <option value="JP">🇯🇵 Japan Only</option>
-                  <option value="IN">🇮🇳 India Only</option>
-                  <option value="BR">🇧🇷 Brazil Only</option>
-                </select>
+                {(() => {
+                  const COUNTRIES: [string, string][] = [
+                    ['US', '🇺🇸 USA'], ['JP', '🇯🇵 Japan'], ['CA', '🇨🇦 Canada'],
+                    ['GB', '🇬🇧 UK'], ['AU', '🇦🇺 Australia'], ['DE', '🇩🇪 Germany'],
+                    ['FR', '🇫🇷 France'], ['IN', '🇮🇳 India'], ['BR', '🇧🇷 Brazil'],
+                  ];
+                  const raw = campaign.triggers.geoTargeting || 'All Countries';
+                  const selected = (raw === 'All Countries' || !raw)
+                    ? []
+                    : raw.split(',').map((s) => s.trim()).filter(Boolean);
+                  const isAll = selected.length === 0;
+                  const commit = (codes: string[]) =>
+                    onUpdateTriggers('geoTargeting', codes.length === 0 ? 'All Countries' : codes.join(','));
+                  const toggle = (code: string) =>
+                    commit(selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]);
+                  const chip = (active: boolean) =>
+                    `text-[11px] font-medium px-2 py-1.5 rounded-md border cursor-pointer transition-colors ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`;
+                  return (
+                    <div className="space-y-1.5">
+                      <button type="button" onClick={() => commit([])} className={`w-full ${chip(isAll)}`}>
+                        🌍 All Worldwide Markets
+                      </button>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {COUNTRIES.map(([code, label]) => (
+                          <button key={code} type="button" onClick={() => toggle(code)} className={chip(selected.includes(code))}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {!isAll && (
+                        <p className="text-[10px] text-zinc-500 pt-0.5">
+                          Shows only to visitors in: <span className="text-zinc-300 font-medium">{selected.join(', ')}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 7. New vs Returning Visitor */}

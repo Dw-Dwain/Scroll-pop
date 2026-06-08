@@ -640,6 +640,11 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     if (t) {
       if (t.deviceTargeting && t.deviceTargeting !== 'all') targeting.push({ kind: 'device', operator: 'include', value: { device: t.deviceTargeting } });
       if (t.newVisitorOnly) targeting.push({ kind: 'returning_visitor', operator: 'include', value: { returning: false } });
+      if (t.geoTargeting && t.geoTargeting !== 'All Countries') {
+        const countries = t.geoTargeting.split(',').map((s) => s.trim()).filter(Boolean);
+        if (countries.length === 1) targeting.push({ kind: 'geo', operator: 'include', value: { country: countries[0] as string } });
+        else if (countries.length > 1) targeting.push({ kind: 'geo', operator: 'include', value: { countries } });
+      }
       // Advanced multi-rule page targeting supersedes the single legacy field — map each rule
       // to a real targeting row so the snippet enforces it (parity with the visual designer).
       const pageRules = t.pageTargetingRules ?? [];

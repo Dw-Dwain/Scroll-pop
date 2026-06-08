@@ -81,7 +81,10 @@ function bootstrapCampaign(
       if (t.kind === 'device') deviceTargeting = (t.value?.['device'] as string | undefined) || 'all';
       if (t.kind === 'returning_visitor') newVisitorOnly = t.value?.['returning'] === false;
       if (t.kind === 'url_contains') pageTargeting = (t.value?.['pattern'] as string | undefined) || '*';
-      if (t.kind === 'geo') geoTargeting = (t.value?.['country'] as string | undefined) || 'All Countries';
+      if (t.kind === 'geo') {
+        const cs = t.value?.['countries'];
+        geoTargeting = Array.isArray(cs) ? cs.join(',') : ((t.value?.['country'] as string | undefined) || 'All Countries');
+      }
       if (t.kind === 'session_page_views') sessionPageCount = (t.value?.['count'] as number | undefined) || 0;
       if (t.kind === 'utm') {
         utmParam = (t.value?.['param'] as string | undefined) || 'utm_source';
@@ -777,7 +780,13 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       } else if (t.pageTargeting && t.pageTargeting.trim() && t.pageTargeting.trim() !== '*') {
         targetingList.push({ kind: 'url_contains', operator: 'include', value: { pattern: t.pageTargeting.trim() } });
       }
-      if (t.geoTargeting && t.geoTargeting !== 'All Countries') targetingList.push({ kind: 'geo', operator: 'include', value: { country: t.geoTargeting } });
+      if (t.geoTargeting && t.geoTargeting !== 'All Countries') {
+        // geoTargeting is a CSV of ISO codes (e.g. "US,JP"). One country → legacy {country};
+        // multiple → {countries:[...]} (the snippet's geo check supports both).
+        const countries = t.geoTargeting.split(',').map((s) => s.trim()).filter(Boolean);
+        if (countries.length === 1) targetingList.push({ kind: 'geo', operator: 'include', value: { country: countries[0] as string } });
+        else if (countries.length > 1) targetingList.push({ kind: 'geo', operator: 'include', value: { countries } });
+      }
       if (t.sessionPageCount > 0) targetingList.push({ kind: 'session_page_views', operator: 'include', value: { count: t.sessionPageCount } });
       if (t.utmValue && t.utmValue.trim() !== '') targetingList.push({ kind: 'utm', operator: 'include', value: { param: t.utmParam || 'utm_source', value: t.utmValue.trim() } });
       // Real A/B is now handled by the variants system (see the A/B Test panel on Campaign

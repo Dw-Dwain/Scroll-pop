@@ -315,11 +315,14 @@ function evaluateRule(rule: TargetingRule): boolean {
       return isReturning === (value['is_returning'] as boolean);
     }
 
-    case 'geo':
-      // Country match against the edge-injected visitor country (ISO alpha-2, already
-      // uppercase). Fail open if the edge couldn't resolve a country. The dashboard
-      // stores uppercase ISO codes, so no normalisation needed here.
-      return !visitorCountry || visitorCountry === value['country'];
+    case 'geo': {
+      // Country match against the edge-injected visitor country (ISO alpha-2, uppercase).
+      // Fail open if the edge couldn't resolve a country. Supports a multi-country list
+      // (value.countries) or a single value.country (legacy). Codes are uppercase ISO.
+      if (!visitorCountry) return true;
+      const cs = value['countries'];
+      return Array.isArray(cs) ? cs.includes(visitorCountry) : visitorCountry === value['country'];
+    }
 
     case 'session_page_views': {
       let c = +(sessionStorage.getItem('_sp_pc') || 0);
@@ -681,7 +684,7 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
         // Marketing-consent checkbox. Submit is gated on it in executeLeadSubmit when
         // data-required is set; consent state is recorded in the lead event metadata.
         const reqAttr = el.extraProps?.['required'] === false ? '' : ' data-required="1"';
-        out.push(`<label style="${pos}display:flex;align-items:flex-start;gap:8px;font-size:${cssNum(el.fontSize, 11)}px;color:${elColor(el.color, '#6B7280')};font-family:${ff};line-height:1.35;cursor:pointer;"><input type="checkbox" id="consent-checkbox"${reqAttr} style="flex-shrink:0;width:15px;height:15px;margin-top:1px;cursor:pointer;"><span>${escapeHtml(content || 'I agree to receive marketing emails.')}</span></label>`);
+        out.push(`<label style="${pos}display:flex;align-items:flex-start;gap:8px;font-size:${cssNum(el.fontSize, 11)}px;color:${elColor(el.color, '#6B7280')};font-family:${ff};line-height:1.35;cursor:pointer;"><input type="checkbox" id="consent-checkbox"${reqAttr} style="flex-shrink:0;width:15px;height:15px;margin-top:1px;cursor:pointer;"><span>${escapeHtml(content || 'I agree to receive emails.')}</span></label>`);
         break;
       }
       case 'image': {
