@@ -1283,7 +1283,10 @@ function beaconEvent(
       method: 'POST',
       body,
       keepalive: true,
-      headers: { 'Content-Type': 'application/json' },
+      // text/plain is a CORS-safelisted content type → no preflight (the API JSON-parses the
+      // body regardless of header). Matches the sendBeacon path; avoids the OPTIONS round-trip
+      // that fails for strict-privacy/Firefox-ETP visitors.
+      headers: { 'Content-Type': 'text/plain' },
     }).catch(() => { /* silent fail */ });
   }
 }
