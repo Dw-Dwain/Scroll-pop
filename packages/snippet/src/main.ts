@@ -766,6 +766,7 @@ function launchSpinWheel(campaign: CampaignConfig): void {
     const { design, affiliateSlots } = resolveVariant(campaign);
     const host = document.createElement('div');
     host.id = `__sp_popup_${campaign.id}`;
+    host.style.cssText = 'display:block!important';
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: 'closed' });
     spinMod.render(
@@ -837,6 +838,10 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   // Create host element
   const host = document.createElement('div');
   host.id = `__sp_popup_${campaignId}`;
+  // Some host themes hide body-appended elements via a global reset (e.g. a rule that sets
+  // `display:none` on unknown `body > *`). Pin the host visible with inline !important so the
+  // popup can never be suppressed by the host page's CSS. (Confirmed on Shopify themes.)
+  host.style.cssText = 'display:block!important';
   host.setAttribute('role', 'dialog');
   host.setAttribute('aria-modal', 'true');
   host.setAttribute('aria-label', design.headline);
@@ -1101,7 +1106,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     const trackerUrl = slot?.click_tracker_url || slot?.product_url || '#';
 
     // Construct beautiful success HTML (built-in fallback when no custom Success step)
-    popupViewMain!.innerHTML = `<div class="success-icon">✓</div><h2 class="headline" style="text-align:center">Congratulations! Voucher active!</h2><p class="subheadline" style="text-align:center;margin-bottom:12px">Your promo code is ready below.</p><div class="success-coupon-box" id="success-coupon-box" title="Copy code"><span>${escapeHtml(couponTxt)}</span></div><a class="cta-btn" href="${escapeHtml(safeHref(trackerUrl))}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top:10px">SHOP WITH VOUCHER CODE</a>${sitePlan === 'free' ? '<p class="powered-by" style="margin-top:6px">Powered by ScrollPop</p>' : ''}`;
+    popupViewMain!.innerHTML = `<div class="success-icon">✓</div><h2 class="headline" style="text-align:center">Congratulations! Voucher active!</h2><p class="subheadline" style="text-align:center;margin-bottom:12px">Your promo code is ready below.</p><div class="success-coupon-box" id="success-coupon-box" title="Copy code"><span>${escapeHtml(couponTxt)}</span></div><a class="cta-btn" href="${escapeHtml(safeHref(trackerUrl))}" target="_blank" rel="noopener" id="success-cta-btn" style="margin-top:10px">Shop now</a>${sitePlan === 'free' ? '<p class="powered-by" style="margin-top:6px">Powered by ScrollPop</p>' : ''}`;
 
     // Wire up clipboard copy trigger
     shadow.getElementById('success-coupon-box')?.addEventListener('click', () => {
