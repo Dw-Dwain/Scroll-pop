@@ -6,7 +6,7 @@
 > 4 ops-only tasks remain (Stripe keys, 2× DNS/CDN, marketing deploy) + P1-14 deferred by owner decision.
 > **P3-2 complete**: dashboard at 0 ESLint warnings + 0 TypeScript errors (full strict). Dormant keys (Sentry/PostHog/Resend) activated.
 > **June 7 security code review (CR-01→08) complete** — 8 findings fixed, no backdoors found.
-> **June 8:** deploy pipeline fixed (pushes now auto-deploy), end-to-end lead capture verified live, DNT→GPC, marketing-consent checkbox shipped. Open: requireConsent toggle, snippet size pass, marketing CI deploy, **legal review of docs/consent posture**.
+> **June 8:** deploy pipeline fixed (pushes now auto-deploy), end-to-end lead capture verified live, DNT→GPC, marketing-consent checkbox, modal-backdrop fix, manual snippet verify, **multi-country geo (US+JP)**, keyboard element nudging. Owner confirmed JP+USA not EU → EU consent work deprioritized. Open: snippet size pass, marketing CI deploy, legal review (CCPA+APPI).
 
 ---
 
@@ -24,12 +24,19 @@
 - **DNT → GPC** (`56a321c`) — dropped deprecated Do-Not-Track (was silently dropping real leads), honor Global Privacy Control (CCPA/CPRA). + scrollpop.online GPC compliance copy.
 - **Targeting rule builder UX** (`4befd10`) — readable, accessible page-rule editor.
 - **Marketing-consent checkbox** (`03d6eca`) — opt-in "Consent Box" builder element; gates submit, records consent on the lead (GDPR/CASL/APPI).
+- **Modal-backdrop fix** (`2b94812`) — designer modals had no overlay (overlayColor vs overlayEnabled mismatch); derived dashboard-side. Existing campaigns need a re-save.
+- **Manual snippet verify** (`2b94812`, FU-5 ✅) — `verify-snippet` endpoint + "Test connection" button for manual installs (no Shopify app).
+- **Multi-country geo** (`41e6df4`) — target multiple markets (e.g. US + JP) via a multi-select chip group; include-list excludes EU automatically.
+- **Keyboard nudging + softer drag** (`40925a2`) — arrow-key element movement in the designer; snap threshold 2.5→1.2 for free-flow dragging.
 
-### Open follow-ups (paused)
-- **FU-1** `requireConsent` site-settings toggle (EU GDPR opt-in enforcement).
-- **FU-2** snippet size pass — bundle at 9.93 KB / 10 KB (75 bytes headroom).
+### Geo / compliance direction (owner decision)
+Targeting **Japan + USA, not EU.** A geo include-list (US+JP) excludes EU visitors, so no EU data is processed → GDPR out of scope for the campaign. EU consent work (FU-1) deprioritized; legal review (FU-4) narrows to CCPA + APPI.
+
+### Open follow-ups
+- **FU-1** `requireConsent` EU toggle — **deprioritized** (not targeting EU).
+- **FU-2** snippet size pass — bundle at ~9.94 KB / 10 KB; `console.*` already dropped at build, so needs a refactor. Do before more snippet logic.
 - **FU-3** `deploy-marketing` CI job (scrollpop.online still deployed by hand).
-- **FU-4** **legal review** of privacy/Terms/DPA + default consent posture (EU/GDPR + Japan APPI). See tracker "Legal/Compliance posture".
+- **FU-4** **legal review** — privacy/Terms/DPA, scope **CCPA (US) + APPI (Japan)** incl. cross-border transfer to US ESPs.
 
 ---
 

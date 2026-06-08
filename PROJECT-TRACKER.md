@@ -41,18 +41,23 @@ CI's `deploy-worker`/`deploy-dashboard` jobs were **failing** (not skipping) bec
 | Targeting rule builder UX | `4befd10` | Restructured the page-targeting rule UI: full-width controls (no truncation), URL field on its own line, plain-English preview, aria-labels. |
 | Marketing-consent checkbox | `03d6eca` | New opt-in "Consent Box" builder element — gates submit until ticked, records `consent: true/false` on the lead. Covers GDPR/CASL/APPI marketing-consent. |
 | WP plugin zip | `c07dcf0` / OPS-WP1 | (June 7–8) Backslash-zip fix + corrected zip re-uploaded to R2, verified live. |
+| Modal backdrop fix | `2b94812` | Designer stored the backdrop as `steps.main.overlayColor`, but the snippet read flat `overlayEnabled`/`overlayOpacity` → designer modals had **no overlay** (looked misplaced). Both editors now derive the flat fields from `overlayColor` alpha. Dashboard-side only (0 snippet bytes). **Existing campaigns need a re-save to apply.** |
+| Manual snippet verify | `2b94812` / FU-5 | New `POST /sites/:id/verify-snippet` actively fetches the live site and confirms the snippet (public key) is present — for manual installs (Shopify theme header, raw HTML) with **no OAuth app**. "Test connection" button added to the Shopify panel. |
+| Multi-country geo | `41e6df4` | Geo was single-select; now a multi-select chip group (e.g. **USA + Japan**). `geoTargeting` stored as CSV of ISO codes; snippet geo check supports `value.countries[]` or legacy `value.country`. An include-list inherently excludes everything else (e.g. EU). |
+| Keyboard nudging + softer drag | `40925a2` | Designer: select an element → **arrow keys** move it precisely (1%, Shift+Arrow 5%), no snapping. Drag snap threshold 2.5 → 1.2 so mouse dragging feels free-flowing. |
 
-### ⚠️ Open follow-ups (paused June 8)
+### ⚠️ Open follow-ups
 | ID | Status | Item |
 |---|---|---|
-| FU-1 | ⬜ | **`requireConsent` site-settings toggle** — surface it in the dashboard (default-on for EU/UK audiences) so EU GDPR opt-in is enforceable per-site. Needs tracing where `requireConsent` is stored before wiring. |
-| FU-2 | ⬜ | **Snippet size-optimization pass** — bundle is at **9.93 KB / 10 KB** (75 bytes headroom). Reclaim space (shared helpers, shorter identifiers) before adding more snippet logic. |
+| FU-1 | ⬜ **Deprioritized** | **`requireConsent` site-settings toggle** (EU GDPR opt-in). **Owner confirmed targeting Japan + USA, not EU** — and a geo include-list (US+JP) excludes EU visitors anyway, keeping GDPR out of scope. Revisit only if EU markets are added. |
+| FU-2 | ⬜ | **Snippet size pass** — bundle at **9.94 KB / 10 KB** (~60 bytes headroom). `console.*` is already dropped at build, so the easy win is gone; a real reduction needs an element-style-builder refactor. Do before adding more snippet logic. |
 | FU-3 | ⬜ | **`deploy-marketing` CI job** — scrollpop.online (`site-plan/`) is the only artifact still deployed by hand; add it to CI so the GPC copy + future content auto-publish. |
-| FU-4 | ⬜ | **Legal review** — privacy policy, Terms, DPA, and the default consent posture reviewed by privacy counsel (esp. EU/GDPR + Japan APPI cross-border transfer to US ESPs). See "Legal/Compliance Posture" below. |
+| FU-4 | ⬜ | **Legal review** — privacy policy, Terms, DPA, default consent posture by privacy counsel. Scope now narrows to **CCPA (US) + APPI (Japan)** incl. cross-border transfer to US ESPs (EU deferred with FU-1). |
+| FU-5 | ✅ Done | Manual snippet verify (`verify-snippet` + "Test connection") — shipped `2b94812`. |
 
 ### ⚖️ Legal / Compliance posture (current code behavior — NOT legal advice)
 - **US / California (CCPA/CPRA):** opt-out model; snippet honors **GPC**. ✅ Aligned.
-- **EU / UK (GDPR / ePrivacy):** requires **prior explicit opt-in** before non-essential tracking. Compliant **only** when the tenant sets `requireConsent` (suppress until their cookie banner grants) — the default is opt-out, which is **not** GDPR-compliant for EU visitors. → FU-1.
+- **EU / UK (GDPR / ePrivacy):** requires **prior explicit opt-in**. **Strategy (owner decision): don't target EU.** Setting geo to an include-list (e.g. US + JP) means the popup never fires for EU visitors → no EU data processed → GDPR out of scope for the campaign. The `requireConsent` opt-in gate (FU-1) is only needed if EU markets are added later.
 - **Japan (APPI + anti-spam):** lighter than GDPR — needs a clear privacy notice stating purpose, processors, and overseas transfer; marketing email is opt-in (the consent checkbox covers this).
 - **Email marketing (all regions):** the new consent checkbox provides explicit opt-in; CAN-SPAM still needs an unsubscribe path.
 - **Responsibility split:** ScrollPop is the data **processor** (provides GPC, consent hooks, DPA); the operator is the **controller** (must wire a CMP, set `requireConsent` for EU, publish a privacy policy, honor deletion/DSAR).
@@ -350,7 +355,7 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 ---
 
-*Last updated: June 8, 2026. June 8 work added — deploy pipeline fixed (auto-deploy now works), live lead-capture verified end-to-end, DNT→GPC, marketing-consent checkbox, targeting-rule UX, email_capture payload fix. Open follow-ups: FU-1 requireConsent toggle, FU-2 snippet size pass, FU-3 marketing CI deploy, FU-4 legal review. This file is the single source of truth; MASTER.md links here rather than duplicating status.*
+*Last updated: June 8, 2026. June 8 work — deploy pipeline fixed (auto-deploy works), live lead-capture verified end-to-end, DNT→GPC, marketing-consent checkbox, targeting-rule UX, email_capture fix, modal-backdrop fix, manual snippet verify (FU-5 ✅), multi-country geo (US+JP), keyboard nudging + softer drag snap. Owner confirmed targeting JP+USA not EU → FU-1 deprioritized. Open: FU-2 snippet size pass, FU-3 marketing CI deploy, FU-4 legal review (CCPA+APPI). Single source of truth; MASTER.md links here.*
 
 ---
 
