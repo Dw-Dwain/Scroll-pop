@@ -10,6 +10,7 @@ import {
   CornerDownRight,
 } from 'lucide-react';
 import { CampaignElement, CampaignStepConfig, PopupType, CanvasPosition } from './types';
+import { CreativePicker } from './CreativePicker';
 
 // Commit-on-blur number input — prevents mid-type clamping (e.g. typing "500" into "200" becoming "2005000")
 function NumInput({
@@ -104,6 +105,14 @@ export default function SidebarRight({
                 placeholder={activeElement.type === 'image' ? 'Image URL...' : 'Type element text...'}
               />
             </div>
+          )}
+
+          {/* ScrollPop Creatives thumbnail picker — image elements only */}
+          {activeElement.type === 'image' && (
+            <CreativePicker
+              value={activeElement.content}
+              onSelect={(url) => onUpdateElement(activeElement.id, 'content', url)}
+            />
           )}
 
           {/* Link URL — button and close elements */}

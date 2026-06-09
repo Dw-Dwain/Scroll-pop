@@ -46,24 +46,26 @@ function entranceStyle(anim: string): React.CSSProperties {
   return map[anim] ? { animation: map[anim] } : {};
 }
 
-/** Map campaign position + popupType → flex alignment CSS classes for the backdrop */
+/** Map campaign position + popupType → flex alignment CSS classes for the backdrop.
+ *  Modal popups are TOP-aligned in the simulator (the frame is a fixed-height store mock, so
+ *  vertically centering tall designs hid them "at 50% scroll"). Horizontal placement is still
+ *  honoured for WYSIWYG. Stickybar/fullscreen keep their real alignment. */
 function backdropClasses(position: string, popupType: string): string {
   if (popupType === 'fullscreen') return 'items-center justify-center p-0';
   if (popupType === 'stickybar') {
     return position === 'bottom' ? 'items-end justify-stretch p-0' : 'items-start justify-stretch p-0';
   }
-  const map: Record<string, string> = {
-    'center':       'items-center justify-center p-4',
-    'top':          'items-start justify-center p-4',
-    'bottom':       'items-end   justify-center p-4',
-    'top-left':     'items-start justify-start  p-4',
-    'top-right':    'items-start justify-end    p-4',
-    'bottom-left':  'items-end   justify-start  p-4',
-    'bottom-right': 'items-end   justify-end    p-4',
-    'left':         'items-center justify-start  p-4',
-    'right':        'items-center justify-end    p-4',
+  // Horizontal justify by position; vertical is always top (items-start) + top padding so the
+  // popup is visible from the moment it fires and can scroll down if it's taller than the frame.
+  const justify: Record<string, string> = {
+    'top-left':     'justify-start',
+    'top-right':    'justify-end',
+    'bottom-left':  'justify-start',
+    'bottom-right': 'justify-end',
+    'left':         'justify-start',
+    'right':        'justify-end',
   };
-  return map[position] ?? 'items-center justify-center p-4';
+  return `items-start ${justify[position] ?? 'justify-center'} px-4 pt-6 pb-6`;
 }
 
 /** Map popupType → overlay opacity (stickybar / slidein show store behind) */
@@ -797,7 +799,7 @@ export default function InteractivePreview({
         {/* 4. MODAL POPUP BACKDROP OVERLAY SIMULATOR */}
         {showMainCampaign && (
           <div
-            className={`absolute inset-0 z-[990] flex ${backdropClasses(campaign.steps.main.position, campaign.steps.main.popupType)}`}
+            className={`absolute inset-0 z-[990] flex overflow-y-auto ${backdropClasses(campaign.steps.main.position, campaign.steps.main.popupType)}`}
             style={{ background: backdropOverlay(campaign.steps.main.popupType) }}
           >
             {/* Active configured template container representing popupType */}
@@ -818,10 +820,13 @@ export default function InteractivePreview({
               return (
                 <div
                   key={`popup-${campaignStep}-${activeStepConfig.animationEntrance}`}
-                  className="relative shadow-2xl text-left overflow-hidden"
+                  className={`relative shadow-2xl text-left ${(isStickybar || isFullscreen) ? 'overflow-hidden' : 'overflow-x-hidden overflow-y-auto'}`}
                   style={{
                     width: popupWidth,
                     height: popupHeight,
+                    // Cap a tall design to the visible frame (minus the backdrop's pt/pb-6) and
+                    // let it scroll internally, instead of overflowing or clipping the simulator.
+                    maxHeight: (isStickybar || isFullscreen) ? undefined : 'calc(100% - 48px)',
                     backgroundColor: activeStepConfig.backgroundColor,
                     borderRadius: `${popupRadius}px`,
                     borderWidth: `${activeStepConfig.borderWidth}px`,
