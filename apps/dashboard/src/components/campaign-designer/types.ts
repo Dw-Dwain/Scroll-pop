@@ -118,6 +118,10 @@ export interface CampaignTriggers {
   enableSmartAffiliate?: boolean; // scrape page to inject dynamic product details
   // How often the popup may show to the same visitor (persisted as the campaign frequency rule)
   frequency?: 'always' | 'once_per_session' | 'once_per_day' | 'once_per_visitor';
+  // Recurrence (optional, layered on top of `frequency`). Persisted to the frequency rule.
+  maxDisplayCount?: number;       // max total displays to one visitor; 0 = unlimited
+  cooldownMinutes?: number;       // minimum minutes between displays (stored as seconds in the API)
+  showAgainIfConverts?: boolean;  // keep showing even after the visitor converts
 }
 
 export interface Campaign {

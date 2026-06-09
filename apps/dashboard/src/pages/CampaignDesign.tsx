@@ -17,7 +17,7 @@ interface CampaignDesignProps {
 
 type TriggerRow = { type?: string; params?: Record<string, number> };
 type TargetingRow = { kind?: string; value?: Record<string, unknown> };
-type FrequencyData = { intervalDays?: number; frequency?: string };
+type FrequencyData = { intervalDays?: number; frequency?: string; maxDisplayCount?: number | null; cooldownSeconds?: number | null; showAgainIfConverts?: boolean };
 
 // Helper to bootstrap Campaign object from legacy flat fields or new steps config
 function bootstrapCampaign(
@@ -127,12 +127,19 @@ function bootstrapCampaign(
     endsAt,
     abTestPercent,
     frequency: (frequencyData?.frequency as Campaign['triggers']['frequency']) ?? 'once_per_session',
+    maxDisplayCount: frequencyData?.maxDisplayCount ?? 0,
+    cooldownMinutes: frequencyData?.cooldownSeconds ? Math.round(frequencyData.cooldownSeconds / 60) : 0,
+    showAgainIfConverts: frequencyData?.showAgainIfConverts ?? false,
   };
   if (config.uiTriggers && typeof config.uiTriggers === 'object') {
     triggers = { ...triggers, ...(config.uiTriggers as Partial<Campaign['triggers']>) };
     // The frequency rule table stays authoritative for these two (also written on save).
     if (frequencyData?.frequency) triggers.frequency = frequencyData.frequency as 'always' | 'once_per_session' | 'once_per_day' | 'once_per_visitor';
     if (frequencyData?.intervalDays) triggers.frequencyCapDays = frequencyData.intervalDays;
+    // Recurrence: the frequency-rule table is authoritative — re-apply after the uiTriggers merge.
+    triggers.maxDisplayCount = frequencyData?.maxDisplayCount ?? 0;
+    triggers.cooldownMinutes = frequencyData?.cooldownSeconds ? Math.round(frequencyData.cooldownSeconds / 60) : 0;
+    triggers.showAgainIfConverts = frequencyData?.showAgainIfConverts ?? false;
   }
 
   if (config.steps) {
@@ -797,6 +804,10 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     // frequencyCapDays, so the dropdown selection was silently lost on save).
     const freqMode = t?.frequency ?? 'once_per_session';
     const freqInterval = t?.frequencyCapDays && t.frequencyCapDays > 0 ? t.frequencyCapDays : undefined;
+    // Recurrence (optional). Convert the UI's minutes to the seconds the API stores.
+    const maxDisplayCount = t?.maxDisplayCount && t.maxDisplayCount > 0 ? t.maxDisplayCount : null;
+    const cooldownSeconds = t?.cooldownMinutes && t.cooldownMinutes > 0 ? t.cooldownMinutes * 60 : null;
+    const showAgainIfConverts = !!t?.showAgainIfConverts;
 
     // Save design
     mutate(
@@ -806,7 +817,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
           // After design succeeds, save triggers
           try {
             await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'put', values: triggersList });
-            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency: freqMode, intervalDays: freqInterval } });
+            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency: freqMode, intervalDays: freqInterval, maxDisplayCount, cooldownSeconds, showAgainIfConverts } });
             await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'put', values: targetingList });
           } catch (err) {
             console.error('Failed to save triggers/targeting:', err);

@@ -1483,6 +1483,41 @@ export default function SidebarLeft({
                 <p className="text-[10.5px] text-zinc-600 leading-normal">
                   How often a single visitor may see this popup.
                 </p>
+
+                {/* Recurrence (optional) — layered on top of the mode above */}
+                <div className="pt-2 mt-1 border-t border-zinc-800 space-y-2">
+                  <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Recurrence (optional)</span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-zinc-300 flex-1">Max displays <span className="text-zinc-600">(0 = ∞)</span></label>
+                    <input
+                      type="number" min={0} max={1000}
+                      value={campaign.triggers.maxDisplayCount ?? 0}
+                      onChange={(e) => onUpdateTriggers('maxDisplayCount', Math.max(0, Math.min(1000, parseInt(e.target.value) || 0)))}
+                      className="w-16 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-zinc-300 flex-1">Min gap <span className="text-zinc-600">(minutes)</span></label>
+                    <input
+                      type="number" min={0}
+                      value={campaign.triggers.cooldownMinutes ?? 0}
+                      onChange={(e) => onUpdateTriggers('cooldownMinutes', Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-16 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={campaign.triggers.showAgainIfConverts ?? false}
+                      onChange={(e) => onUpdateTriggers('showAgainIfConverts', e.target.checked)}
+                      className="accent-indigo-600"
+                    />
+                    <span className="text-[11px] text-zinc-300">Keep showing after a conversion</span>
+                  </label>
+                  <p className="text-[10.5px] text-zinc-600 leading-normal">
+                    e.g. Max 3, Min gap 60 → shows up to 3 times, at least 1h apart, then stops once they convert.
+                  </p>
+                </div>
               </div>
 
               {/* 1. Exit intent */}
