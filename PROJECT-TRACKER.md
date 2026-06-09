@@ -1,7 +1,7 @@
 # ScrollPop — Project Tracker
 
 > Single source of truth for all open issues, feature gaps, security findings, performance fixes, and technical debt.
-> Sourced from `CTO-AUDIT.md` (June 4, 2026). Last reconciled: **June 9, 2026**.
+> Sourced from `CTO-AUDIT.md` (June 4, 2026). Last reconciled: **June 10, 2026**.
 > **Priority:** P0 = launch blocker · P1 = high · P2 = medium · P3 = low
 > **Status:** ⬜ Todo · 🔄 In progress · ✅ Done · ❌ Won't build
 
@@ -29,22 +29,24 @@
 
 | # | Action | Item | Detail / where |
 |---|---|---|---|
-| NQ-1 | **clean** | Dead UI-kit pages | `apps/dashboard/src/pages/`: `SupportChat`, `ImageGallery`, `CalendarPage`, `MessagesPage`, `FormsPage`, `TablesPage` — unrouted (see `main.tsx` comment), hardcoded sample data, no backend. Delete the files + any stray imports. |
+| NQ-1 | ✅ **done** | Dead UI-kit pages | `apps/dashboard/src/pages/`: `SupportChat`, `ImageGallery`, `CalendarPage`, `MessagesPage`, `FormsPage`, `TablesPage` — deleted in `558ce1f`. |
 | NQ-2 | **fix** | Experiments save but don't run | `routes/experiments.ts` persists `experimentsV1` into `design.config` (real CRUD), but the **snippet never consumes experiment allocation/guardrails** — A/B serving uses the separate variant-weight path. Either wire the snippet to allocate by experiment + enforce guardrails, or gate the UI honestly. Flag `ff_experiments_v1` (off). |
 | NQ-3 | **fix & complete** | Settings — partial wiring | `pages/Settings.tsx`: `webhookSecret: 'whsec_placeholder_32chars_min'` hardcoded; global webhook field only **test-pings** (`fetch`), never persists (per-campaign outbound webhooks are the real path); affiliate-network "auto-tagging product URLs **coming soon**" not built. Confirm affiliate-link + webhook config actually persist (tenant/integrations), finish or remove the half-wired bits. |
 | NQ-4 | **remove** | Stale comments | e.g. Dashboard.tsx:423 "Events over time — area chart **placeholder**" (it actually renders a real `<EventsAreaChart>` with live data). Sweep for other lies-in-comments. |
-| NQ-5 | **remove** | Dead duplicate source trees | Repo-root `src/`, `scrollpop-campaign-designer/`, `site-plan/` are git-tracked duplicates of the deployed `apps/dashboard` (original Figma-make exports). Confirm nothing in the build references them, then delete. They inflate the graph + carry stale "coming soon" copy. |
+| NQ-5 | ✅ **done** | Dead duplicate source trees | Repo-root `src/`, `scrollpop-campaign-designer/`, `site-plan/` are git-tracked duplicates of the deployed `apps/dashboard` (original Figma-make exports). Confirm nothing in the build references them, then delete. They inflate the graph + carry stale "coming soon" copy. |
 | NQ-6 | **fix e2e** | Journeys runtime (→ FU-7) | `routes/journeys.ts` `/journeys/:id/diagnose` returns **fabricated** `topBlockedReasons` (hardcoded 40/35/25 % split). Wire it to real block telemetry, and connect the Journeys UI to the **FU-7 sequence runtime** (now shipped: `journey.js` + `design.uiTriggers.sequence*`). Flag `ff_journeys_ui` (off). |
-| NQ-7 | **fix (quick)** | ClientSwitcher light-mode contrast | The "+ New client" row uses `var(--accent-400)` (#?) which is too light on the light dropdown surface — unreadable in light mode (owner-reported). Use `var(--accent-600)`/`--accent-500` (or `--text-primary`). File: `components/ClientSwitcher.tsx`. |
+| NQ-7 | ✅ **done** | ClientSwitcher light-mode contrast | The "+ New client" row uses `var(--accent-400)` (#?) which is too light on the light dropdown surface — unreadable in light mode (owner-reported). Use `var(--accent-600)`/`--accent-500` (or `--text-primary`). File: `components/ClientSwitcher.tsx`. |
 
-### AG-6 — Extend client-scoping beyond Sites (PARTIAL — deferred to next session)
+> **June 10 update (commit `558ce1f`):** NQ-1 ✅, NQ-5 ✅ (duplicate trees deleted), NQ-7 ✅ (ClientSwitcher contrast fixed). AG-6 partially shipped.
+
+### AG-6 — Extend client-scoping beyond Sites (PARTIAL — half shipped `558ce1f`)
 Client switcher currently re-scopes only **Sites**. AG-6 extends it to **Campaigns / Analytics / Leads** via the site→campaign chain.
-- **Done but UNCOMMITTED in the working tree** (do NOT lose — typecheck-clean):
+- **Shipped in `558ce1f`:**
   - `apps/api/src/routes/campaigns.ts` — `GET /campaigns?clientId=` filters by `site.client_id` subquery.
   - `apps/api/src/routes/leads.ts` — `?clientId` on list + export (leads carry `siteId`); `clientLeadFilter` helper.
   - `apps/api/src/routes/analytics.ts` — `clientEventFilter` helper applied to overview / campaigns / daily / breakdown / revenue / funnel (events→campaign→site→client).
   - `apps/dashboard/src/providers/dataProvider.ts` — `getList` auto-appends `clientId` (from `localStorage.sp_active_client`) for `campaigns` + `leads` resources.
-- **Remaining:** wire `clientId` into the **Analytics + Dashboard** pages' `useCustom` analytics calls (they bypass `getList`); typecheck + lint + verify with a real client; commit + push both remotes.
+- **Remaining:** wire `clientId` into the **Analytics + Dashboard** pages’ `useCustom` analytics calls (they bypass `getList`); typecheck + lint + verify with a real client; commit + push both remotes.
 
 ---
 
@@ -453,7 +455,7 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 ---
 
-*Last updated: June 8, 2026. June 8 work — deploy pipeline fixed (auto-deploy works), live lead-capture verified end-to-end, DNT→GPC, marketing-consent checkbox, targeting-rule UX, email_capture fix, modal-backdrop fix, manual snippet verify (FU-5 ✅), multi-country geo (US+JP), keyboard nudging + softer drag snap. Owner confirmed targeting JP+USA not EU → FU-1 deprioritized. Open: FU-2 snippet size pass, FU-3 marketing CI deploy, FU-4 legal review (CCPA+APPI). Single source of truth; MASTER.md links here.*
+*Last updated: June 10, 2026. June 10 work (commit `558ce1f`) — **NQ-1** ✅ dead UI-kit pages deleted (6 files), **NQ-5** ✅ legacy duplicate source trees removed (`scrollpop-campaign-designer/` + root `src/` + root `index.html`/`tsconfig.json`/`vite.config.ts`), **NQ-7** ✅ ClientSwitcher light-mode contrast fixed, **AG-6 partial** ✅ client-scoping API routes + dataProvider committed. Open: NQ-2/NQ-3/NQ-4/NQ-6 cleanup items; AG-6 Analytics/Dashboard `useCustom` wiring. No schema changes — no Render redeploy needed. Both remotes in sync at `558ce1f`.*
 
 ---
 

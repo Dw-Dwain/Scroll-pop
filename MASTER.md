@@ -1,7 +1,7 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 9, 2026 · v0.1.6-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
+> Last updated: June 10, 2026 · v0.1.7-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
 > Status detail lives in **`PROJECT-TRACKER.md`** (single source of truth) — this file links there rather than duplicating it.
 > 4 ops-only tasks remain (Stripe keys, 2× DNS/CDN, marketing deploy) + P1-14 deferred by owner decision.
 > **P3-2 complete**: dashboard at 0 ESLint warnings + 0 TypeScript errors (full strict). Dormant keys (Sentry/PostHog/Resend) activated.
@@ -9,6 +9,33 @@
 > **June 8:** deploy pipeline fixed (pushes now auto-deploy), end-to-end lead capture verified live, DNT→GPC, marketing-consent checkbox, modal-backdrop fix, manual snippet verify, **multi-country geo (US+JP)**, keyboard element nudging.
 > **June 9:** live Shopify/WordPress debugging — fixed **host `display:none`** (theme hid the popup), **leads on `email_capture`** (origin gate dropped conversions on custom domains), **`/spin.js` 404** (not on R2), **custom-domain analytics** (`sites.custom_domain`), **heading WYSIWYG** (editor lied about alignment), center-modal positioning, custom Success screen, `/e` CORS. Plus **recurrence frequency model** (max displays + cooldown + show-after-convert) and snippet **refactor** (removed dead flat-render path −370B; **per-chunk CI budgets**).
 > **June 9 (cont.):** **Agency SaaS layer** shipped — **client workspaces** (CRUD API + top-nav switcher + per-client site filtering/assignment) and **coupled-login team invites** (owner invites by verified email → employee accepts → shares the agency's data; Novatise `@novatise.com` domain auto-join untouched), all **agency-plan + owner gated**. Plus **`/e` undercount fix** (honour `sendBeacon()`'s `false` return → keepalive `fetch` fallback for Firefox-ETP/strict-privacy visitors), **ScrollPop Creatives thumbnail picker** in the designer, **Simulate preview** top-aligned + height-capped, **deleted-campaign funnel exclusion**, and **`trigger_fired`** funnel tracking. Open: continue lazy-chunk extraction (Journey/Targeting), popup sequences, legal review (CCPA+APPI).
+> **June 10:** Repo cleanup (commit `558ce1f`) — **NQ-1** dead UI-kit pages deleted (CalendarPage, FormsPage, ImageGallery, MessagesPage, SupportChat, TablesPage), **NQ-5** legacy duplicate source trees removed (`scrollpop-campaign-designer/`, root `src/`, root `index.html`/`tsconfig.json`/`vite.config.ts`), **AG-6 partial** client-scoping extended to Campaigns/Leads/Analytics API routes + `dataProvider.ts` auto-appends `clientId`, **NQ-7** ClientSwitcher light-mode contrast fixed. Japanese sales templates committed. Open: wire `clientId` into Analytics/Dashboard `useCustom` calls.
+
+---
+
+## 📅 June 10, 2026 — Repo Cleanup + AG-6 Partial + NQ-7
+
+**Commit `558ce1f` — 60 files changed, 251 insertions / 16,590 deletions. Pushed to both remotes.**
+
+### What shipped
+
+| Item | Commit | What |
+|---|---|---|
+| **NQ-1** Dead UI-kit pages | `558ce1f` | Deleted 6 unrouted, hardcoded-data pages from `apps/dashboard/src/pages/`: `CalendarPage.tsx`, `FormsPage.tsx`, `ImageGallery.tsx`, `MessagesPage.tsx`, `SupportChat.tsx`, `TablesPage.tsx`. |
+| **NQ-5** Legacy duplicate source trees | `558ce1f` | Deleted `scrollpop-campaign-designer/` (old standalone Vite app, 18 files), root `src/` (10 files), and root-level `index.html`, `tsconfig.json`, `vite.config.ts`. These were stale Figma-make exports never referenced by the monorepo build. |
+| **AG-6 (partial)** Client-scoping API | `558ce1f` | `routes/campaigns.ts` — `GET /campaigns?clientId=` filters by `site.client_id` subquery. `routes/leads.ts` — `?clientId` on list + export (`clientLeadFilter` helper). `routes/analytics.ts` — `clientEventFilter` helper applied to overview / campaigns / daily / breakdown / revenue / funnel (events→campaign→site→client chain). |
+| **AG-6 (partial)** dataProvider | `558ce1f` | `providers/dataProvider.ts` — `getList` auto-appends `clientId` (from `localStorage.sp_active_client`) for `campaigns` + `leads` resources. |
+| **NQ-7** ClientSwitcher contrast | `558ce1f` | `components/ClientSwitcher.tsx` — fixed light-mode "+" New client row contrast (was `--accent-400`, unreadable; corrected). |
+| Japanese sales templates | `558ce1f` | Added `Scrollpop japanese sales templates/` image assets (Amazon JP Black Friday / Prime Day / Spring Sale, Mercari, Rakuten, Yahoo Shopping / PayPay Mall). |
+
+### AG-6 remaining
+- Wire `clientId` into the **Analytics** and **Dashboard** pages' `useCustom` analytics calls (they bypass `getList`).
+- Typecheck + lint + owner verify: client switcher → campaigns / leads / analytics filter correctly.
+
+### Deploy notes
+- No schema changes in this commit — no Render redeploy required.
+- Snippet pre-commit hook rebuilt `apps/worker/src/p.txt` automatically and staged it.
+- All commits pushed to **origin** (`Dw-Dwain/Scroll-pop`) + **dwain-coder** (`dwain-coder/Scroll-pop`).
 
 ---
 
