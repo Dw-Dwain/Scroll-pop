@@ -115,8 +115,9 @@ export default function SidebarRight({
             />
           )}
 
-          {/* Link URL — button and close elements */}
-          {['button', 'close'].includes(activeElement.type) && (
+          {/* Link URL — button (CTA) elements. Close-button destination lives in the
+              "Close behaviour" panel below and only applies when ad-then-close is enabled. */}
+          {activeElement.type === 'button' && (
             <div className="space-y-1.5 pt-3 border-t border-zinc-200">
               <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 🔗 Destination URL
@@ -129,8 +130,44 @@ export default function SidebarRight({
                 onChange={(e) => onUpdateElement(activeElement.id, 'href', e.target.value)}
               />
               <div className="text-[9px] text-zinc-400 leading-relaxed">
-                Opens in new tab when clicked. First click on ✕ also opens this URL — viewer must close that tab before the popup dismisses.
+                Opens in a new tab when clicked.
               </div>
+            </div>
+          )}
+
+          {/* ── Close behaviour: natural close vs ad-then-close (per-campaign opt-in) ── */}
+          {activeElement.type === 'close' && (
+            <div className="space-y-2.5 pt-3 border-t border-zinc-200">
+              <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-widest block font-mono">✕ Close Behaviour</span>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 shrink-0"
+                  checked={(activeElement.extraProps as { adClose?: boolean } | undefined)?.adClose === true}
+                  onChange={(e) => onUpdateElement(activeElement.id, 'extraProps', {
+                    ...(activeElement.extraProps || {}),
+                    adClose: e.target.checked,
+                  })}
+                />
+                <span className="text-[11px] text-zinc-600 leading-snug">
+                  <span className="font-semibold text-zinc-800">Open an affiliate ad before closing</span><br />
+                  Off (default): the ✕ closes the popup instantly. On: the 1st ✕ click opens your link in a new tab and keeps the popup; the 2nd click closes it.
+                </span>
+              </label>
+              {(activeElement.extraProps as { adClose?: boolean } | undefined)?.adClose === true && (
+                <div className="space-y-1.5 pl-6">
+                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                    🔗 Ad link (opens on ✕)
+                  </label>
+                  <input
+                    type="url"
+                    className="w-full text-xs p-2 border border-zinc-200 rounded bg-zinc-50/50 focus:bg-white focus:outline-none font-mono"
+                    placeholder="https://affiliate-link.com/product?tag=..."
+                    value={activeElement.href ?? (activeElement.extraProps?.href as string) ?? ''}
+                    onChange={(e) => onUpdateElement(activeElement.id, 'href', e.target.value)}
+                  />
+                </div>
+              )}
             </div>
           )}
 

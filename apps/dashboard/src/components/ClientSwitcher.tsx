@@ -170,7 +170,7 @@ export const ClientSwitcher: React.FC = () => {
               </button>
             </div>
           ) : (
-            <button onClick={() => setAdding(true)} className="nav-item" style={{ ...rowBase, color: 'var(--accent-400)' }}>
+            <button onClick={() => setAdding(true)} className="nav-item" style={{ ...rowBase, color: 'var(--accent-600)' }}>
               <Plus size={14} />
               <span>New client</span>
             </button>

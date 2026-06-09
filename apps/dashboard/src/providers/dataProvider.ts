@@ -71,6 +71,15 @@ export const createDataProvider = (getToken: () => Promise<string | null>): Data
         url.searchParams.append('limit', pagination.pageSize.toString());
       }
 
+      // Agency client scoping: when a client workspace is active, scope the client-aware list
+      // resources to it (the API filters via the site→campaign chain). Empty/absent = no filter.
+      if (resource === 'campaigns' || resource === 'leads') {
+        try {
+          const activeClient = localStorage.getItem('sp_active_client');
+          if (activeClient) url.searchParams.append('clientId', activeClient);
+        } catch { /* localStorage unavailable — skip scoping */ }
+      }
+
       const res = await fetchWithAuth(url.toString());
       if (res.status === 401) return { data: [] as TData[], total: 0 };
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);

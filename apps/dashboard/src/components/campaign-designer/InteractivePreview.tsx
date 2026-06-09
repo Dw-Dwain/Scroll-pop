@@ -47,16 +47,15 @@ function entranceStyle(anim: string): React.CSSProperties {
 }
 
 /** Map campaign position + popupType → flex alignment CSS classes for the backdrop.
- *  Modal popups are TOP-aligned in the simulator (the frame is a fixed-height store mock, so
- *  vertically centering tall designs hid them "at 50% scroll"). Horizontal placement is still
- *  honoured for WYSIWYG. Stickybar/fullscreen keep their real alignment. */
+ *  Honours true vertical position (top/center/bottom) for WYSIWYG. Centering is safe because
+ *  the popup card is height-capped (maxHeight: calc(100% - 48px)) and scrolls internally, so a
+ *  tall design no longer disappears "at 50% scroll". Stickybar/fullscreen keep their real edges. */
 function backdropClasses(position: string, popupType: string): string {
   if (popupType === 'fullscreen') return 'items-center justify-center p-0';
   if (popupType === 'stickybar') {
     return position === 'bottom' ? 'items-end justify-stretch p-0' : 'items-start justify-stretch p-0';
   }
-  // Horizontal justify by position; vertical is always top (items-start) + top padding so the
-  // popup is visible from the moment it fires and can scroll down if it's taller than the frame.
+  // Horizontal justify by position.
   const justify: Record<string, string> = {
     'top-left':     'justify-start',
     'top-right':    'justify-end',
@@ -64,8 +63,13 @@ function backdropClasses(position: string, popupType: string): string {
     'bottom-right': 'justify-end',
     'left':         'justify-start',
     'right':        'justify-end',
+    'center':       'justify-center',
   };
-  return `items-start ${justify[position] ?? 'justify-center'} px-4 pt-6 pb-6`;
+  // Vertical align by position: top* → start, bottom* → end, everything else (center/left/right) → center.
+  const align = position.startsWith('top') ? 'items-start'
+    : position.startsWith('bottom') ? 'items-end'
+    : 'items-center';
+  return `${align} ${justify[position] ?? 'justify-center'} px-4 py-6`;
 }
 
 /** Map popupType → overlay opacity (stickybar / slidein show store behind) */
@@ -234,9 +238,13 @@ export default function InteractivePreview({
 
   // Open affiliate link in new tab — first call arms the dismiss gate, second dismisses
   const handleAffiliateDismiss = (stepConfig: CampaignStepConfig) => {
-    const href = getStepAffiliate(stepConfig);
+    // Ad-then-close is a per-campaign opt-in on the close element (extraProps.adClose).
+    // Default: the X is a natural instant close.
+    const closeEl = stepConfig.elements.find((e) => e.type === 'close');
+    const adClose = (closeEl?.extraProps as { adClose?: boolean } | undefined)?.adClose === true;
+    const href = adClose ? (closeEl?.href || getStepAffiliate(stepConfig)) : null;
     if (!href) {
-      // No affiliate link — just close normally
+      // Natural close
       setShowMainCampaign(false);
       setShowTeaser(true);
       showToast('❌ Popup dismissed');

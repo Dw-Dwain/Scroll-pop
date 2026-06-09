@@ -2,6 +2,7 @@ import React, { useState, useMemo, useDeferredValue } from 'react';
 import { Plus, Search, Layers, Pencil, Trash2, Play, Pause, MoreHorizontal, Download, Copy } from 'lucide-react';
 import { useCustom, useCreate, useDelete, useList, useUpdate, useApiUrl } from '@refinedev/core';
 import { authedFetch } from '../providers/dataProvider';
+import { useActiveClient } from '../hooks/useClients';
 
 interface CampaignsProps {
   onNavigate: (path: string) => void;
@@ -206,7 +207,14 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
   const [sortBy, setSortBy] = useState<'newest' | 'name' | 'ctr'>('newest');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  const { data: analyticsResult } = useCustom({ url: `${apiUrl}/analytics/campaigns`, method: 'get' });
+  // Agency client scoping: the campaigns list goes through dataProvider.getList, which appends
+  // `clientId` from localStorage — but Refine's cache key doesn't change on switch, so refetch
+  // explicitly. The analytics overlay (useCustom) has no queryKey, so scoping its URL re-keys it.
+  const { activeClientId } = useActiveClient();
+  React.useEffect(() => { void refetch(); }, [activeClientId, refetch]);
+  const cq = activeClientId ? `?clientId=${activeClientId}` : '';
+
+  const { data: analyticsResult } = useCustom({ url: `${apiUrl}/analytics/campaigns${cq}`, method: 'get' });
 
   const analyticsMap = useMemo<Record<string, CampaignStat>>(() => {
     const map: Record<string, CampaignStat> = {};

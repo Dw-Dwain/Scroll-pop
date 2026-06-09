@@ -1,6 +1,8 @@
 import React from 'react';
-import { Download, TrendingUp, TrendingDown, ChevronUp, ChevronDown, Zap, DollarSign, MousePointer, Mail } from 'lucide-react';
+import { Download, TrendingUp, TrendingDown, ChevronUp, ChevronDown, Zap, DollarSign, MousePointer, Mail, Info, Trash2 } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
+import { useActiveClient } from '../hooks/useClients';
+import { authedFetch } from '../providers/dataProvider';
 
 interface AnalyticsProps {
   onNavigate: (path: string) => void;
@@ -101,6 +103,23 @@ function TrendChart({ daily }: {
 
 // ─── Funnel Step Bar ───────────────────────────────────────────────────────────
 
+// Plain-English meaning of each funnel/exit term. Shown as a hover tooltip on the little
+// "i" next to each funnel step name (replaces the old always-visible legend block).
+const FUNNEL_GLOSSARY: Record<string, string> = {
+  'Trigger Fired': 'A trigger condition was met (scroll %, dwell, inactivity, exit-intent, click).',
+  'Popup Shown': 'The popup actually rendered on the page — one impression.',
+  'Popup Viewed': 'It stayed on screen long enough to be seen (~1 second+).',
+  'CTA Clicked': 'The visitor clicked the call-to-action / affiliate link inside the popup.',
+  'Form Submitted': 'They submitted the email/lead form (clicked submit).',
+  'Email Captured': 'A valid email was saved as a lead (deduped per campaign).',
+  'Checkout Started': 'Shopify checkout was started from the popup.',
+  'Checkout / Purchase': 'Shopify checkout started / completed — attributed revenue.',
+  'Purchase': 'Shopify checkout completed — attributed revenue.',
+  'Intentional Close': 'Visitor clicked the ✕ to close.',
+  'Passive Dismiss': 'Visitor clicked the dark overlay / a dismiss link instead of the ✕.',
+  'Rage-Close': "Share of viewers who closed it almost immediately — a sign it's mistimed or annoying.",
+};
+
 function FunnelBar({ steps, topCount }: {
   steps: Array<{ label: string; count: number; dropOffPct: number }>;
   topCount: number;
@@ -121,6 +140,15 @@ function FunnelBar({ steps, topCount }: {
               <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
                 {step.label}
+                {FUNNEL_GLOSSARY[step.label] && (
+                  <Info
+                    size={11}
+                    style={{ color: 'var(--text-disabled)', flexShrink: 0, cursor: 'help' }}
+                    aria-label={FUNNEL_GLOSSARY[step.label]}
+                  >
+                    <title>{FUNNEL_GLOSSARY[step.label]}</title>
+                  </Info>
+                )}
               </span>
               <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: 11 }}>
                 {step.count.toLocaleString()}
@@ -144,8 +172,16 @@ function FunnelBar({ steps, topCount }: {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
-  const { data: campaignsData } = useList({ resource: 'campaigns' });
+  const { data: campaignsData, refetch: refetchCampaigns } = useList({ resource: 'campaigns' });
   const apiUrl = useApiUrl();
+  // Rows the operator has just deleted from the breakdown — hidden immediately for snappy
+  // feedback; the soft-delete also drops them from /analytics/campaigns on the next poll.
+  const [removedIds, setRemovedIds] = React.useState<Set<string>>(new Set());
+  // Agency client scoping: when a client workspace is active, scope every analytics call to it.
+  // `cq` is the query-string fragment (`&clientId=…`); adding `activeClientId` to each queryKey
+  // forces a refetch when the operator switches client.
+  const { activeClientId } = useActiveClient();
+  const cq = activeClientId ? `&clientId=${activeClientId}` : '';
   const [range, setRange] = React.useState<'7d' | '30d' | '90d'>('30d');
   const [sortCol, setSortCol] = React.useState<SortCol>('impressions');
   const [sortAsc, setSortAsc] = React.useState(false);
@@ -158,34 +194,34 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: overviewResult, isLoading: overviewLoading } = useCustom({
-    url: `${apiUrl}/analytics/overview?days=${days}`,
+    url: `${apiUrl}/analytics/overview?days=${days}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/overview', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/overview', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: statsResult, isLoading: statsLoading } = useCustom({
-    url: `${apiUrl}/analytics/campaigns?days=${days}`,
+    url: `${apiUrl}/analytics/campaigns?days=${days}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/campaigns', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/campaigns', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: dailyResult, isLoading: dailyLoading } = useCustom({
-    url: `${apiUrl}/analytics/daily`,
+    url: `${apiUrl}/analytics/daily${activeClientId ? `?clientId=${activeClientId}` : ''}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/daily'], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/daily', activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: breakdownResult } = useCustom({
-    url: `${apiUrl}/analytics/breakdown?days=${days}`,
+    url: `${apiUrl}/analytics/breakdown?days=${days}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/breakdown', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/breakdown', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: revenueResult, isLoading: revenueLoading } = useCustom({
-    url: `${apiUrl}/analytics/revenue?days=${days}`,
+    url: `${apiUrl}/analytics/revenue?days=${days}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/revenue', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/revenue', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: funnelResult, isLoading: funnelLoading } = useCustom({
-    url: `${apiUrl}/analytics/funnel?days=${days}`,
+    url: `${apiUrl}/analytics/funnel?days=${days}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/funnel', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/funnel', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: intelligenceResult } = useCustom({
     url: `${apiUrl}/analytics/intelligence?days=${days}`,
@@ -243,12 +279,24 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   const prevCtr  = prevImpr > 0 ? (prevClks / prevImpr) * 100 : 0;
 
   const campaignStats = React.useMemo(() => {
-    const arr = [...rawStats];
+    const arr = rawStats.filter((r) => !removedIds.has(r.campaignId));
     arr.sort((a, b) => sortAsc ? a[sortCol] - b[sortCol] : b[sortCol] - a[sortCol]);
     return arr;
-  }, [rawStats, sortCol, sortAsc]);
+  }, [rawStats, sortCol, sortAsc, removedIds]);
 
   const getCampaign = (id: string) => campaignsData?.data?.find((c) => (c as { id?: string }).id === id);
+
+  // Delete a non-active campaign straight from the breakdown (paused/draft, or an orphaned row
+  // whose campaign was already deleted but still carries lingering events). Soft-deletes the
+  // campaign if it still exists; either way the row is hidden locally.
+  const deleteBreakdownRow = async (id: string, name: string) => {
+    if (!window.confirm(`Remove "${name}" from analytics? This soft-deletes the campaign (its events are purged within 24h).`)) return;
+    setRemovedIds((prev) => new Set(prev).add(id));
+    try {
+      await authedFetch(`/campaigns/${id}`, { method: 'DELETE' });
+    } catch { /* orphan row with no live campaign — hiding it locally is enough */ }
+    void refetchCampaigns();
+  };
   const toggleSort = (col: SortCol) => {
     if (sortCol === col) setSortAsc((v) => !v);
     else { setSortCol(col); setSortAsc(false); }
@@ -485,26 +533,6 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                 No funnel data yet. Events will appear once your snippet is live.
               </div>
             )}
-            {/* Plain-English legend — what each stage/term actually counts */}
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'grid', gap: 5 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, marginBottom: 2 }}>What these mean</div>
-              {([
-                ['Trigger Fired', 'A trigger condition was met (scroll %, dwell, inactivity, exit-intent, click).'],
-                ['Popup Shown', 'The popup actually rendered on the page — one impression.'],
-                ['Popup Viewed', 'It stayed on screen long enough to be seen (~1 second+).'],
-                ['CTA Clicked', 'The visitor clicked the call-to-action / affiliate link inside the popup.'],
-                ['Form Submitted', 'They submitted the email/lead form (clicked submit).'],
-                ['Email Captured', 'A valid email was saved as a lead (deduped per campaign).'],
-                ['Checkout / Purchase', 'Shopify checkout started / completed — attributed revenue.'],
-                ['Intentional Close', 'Visitor clicked the ✕ to close.'],
-                ['Passive Dismiss', 'Visitor clicked the dark overlay / a dismiss link instead of the ✕.'],
-                ['Rage-Close', 'Share of viewers who closed it almost immediately — a sign it\'s mistimed or annoying.'],
-              ] as [string, string][]).map(([t, d]) => (
-                <div key={t} style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t}</span> — {d}
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Exit stats + rage-close */}
@@ -640,6 +668,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                       </span>
                     </th>
                   ))}
+                  <th style={{ width: 36 }} aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -663,6 +692,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--data-4)' }}>{row.conversions.toLocaleString()}</td>
+                      <td style={{ textAlign: 'center', width: 36 }} onClick={(e) => e.stopPropagation()}>
+                        {c?.status !== 'active' && (
+                          <button
+                            onClick={() => void deleteBreakdownRow(row.campaignId, c?.name ?? `Campaign ${row.campaignId.slice(0, 8)}`)}
+                            title={c ? 'Delete this paused/draft campaign' : 'Remove this orphaned (deleted) campaign from analytics'}
+                            aria-label="Delete campaign"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 5, color: 'var(--text-muted)', display: 'inline-flex' }}
+                            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-error)')}
+                            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

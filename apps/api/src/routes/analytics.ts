@@ -5,12 +5,20 @@ import { eq, and, gte, isNull, sql } from 'drizzle-orm';
 
 const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d; };
 
+// Agency client scoping: restrict events to campaigns whose site belongs to the given client
+// (events → campaign.site_id → site.client_id). Returns undefined when no client is active.
+const clientEventFilter = (clientId: string | undefined, tenantId: string) =>
+  clientId
+    ? sql`${events.campaignId} IN (SELECT c.id FROM campaigns c JOIN sites s ON s.id = c.site_id WHERE s.client_id = ${clientId}::uuid AND c.tenant_id = ${tenantId}::uuid)`
+    : undefined;
+
 export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/v1/analytics/overview — tenant-level stats
   // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string } }>('/analytics/overview', async (request, reply) => {
+  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/overview', async (request, reply) => {
     const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
     const since = daysAgo(days);
+    const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     const rows = await db
       .select({
@@ -18,7 +26,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         count: sql<number>`count(*)::int`,
       })
       .from(events)
-      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since)))
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), clientFilter))
       .groupBy(events.eventType);
 
     const counts = Object.fromEntries(rows.map((r) => [r.eventType, r.count]));
@@ -68,9 +76,14 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/v1/analytics/campaigns — all tenant campaigns, aggregated stats
   // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string } }>('/analytics/campaigns', async (request, reply) => {
+  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/campaigns', async (request, reply) => {
     const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
     const since = daysAgo(days);
+    const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
+
+    // Exclude soft-deleted campaigns so their lingering events (purged within 24h) don't show
+    // up as orphaned "Campaign <id>" rows in the breakdown.
+    const notDeleted = sql`${events.campaignId} NOT IN (SELECT id FROM campaigns WHERE tenant_id = ${request.tenantId}::uuid AND deleted_at IS NOT NULL)`;
 
     const rows = await db
       .select({
@@ -81,7 +94,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         conversions: sql<number>`count(*) filter (where ${events.eventType}::text = 'conversion')::int`,
       })
       .from(events)
-      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since)))
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), notDeleted, clientFilter))
       .groupBy(events.campaignId);
 
     const withCtr = rows.map((r) => ({
@@ -131,10 +144,11 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // GET /api/v1/analytics/daily — per-day breakdown for last 60d (current + previous 30d windows)
-  fastify.get('/analytics/daily', async (request, reply) => {
+  fastify.get<{ Querystring: { clientId?: string } }>('/analytics/daily', async (request, reply) => {
     const now = new Date();
     const since60 = new Date(now);
     since60.setDate(now.getDate() - 60);
+    const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     const rows = await db
       .select({
@@ -143,7 +157,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         count: sql<number>`count(*)::int`,
       })
       .from(events)
-      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since60)))
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since60), clientFilter))
       .groupBy(sql`date_trunc('day', ${events.ts})`, events.eventType)
       .orderBy(sql`date_trunc('day', ${events.ts})`);
 
@@ -172,9 +186,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/v1/analytics/breakdown — device/country/referrer/trigger/unique breakdown
   // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string } }>('/analytics/breakdown', async (request, reply) => {
+  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/breakdown', async (request, reply) => {
     const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
     const since = daysAgo(days);
+    const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     const [deviceRows, countryRows, triggerRows, uniqueRow] = await Promise.all([
       // Device breakdown
@@ -183,7 +198,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         count: sql<number>`count(*)::int`,
       })
         .from(events)
-        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression')))
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression'), clientFilter))
         .groupBy(events.device)
         .orderBy(sql`count(*) desc`),
 
@@ -193,7 +208,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         count: sql<number>`count(*)::int`,
       })
         .from(events)
-        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression')))
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression'), clientFilter))
         .groupBy(events.country)
         .orderBy(sql`count(*) desc`)
         .limit(10),
@@ -204,14 +219,14 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         count: sql<number>`count(*)::int`,
       })
         .from(events)
-        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression')))
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression'), clientFilter))
         .groupBy(sql`metadata->>'triggerType'`)
         .orderBy(sql`count(*) desc`),
 
       // Unique visitors
       db.select({ count: sql<number>`count(distinct visitor_id)::int` })
         .from(events)
-        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since))),
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), clientFilter)),
     ]);
 
     return reply.send({
@@ -243,9 +258,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/v1/analytics/revenue — revenue dashboard per campaign
   // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string } }>('/analytics/revenue', async (request, reply) => {
+  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/revenue', async (request, reply) => {
     const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
     const since = daysAgo(days);
+    const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     // Per-campaign revenue + funnel summary
     const rows = await db
@@ -259,7 +275,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         revenueCents:   sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
       })
       .from(events)
-      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since)))
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), clientFilter))
       .groupBy(events.campaignId);
 
     // Fetch campaign names for the enriched response
@@ -311,10 +327,11 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/v1/analytics/funnel — full conversion funnel step counts
   // Query param: ?days=7|30|90 (default 30), ?campaignId=uuid (optional)
-  fastify.get<{ Querystring: { days?: string; campaignId?: string } }>('/analytics/funnel', async (request, reply) => {
+  fastify.get<{ Querystring: { days?: string; campaignId?: string; clientId?: string } }>('/analytics/funnel', async (request, reply) => {
     const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
     const since = daysAgo(days);
-    const { campaignId } = request.query;
+    const { campaignId, clientId } = request.query;
+    const clientFilter = clientEventFilter(clientId, request.tenantId);
 
     // Exclude soft-deleted campaigns from the aggregate funnel so they stop reflecting in
     // analytics immediately (their raw events are also hard-purged 24h after deletion). A
@@ -322,7 +339,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const notDeleted = sql`${events.campaignId} NOT IN (SELECT id FROM campaigns WHERE tenant_id = ${request.tenantId}::uuid AND deleted_at IS NOT NULL)`;
     const baseWhere = campaignId
       ? and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.campaignId, campaignId))
-      : and(eq(events.tenantId, request.tenantId), gte(events.ts, since), notDeleted);
+      : and(eq(events.tenantId, request.tenantId), gte(events.ts, since), notDeleted, clientFilter);
 
     const [row] = await db
       .select({

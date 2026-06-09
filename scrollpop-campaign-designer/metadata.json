@@ -1,6 +1,0 @@
-{
-  "name": "Visual Popup Campaign Designer",
-  "description": "A visual-first Canva-like design platform and campaign builder for high-converting ecommerce popups, sticky bars, and multi-step widgets.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

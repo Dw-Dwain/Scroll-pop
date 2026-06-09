@@ -14,12 +14,20 @@ const ListQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   campaignId: z.string().uuid().optional(),
   siteId: z.string().uuid().optional(),
+  clientId: z.string().uuid().optional(),
 });
 
 const FilterQuery = z.object({
   campaignId: z.string().uuid().optional(),
   siteId: z.string().uuid().optional(),
+  clientId: z.string().uuid().optional(),
 });
+
+// Agency client scoping: restrict leads to sites belonging to the given client (leads carry siteId).
+const clientLeadFilter = (clientId: string | undefined, tenantId: string) =>
+  clientId
+    ? sql`${leads.siteId} IN (SELECT id FROM sites WHERE client_id = ${clientId}::uuid AND tenant_id = ${tenantId}::uuid)`
+    : undefined;
 
 export const leadRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/v1/leads — list captured leads (tenant-scoped, filterable, paginated, newest first)
@@ -29,6 +37,7 @@ export const leadRoutes: FastifyPluginAsync = async (fastify) => {
       eq(leads.tenantId, request.tenantId),
       q.campaignId ? eq(leads.campaignId, q.campaignId) : undefined,
       q.siteId ? eq(leads.siteId, q.siteId) : undefined,
+      clientLeadFilter(q.clientId, request.tenantId),
     );
 
     const [rows, totals] = await Promise.all([
@@ -73,6 +82,7 @@ export const leadRoutes: FastifyPluginAsync = async (fastify) => {
       eq(leads.tenantId, request.tenantId),
       q.campaignId ? eq(leads.campaignId, q.campaignId) : undefined,
       q.siteId ? eq(leads.siteId, q.siteId) : undefined,
+      clientLeadFilter(q.clientId, request.tenantId),
     );
 
     const rows = await db

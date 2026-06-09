@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Mail, Download, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { authedFetch } from '../providers/dataProvider';
+import { useActiveClient } from '../hooks/useClients';
 
 interface LeadsProps {
   onNavigate: (path: string) => void;
@@ -34,9 +35,16 @@ export function Leads(_props: LeadsProps) {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  // Agency client scoping: fold the active client into the filter string so the list + export
+  // (which call authedFetch directly, bypassing dataProvider.getList) both scope to it. `load`
+  // depends on filterQs, so switching client re-runs the fetch automatically.
+  const { activeClientId } = useActiveClient();
+
   const filterQs = useMemo(
-    () => (campaignFilter ? `&campaignId=${encodeURIComponent(campaignFilter)}` : ''),
-    [campaignFilter],
+    () =>
+      (campaignFilter ? `&campaignId=${encodeURIComponent(campaignFilter)}` : '') +
+      (activeClientId ? `&clientId=${encodeURIComponent(activeClientId)}` : ''),
+    [campaignFilter, activeClientId],
   );
 
   const load = useCallback(async () => {
@@ -58,18 +66,18 @@ export function Leads(_props: LeadsProps) {
 
   useEffect(() => { void load(); }, [load]);
 
-  // Campaign list for the filter dropdown (best-effort).
+  // Campaign list for the filter dropdown (best-effort), scoped to the active client.
   useEffect(() => {
     void (async () => {
       try {
-        const res = await authedFetch('/campaigns?limit=100');
+        const res = await authedFetch(`/campaigns?limit=100${activeClientId ? `&clientId=${encodeURIComponent(activeClientId)}` : ''}`);
         if (!res.ok) return;
         const json = await res.json();
         const items = (json.data ?? []) as Array<{ id: string; name: string }>;
         setCampaigns(items.map((c) => ({ id: c.id, name: c.name })));
       } catch { /* non-fatal */ }
     })();
-  }, []);
+  }, [activeClientId]);
 
   const handleExport = async () => {
     setExporting(true);

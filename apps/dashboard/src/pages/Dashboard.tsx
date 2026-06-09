@@ -1,6 +1,7 @@
 import React from 'react';
 import { Eye, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
+import { useActiveClient } from '../hooks/useClients';
 
 interface DashboardProps {
   onNavigate: (path: string) => void;
@@ -143,13 +144,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const LIVE_MS = 15000;
   const liveOpts = { refetchInterval: LIVE_MS, refetchOnWindowFocus: true } as const;
 
+  // Agency client scoping: scope the client-aware analytics calls to the active client.
+  // These useCustom calls have no explicit queryKey, so Refine derives it from the URL —
+  // appending `?clientId=…` is enough to trigger a refetch when the operator switches client.
+  const { activeClientId } = useActiveClient();
+  const cq = activeClientId ? `?clientId=${activeClientId}` : '';
+
   const { data: overviewResult, isLoading } = useCustom({
-    url: `${apiUrl}/analytics/overview`,
+    url: `${apiUrl}/analytics/overview${cq}`,
     method: 'get',
     queryOptions: liveOpts,
   });
   const { data: statsResult } = useCustom({
-    url: `${apiUrl}/analytics/campaigns`,
+    url: `${apiUrl}/analytics/campaigns${cq}`,
     method: 'get',
     queryOptions: liveOpts,
   });
@@ -159,7 +166,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     queryOptions: liveOpts,
   });
   const { data: dailyResult } = useCustom({
-    url: `${apiUrl}/analytics/daily`,
+    url: `${apiUrl}/analytics/daily${cq}`,
     method: 'get',
     queryOptions: liveOpts,
   });
@@ -420,7 +427,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       {/* Charts row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, marginBottom: 24 }}>
-        {/* Events over time — area chart placeholder */}
+        {/* Events over time — live area chart (EventsAreaChart, driven by /analytics/daily) */}
         <div style={{
           background: 'var(--bg-surface)',
           border: '1px solid var(--border-subtle)',

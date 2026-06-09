@@ -147,7 +147,6 @@ function loadChunk(file: string): Promise<void> {
 }
 
 let activeSiteId = '';
-let adTriggerEnabled = false; // growth+ plans only
 let sitePlan = 'free'; // tenant plan — gates the "Powered by ScrollPop" badge
 let visitorCountry = ''; // ISO country from the edge (config.geo.country) for geo targeting
 
@@ -246,7 +245,6 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
 
     const config: SiteConfig = await res.json() as SiteConfig;
     activeSiteId = config.siteId;
-    adTriggerEnabled = 'growthscaleagency'.includes(config.plan || '');
     sitePlan = config.plan || 'free';
     visitorCountry = config.geo?.country || '';
     // Strict opt-in: popups still render, but record no analytics until consent is
@@ -1134,8 +1132,15 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   //   2nd click → dismisses popup and resets frequency cap.
   //
   // free | starter — standard instant dismiss (no ad-trigger on X).
+  // X close behaviour is per-campaign, not plan-gated:
+  //   default            → natural instant close (X fires immediately).
+  //   extraProps.adClose → two-step "ad-then-close": 1st X click opens the operator's
+  //                        affiliate link in a new tab + keeps the popup; 2nd click closes.
   const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
-  const closeUrl = adTriggerEnabled ? (closeEl?.href || slot?.click_tracker_url || slot?.product_url || null) : null;
+  const adClose = closeEl?.extraProps?.adClose === true;
+  const rawCloseHref = adClose ? (closeEl?.href || slot?.click_tracker_url || slot?.product_url || '') : '';
+  const safeCloseHref = rawCloseHref ? safeHref(injectMacros(rawCloseHref)) : '';
+  const closeUrl = (safeCloseHref && safeCloseHref !== '#') ? safeCloseHref : null;
   let adOpened = false;
   shadow.getElementById('close-btn')?.addEventListener('click', () => {
     if (closeUrl && !adOpened) {

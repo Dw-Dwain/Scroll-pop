@@ -130,10 +130,6 @@ const getCampaignDesignId = (path: string) => {
   return m ? m[1] : null;
 };
 
-// Note: UI-kit showcase pages (SupportChat, ImageGallery, CalendarPage, MessagesPage,
-// FormsPage, TablesPage) exist in ./pages/ but are intentionally not routed —
-// they render hardcoded sample data with no real backing.
-
 import { createDataProvider } from './providers/dataProvider';
 import { isFeatureEnabled } from './lib/flags';
 import './index.css';

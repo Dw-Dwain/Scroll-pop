@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Readable } from 'node:stream';
 import { db } from '../db/client.js';
 import { campaigns, sites, designs, events, triggers, targetingRules, frequencyRules } from '../db/schema.js';
-import { eq, and, isNull, desc, lt } from 'drizzle-orm';
+import { eq, and, isNull, desc, lt, sql } from 'drizzle-orm';
 import { emitNotification } from './notifications.js';
 import { purgeSiteConfigCache } from '../lib/cache-purge.js';
 
@@ -36,10 +36,10 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   }
 
   // GET /api/v1/campaigns
-  fastify.get<{ Querystring: { siteId?: string; status?: string } }>(
+  fastify.get<{ Querystring: { siteId?: string; status?: string; clientId?: string } }>(
     '/campaigns',
     async (request, reply) => {
-      const { siteId, status } = request.query;
+      const { siteId, status, clientId } = request.query;
 
       const rows = await db
         .select({
@@ -63,6 +63,10 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
             eq(campaigns.tenantId, request.tenantId),
             isNull(campaigns.deletedAt),
             siteId ? eq(campaigns.siteId, siteId) : undefined,
+            // Agency client scoping: restrict to campaigns whose site belongs to the client.
+            clientId
+              ? sql`${campaigns.siteId} IN (SELECT id FROM sites WHERE client_id = ${clientId}::uuid AND tenant_id = ${request.tenantId}::uuid)`
+              : undefined,
             status ? eq(campaigns.status, status as typeof campaigns.status._.data) : undefined
           )
         )

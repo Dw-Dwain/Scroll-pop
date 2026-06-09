@@ -1235,9 +1235,12 @@ const PRESERVATION_CATALOG: Campaign[] = [
     }
   },
 
-  // 3b. ScrollPop Creative (Vertical) — full-bleed AI creative + invisible CTA overlay + X (affiliate redirect).
-  // Drop in a creative from the ScrollPop Creatives library (cdn.scrollpop.online/creatives/<name>.png),
-  // set the CTA href to your Rakuten/Amazon link. Whole image is clickable; X closes. No editing needed.
+  // 3b. ScrollPop Creative (Vertical) — full-bleed creative + invisible CTA overlay + X.
+  // Layering (do not reorder): image zIndex 1 (bottom) → invisible CTA zIndex 2 (whole image
+  // clickable, no label) → X close zIndex 100 (top-right, always clickable above the CTA).
+  // Pick a creative from the ScrollPop Creatives library (cdn.scrollpop.online/creatives/<name>.jpg)
+  // and set the CTA href to your Rakuten/Amazon link. X closes instantly (natural close); enable
+  // ad-then-close per-campaign via the close element's adClose option.
   {
     id: 'creative-vertical',
     name: 'ScrollPop Creative (Vertical)',
@@ -1262,9 +1265,9 @@ const PRESERVATION_CATALOG: Campaign[] = [
         backgroundColor: 'rgba(0,0,0,0)', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
         boxShadow: '0 24px 60px rgba(0,0,0,0.45)', overlayColor: 'rgba(0,0,0,0.6)', animationEntrance: 'zoom',
         elements: [
-          { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: 'https://cdn.scrollpop.online/creatives/REPLACE-ME.png', borderRadius: 16, zIndex: 1 },
+          { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: 'https://cdn.scrollpop.online/creatives/AMAZON%20JAPAN%20BLACK%20FRIDAY.jpg', borderRadius: 16, zIndex: 1 },
           { id: 'cta-link', type: 'button', x: 0, y: 0, w: 100, h: 100, content: '', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0)', href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', borderRadius: 16, zIndex: 2 },
-          { id: 'close-btn', type: 'close', x: 90, y: 2, w: 8, h: 6, content: '✕', color: '#ffffff', fontSize: 16, fontWeight: '700', align: 'center', borderRadius: 99, zIndex: 100 },
+          { id: 'close-btn', type: 'close', x: 90, y: 2, w: 8, h: 6, content: '✕', color: '#ffffff', fontSize: 16, fontWeight: '700', align: 'center', backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 99, zIndex: 100, extraProps: { adClose: false } },
         ],
       },
       success: {
