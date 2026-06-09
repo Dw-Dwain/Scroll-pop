@@ -992,7 +992,9 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   // Auto-reopen (re-engagement): re-show the popup on the SAME page N seconds after it's closed,
   // up to reopenMaxTimes. Driven by design.uiTriggers (rides the design save — no API dependency).
   // Aggressive UX — capped and off by default (reopenAfterSeconds=0).
-  const reopenAfter = safeCssInt((design as any).uiTriggers?.reopenAfterSeconds, 0, 300, 0);
+  const _reopenRaw = safeCssInt((design as any).uiTriggers?.reopenAfterSeconds, 0, 300, 0);
+  // Enforce a 15s minimum gap between displays (compliance/UX guardrail). 0 = off.
+  const reopenAfter = _reopenRaw > 0 ? Math.max(15, _reopenRaw) : 0;
   const reopenMax = safeCssInt((design as any).uiTriggers?.reopenMaxTimes, 0, 20, 1);
   let reopens = 0;
 
@@ -1017,6 +1019,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   };
 
   const reopen = () => {
+    adOpened = false; // reset the X two-step ad-trigger flow so each cycle keeps the same close logic
     if (popupCard) popupCard.style.display = 'block';
     if (overlay) overlay.style.display = 'block';
     if (teaser) teaser.style.display = 'none';

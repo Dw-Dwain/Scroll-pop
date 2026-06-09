@@ -1540,8 +1540,13 @@ export default function SidebarLeft({
                       className="w-16 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
                     />
                   </div>
+                  {(campaign.triggers.reopenAfterSeconds ?? 0) > 0 && (campaign.triggers.reopenAfterSeconds ?? 0) < 15 && (
+                    <p className="text-[10.5px] text-red-400 leading-snug">
+                      ⚠️ Below 15s is auto-raised to 15s at runtime — a shorter gap is too aggressive and risks ad-blocker / policy flags.
+                    </p>
+                  )}
                   <p className="text-[10.5px] text-zinc-600 leading-normal">
-                    Re-shows the popup on the same page this many seconds after it's closed. Aggressive — keep low (e.g. 12s, 1 reopen).
+                    Re-shows the popup on the same page after it's closed. A 15s minimum gap is enforced; keep reopens low (e.g. 1). The X/close keeps the same behavior each cycle.
                   </p>
                 </div>
 
