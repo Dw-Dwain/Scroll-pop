@@ -212,6 +212,8 @@ export const sites = pgTable(
     // store on its own domain rather than *.myshopify.com). Accepted by the event origin gate
     // so impression/conversion analytics aren't dropped on custom domains.
     customDomain: text('custom_domain'),
+    // Agency multi-client: the client workspace this site belongs to (NULL = agency-level).
+    clientId: uuid('client_id'),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -228,6 +230,18 @@ export const sites = pgTable(
     ),
   })
 );
+
+// ─── Agency Clients (multi-client sub-accounts under an agency tenant) ─────────
+export const clients = pgTable('clients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
 
 // ─── Shopify Installations ────────────────────────────────────────────────────
 

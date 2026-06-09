@@ -15,6 +15,7 @@ import { ensureAuditLogSchema } from './db/ensure-audit-log.js';
 import { ensureLeadsSchema } from './db/ensure-leads.js';
 import { ensureVariantsSchema } from './db/ensure-variants.js';
 import { ensureCouponsSchema } from './db/ensure-coupons.js';
+import { ensureClientsSchema } from './db/ensure-clients.js';
 import { ensureWebhooksSchema } from './db/ensure-webhooks.js';
 import { ensureIntegrationsSchema } from './db/ensure-integrations.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
@@ -947,7 +948,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '15'; // v15: frequency_rules recurrence cols (max_display_count, cooldown_seconds, show_again_if_converts)
+  const SCHEMA_VERSION = '16'; // v16: agency clients table + sites.client_id (multi-client layer)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
@@ -978,6 +979,8 @@ async function bootstrap() {
     await ensureWebhooksSchema(app.log);
     // Ensure integrations column on tenants + esp_config on campaigns (migration 0013, P1-8/P1-9).
     await ensureIntegrationsSchema(app.log);
+    // Ensure agency clients table + sites.client_id (multi-client layer).
+    await ensureClientsSchema(app.log);
 
     if (redis) {
       // 24h TTL — long enough to cover normal redeploys, short enough that a schema version
