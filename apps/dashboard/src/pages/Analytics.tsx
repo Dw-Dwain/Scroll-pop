@@ -485,6 +485,26 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                 No funnel data yet. Events will appear once your snippet is live.
               </div>
             )}
+            {/* Plain-English legend — what each stage/term actually counts */}
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'grid', gap: 5 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, marginBottom: 2 }}>What these mean</div>
+              {([
+                ['Trigger Fired', 'A trigger condition was met (scroll %, dwell, inactivity, exit-intent, click).'],
+                ['Popup Shown', 'The popup actually rendered on the page — one impression.'],
+                ['Popup Viewed', 'It stayed on screen long enough to be seen (~1 second+).'],
+                ['CTA Clicked', 'The visitor clicked the call-to-action / affiliate link inside the popup.'],
+                ['Form Submitted', 'They submitted the email/lead form (clicked submit).'],
+                ['Email Captured', 'A valid email was saved as a lead (deduped per campaign).'],
+                ['Checkout / Purchase', 'Shopify checkout started / completed — attributed revenue.'],
+                ['Intentional Close', 'Visitor clicked the ✕ to close.'],
+                ['Passive Dismiss', 'Visitor clicked the dark overlay / a dismiss link instead of the ✕.'],
+                ['Rage-Close', 'Share of viewers who closed it almost immediately — a sign it\'s mistimed or annoying.'],
+              ] as [string, string][]).map(([t, d]) => (
+                <div key={t} style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t}</span> — {d}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Exit stats + rage-close */}

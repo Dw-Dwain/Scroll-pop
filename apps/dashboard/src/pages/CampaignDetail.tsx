@@ -687,11 +687,11 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
         {[
-          { label: 'Impressions', value: stats.impressions.toLocaleString(), icon: Eye,               color: 'var(--data-1)' },
-          { label: 'Views',       value: stats.views.toLocaleString(),       icon: Megaphone,         color: 'var(--status-success)' },
-          { label: 'Clicks',      value: stats.clicks.toLocaleString(),      icon: MousePointerClick, color: 'var(--data-3)' },
-          { label: 'CTR',         value: `${stats.ctr}%`,                    icon: Percent,           color: 'var(--accent-300)' },
-        ].map(({ label, value, icon: Icon, color }) => (
+          { label: 'Impressions', value: stats.impressions.toLocaleString(), icon: Eye,               color: 'var(--data-1)',       desc: 'Times this popup was shown to a visitor.' },
+          { label: 'Views',       value: stats.views.toLocaleString(),       icon: Megaphone,         color: 'var(--status-success)', desc: 'Popups that stayed on screen long enough to be seen (~1s+).' },
+          { label: 'Clicks',      value: stats.clicks.toLocaleString(),      icon: MousePointerClick, color: 'var(--data-3)',       desc: 'Clicks on the CTA / affiliate link inside the popup.' },
+          { label: 'CTR',         value: `${stats.ctr}%`,                    icon: Percent,           color: 'var(--accent-300)',   desc: 'Click-through rate — clicks divided by impressions.' },
+        ].map(({ label, value, icon: Icon, color, desc }) => (
           <div key={label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <Icon size={13} style={{ color }} />
@@ -700,6 +700,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 500, color }}>
               {value}
             </div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.45 }}>{desc}</div>
           </div>
         ))}
       </div>
