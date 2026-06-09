@@ -64,6 +64,22 @@ export default Sentry.withSentry(
       return new Response('/* spin chunk not deployed */', { status: 404, headers: snippetHeaders });
     }
 
+    // GET /creatives — list available creative names (for the dashboard thumbnail picker).
+    if (request.method === 'GET' && url.pathname === '/creatives') {
+      let creatives: string[] = [];
+      if (env.SNIPPET_BUCKET) {
+        try {
+          const listed = await env.SNIPPET_BUCKET.list({ prefix: 'creatives/' });
+          creatives = listed.objects
+            .map((o) => o.key.replace(/^creatives\//, ''))
+            .filter((n) => n && /\.(png|jpe?g|webp|gif)$/i.test(n));
+        } catch { /* non-fatal */ }
+      }
+      return new Response(JSON.stringify({ creatives }), {
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS, 'Cache-Control': 'public, max-age=60' },
+      });
+    }
+
     // GET /creatives/<name> — non-editable "ScrollPop Creatives" images served from R2.
     // Used by the blank image template (full-bleed creative + transparent CTA + X).
     if (request.method === 'GET' && url.pathname.startsWith('/creatives/')) {
