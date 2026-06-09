@@ -122,6 +122,9 @@ export interface CampaignTriggers {
   maxDisplayCount?: number;       // max total displays to one visitor; 0 = unlimited
   cooldownMinutes?: number;       // minimum minutes between displays (stored as seconds in the API)
   showAgainIfConverts?: boolean;  // keep showing even after the visitor converts
+  // Same-page auto-reopen (re-engagement). Stored in config.uiTriggers (no API dependency).
+  reopenAfterSeconds?: number;    // seconds after close to auto-reopen on the same page; 0 = off
+  reopenMaxTimes?: number;        // max auto-reopens on one page load
 }
 
 export interface Campaign {

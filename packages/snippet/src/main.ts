@@ -989,6 +989,13 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   const teaser = shadow.getElementById('teaser-badge');
   const popupViewMain = shadow.getElementById('popup-view-main');
 
+  // Auto-reopen (re-engagement): re-show the popup on the SAME page N seconds after it's closed,
+  // up to reopenMaxTimes. Driven by design.uiTriggers (rides the design save — no API dependency).
+  // Aggressive UX — capped and off by default (reopenAfterSeconds=0).
+  const reopenAfter = safeCssInt((design as any).uiTriggers?.reopenAfterSeconds, 0, 300, 0);
+  const reopenMax = safeCssInt((design as any).uiTriggers?.reopenMaxTimes, 0, 20, 1);
+  let reopens = 0;
+
   // dismiss() — close the popup and minimise to the teaser badge.
   // Beacons the 'dismiss' event exactly once.
   let dismissed = false;
@@ -999,6 +1006,14 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     if (popupCard) popupCard.style.display = 'none';
     if (overlay)   overlay.style.display = 'none';
     if (teaser)    teaser.style.display = 'flex';
+    if (reopenAfter > 0 && reopens < reopenMax) {
+      reopens++;
+      setTimeout(() => {
+        dismissed = false; // allow it to be closed again
+        reopen();
+        beaconEvent(campaign, 'impression', undefined, { triggerType: 'auto_reopen' });
+      }, reopenAfter * 1000);
+    }
   };
 
   const reopen = () => {

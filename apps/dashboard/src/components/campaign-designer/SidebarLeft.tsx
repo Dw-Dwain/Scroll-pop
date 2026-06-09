@@ -1518,6 +1518,32 @@ export default function SidebarLeft({
                     e.g. Max 3, Min gap 60 → shows up to 3 times, at least 1h apart, then stops once they convert.
                   </p>
                 </div>
+
+                {/* Auto-reopen (same page) */}
+                <div className="pt-2 mt-1 border-t border-zinc-800 space-y-2">
+                  <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Auto-reopen (same page)</span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-zinc-300 flex-1">Reopen after <span className="text-zinc-600">(seconds, 0 = off)</span></label>
+                    <input
+                      type="number" min={0} max={300}
+                      value={campaign.triggers.reopenAfterSeconds ?? 0}
+                      onChange={(e) => onUpdateTriggers('reopenAfterSeconds', Math.max(0, Math.min(300, parseInt(e.target.value) || 0)))}
+                      className="w-16 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-zinc-300 flex-1">Max reopens</label>
+                    <input
+                      type="number" min={0} max={20}
+                      value={campaign.triggers.reopenMaxTimes ?? 1}
+                      onChange={(e) => onUpdateTriggers('reopenMaxTimes', Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
+                      className="w-16 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
+                    />
+                  </div>
+                  <p className="text-[10.5px] text-zinc-600 leading-normal">
+                    Re-shows the popup on the same page this many seconds after it's closed. Aggressive — keep low (e.g. 12s, 1 reopen).
+                  </p>
+                </div>
               </div>
 
               {/* 1. Exit intent */}
