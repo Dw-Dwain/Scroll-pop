@@ -526,8 +526,10 @@ function freqState(campaignId: string): FreqState {
 // Recurrence-aware frequency gate. The legacy `frequency` enum still drives the defaults; the
 // optional recurrence fields layer on top, so existing campaigns behave exactly as before.
 function checkFrequencyCap(campaignId: string, f: FrequencyRule): boolean {
-  // Legacy per-session gate (unchanged).
-  if (f.frequency === 'once_per_session' && sessionStorage.getItem(`_sp_session_${campaignId}`)) {
+  // When recurrence is configured (max displays or a cooldown), it takes precedence over the
+  // legacy per-session gate — otherwise "once per session" would block every re-display.
+  const recurring = (f.maxDisplayCount ?? 0) > 0 || (f.cooldownSeconds ?? 0) > 0;
+  if (!recurring && f.frequency === 'once_per_session' && sessionStorage.getItem(`_sp_session_${campaignId}`)) {
     return false;
   }
   const s = freqState(campaignId);
