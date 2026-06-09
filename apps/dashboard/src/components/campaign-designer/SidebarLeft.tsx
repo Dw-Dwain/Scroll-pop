@@ -1544,6 +1544,13 @@ export default function SidebarLeft({
                     Re-shows the popup on the same page this many seconds after it's closed. Aggressive — keep low (e.g. 12s, 1 reopen).
                   </p>
                 </div>
+
+                {/* Why recurrence/auto-reopen aren't preferred — informational */}
+                <div className="mt-1 p-2 rounded bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[10.5px] text-amber-300/90 leading-snug">
+                    ⚠️ <b>Heads-up:</b> Recurrence &amp; auto-reopen are <b>aggressive by design</b>. Re-showing or auto-reopening a popup a visitor just dismissed tends to raise bounce, annoy users, and can trip ad-blocker / Google "annoyance" filters — which may hide your popup or hurt the host site's standing. They're here for power use, but a single, well-targeted display almost always converts better. Use sparingly.
+                  </p>
+                </div>
               </div>
 
               {/* 1. Exit intent */}
