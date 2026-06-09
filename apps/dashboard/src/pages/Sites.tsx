@@ -594,9 +594,10 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 
       {atSiteLimit && <LimitBanner type="site" current={siteCount} max={limits.maxSites} onNavigate={onNavigate} />}
 
-      {/* Sites grid */}
+      {/* Master-detail: site list (left) + setup/detail (right) */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24, alignItems: 'flex-start' }}>
       {sitesData?.data && sitesData.data.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginBottom: 24 }}>
+        <div style={{ width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
           {(sitesData.data as SiteRecord[]).map((site) => (
             <div key={site.id} style={{
               background: 'var(--bg-surface)',
@@ -718,13 +719,13 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
         </div>
       ) : null}
 
-      {/* Platform-aware setup panel */}
-      {selectedSite && (
+      {/* Right: platform-aware setup / detail panel */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+      {selectedSite ? (
         <div style={{
           background: 'var(--bg-surface)',
           border: '1px solid var(--border-default)',
           borderRadius: 8,
-          marginBottom: 24,
           overflow: 'hidden',
         }}>
           {/* Panel header */}
@@ -909,7 +910,15 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
             )}
           </div>
         </div>
+      ) : (
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          {sitesData?.data && sitesData.data.length > 0
+            ? 'Select a site on the left to manage its setup, snippet, and connection.'
+            : 'No sites yet — connect one below to get started.'}
+        </div>
       )}
+      </div>
+      </div>
 
       {/* Connect a new site inline form */}
       <div style={{
