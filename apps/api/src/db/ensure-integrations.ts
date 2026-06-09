@@ -15,8 +15,11 @@ export async function ensureIntegrationsSchema(
       ALTER TABLE tenants   ADD COLUMN IF NOT EXISTS integrations  JSONB NOT NULL DEFAULT '{}';
       ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS esp_config    JSONB NOT NULL DEFAULT '{}';
       ALTER TABLE sites     ADD COLUMN IF NOT EXISTS custom_domain TEXT;
+      ALTER TABLE frequency_rules ADD COLUMN IF NOT EXISTS max_display_count      INTEGER;
+      ALTER TABLE frequency_rules ADD COLUMN IF NOT EXISTS cooldown_seconds       INTEGER;
+      ALTER TABLE frequency_rules ADD COLUMN IF NOT EXISTS show_again_if_converts BOOLEAN NOT NULL DEFAULT false;
     `);
-    log.info('[schema] integrations + esp_config + custom_domain columns ensured');
+    log.info('[schema] integrations + esp_config + custom_domain + recurrence columns ensured');
   } catch (err) {
     log.error(err, '[schema] failed to ensure integrations schema (continuing startup)');
   }

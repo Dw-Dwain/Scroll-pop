@@ -284,7 +284,12 @@ async function bootstrap() {
               operator: r.operator,
               value: r.value,
             })),
-            frequency: { frequency: freq?.frequency ?? 'once_per_session' },
+            frequency: {
+              frequency: freq?.frequency ?? 'once_per_session',
+              maxDisplayCount: freq?.maxDisplayCount ?? null,
+              cooldownSeconds: freq?.cooldownSeconds ?? null,
+              showAgainIfConverts: freq?.showAgainIfConverts ?? false,
+            },
             affiliateSlots: design.affiliateSlots,
           };
         }).filter(Boolean);
@@ -942,7 +947,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '14'; // v14: sites.custom_domain (ensureIntegrationsSchema)
+  const SCHEMA_VERSION = '15'; // v15: frequency_rules recurrence cols (max_display_count, cooldown_seconds, show_again_if_converts)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)

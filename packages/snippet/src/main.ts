@@ -48,6 +48,10 @@ interface TargetingRule {
 
 interface FrequencyRule {
   frequency: 'once_per_session' | 'once_per_day' | 'once_per_visitor' | 'always';
+  // Recurrence (optional). Absent → behaves exactly like the legacy `frequency` above.
+  maxDisplayCount?: number | null;  // max total displays; 0/null = unlimited
+  cooldownSeconds?: number;         // minimum seconds between displays
+  showAgainIfConverts?: boolean;    // if false (default), stop showing once the visitor converts
 }
 
 interface DesignConfig {
@@ -370,7 +374,7 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
       return;
     }
 
-    if (!checkFrequencyCap(campaign.id, campaign.frequency.frequency)) {
+    if (!checkFrequencyCap(campaign.id, campaign.frequency)) {
       console.warn('[ScrollPop] Frequency cap met, skipping display for campaign:', campaign.id);
       return;
     }
@@ -389,7 +393,7 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
     });
 
     renderPopup(campaign, timeOnPage);
-    setFrequencyCap(campaign.id, campaign.frequency.frequency);
+    setFrequencyCap(campaign.id, campaign.frequency);
   };
 
   for (const trigger of campaign.triggers) {
@@ -514,39 +518,46 @@ function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: st
 
 // ─── Frequency Capping ────────────────────────────────────────────────────────
 
-function checkFrequencyCap(campaignId: string, frequency: string): boolean {
-  if (frequency === 'once_per_session') {
-    return !sessionStorage.getItem(`_sp_session_${campaignId}`);
+type FreqState = { n?: number; ts?: number; c?: boolean };
+function freqState(campaignId: string): FreqState {
+  try { return JSON.parse(localStorage.getItem(`_sp_${campaignId}`) || '{}') as FreqState; } catch { return {}; }
+}
+
+// Recurrence-aware frequency gate. The legacy `frequency` enum still drives the defaults; the
+// optional recurrence fields layer on top, so existing campaigns behave exactly as before.
+function checkFrequencyCap(campaignId: string, f: FrequencyRule): boolean {
+  // Legacy per-session gate (unchanged).
+  if (f.frequency === 'once_per_session' && sessionStorage.getItem(`_sp_session_${campaignId}`)) {
+    return false;
   }
-
-  const key = `_sp_${campaignId}`;
-  const stored = localStorage.getItem(key);
-  if (!stored) return true;
-
-  const { ts } = JSON.parse(stored) as { ts: number };
+  const s = freqState(campaignId);
   const now = Date.now();
+  // Stop showing once the visitor converted, unless explicitly allowed to recur.
+  if (s.c && !f.showAgainIfConverts) return false;
+  // Minimum gap between displays (recurrence; also expresses legacy once_per_day = 24h).
+  const cooldownMs = (f.cooldownSeconds ?? (f.frequency === 'once_per_day' ? 86400 : 0)) * 1000;
+  if (cooldownMs && s.ts && now - s.ts < cooldownMs) return false;
+  // Max total displays (recurrence; also expresses legacy once_per_visitor = 1). 0/absent = unlimited.
+  const max = f.maxDisplayCount ?? (f.frequency === 'once_per_visitor' ? 1 : 0);
+  if (max && (s.n ?? 0) >= max) return false;
+  return true;
+}
 
-  switch (frequency) {
-    case 'once_per_visitor':
-      return false; // Already shown to this visitor
-
-    case 'once_per_day':
-      return now - ts > 86400000; // 24h
-
-    case 'always':
-      return true;
-
-    default:
-      return true;
+function setFrequencyCap(campaignId: string, f: FrequencyRule): void {
+  const s = freqState(campaignId);
+  try {
+    localStorage.setItem(`_sp_${campaignId}`, JSON.stringify({ n: (s.n ?? 0) + 1, ts: Date.now(), c: !!s.c }));
+  } catch { /* storage blocked — non-fatal */ }
+  if (f.frequency === 'once_per_session') {
+    try { sessionStorage.setItem(`_sp_session_${campaignId}`, '1'); } catch { /* non-fatal */ }
   }
 }
 
-function setFrequencyCap(campaignId: string, frequency: string): void {
-  const key = `_sp_${campaignId}`;
-  localStorage.setItem(key, JSON.stringify({ ts: Date.now() }));
-  if (frequency === 'once_per_session') {
-    sessionStorage.setItem(`_sp_session_${campaignId}`, '1');
-  }
+// Record that the visitor converted so showAgainIfConverts=false stops future displays.
+function markConverted(campaignId: string): void {
+  const s = freqState(campaignId);
+  s.c = true;
+  try { localStorage.setItem(`_sp_${campaignId}`, JSON.stringify(s)); } catch { /* non-fatal */ }
 }
 
 function getShadowCSS(shadow: string | undefined): string {
@@ -1008,6 +1019,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       beaconEvent(campaign, 'email_capture', slot?.id, { email, hasEmail: true, ...consentMeta });
     }
     beaconEvent(campaign, 'conversion', slot?.id, { email, ...consentMeta });
+    markConverted(campaign.id); // recurrence: stops re-showing unless showAgainIfConverts
 
     const successStep = getStep('success');
     if (successStep?.enabled === false) {

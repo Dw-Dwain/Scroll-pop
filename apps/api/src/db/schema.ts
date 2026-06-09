@@ -358,6 +358,10 @@ export const frequencyRules = pgTable('frequency_rules', {
     .references(() => tenants.id, { onDelete: 'cascade' }),
   frequency: frequencyEnum('frequency').notNull().default('once_per_session'),
   intervalDays: integer('interval_days'),
+  // Recurrence model (PromoLayer-style). Null/absent → legacy `frequency` behaviour.
+  maxDisplayCount: integer('max_display_count'),
+  cooldownSeconds: integer('cooldown_seconds'),
+  showAgainIfConverts: boolean('show_again_if_converts').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),
