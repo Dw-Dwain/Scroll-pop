@@ -64,6 +64,27 @@ export default Sentry.withSentry(
       return new Response('/* spin chunk not deployed */', { status: 404, headers: snippetHeaders });
     }
 
+    // GET /creatives/<name> — non-editable "ScrollPop Creatives" images served from R2.
+    // Used by the blank image template (full-bleed creative + transparent CTA + X).
+    if (request.method === 'GET' && url.pathname.startsWith('/creatives/')) {
+      // Sanitize the name to a flat allowlist (no path traversal, no subfolders).
+      const name = url.pathname.slice('/creatives/'.length).replace(/[^a-zA-Z0-9._-]/g, '');
+      if (name && env.SNIPPET_BUCKET) {
+        const obj = await env.SNIPPET_BUCKET.get(`creatives/${name}`);
+        if (obj) {
+          return new Response(obj.body, {
+            headers: {
+              'Content-Type': obj.httpMetadata?.contentType || 'image/png',
+              'X-Content-Type-Options': 'nosniff',
+              ...CORS_HEADERS,
+              'Cache-Control': 'public, max-age=86400',
+            },
+          });
+        }
+      }
+      return new Response('Creative not found', { status: 404, headers: CORS_HEADERS });
+    }
+
     // GET /c/:publicKey — config endpoint
     if (request.method === 'GET' && url.pathname.startsWith('/c/')) {
       return handleConfig(request, env, ctx, url);
