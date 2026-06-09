@@ -316,9 +316,13 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const since = daysAgo(days);
     const { campaignId } = request.query;
 
+    // Exclude soft-deleted campaigns from the aggregate funnel so they stop reflecting in
+    // analytics immediately (their raw events are also hard-purged 24h after deletion). A
+    // campaignId-scoped query (drill-down / 24h download path) is exempt.
+    const notDeleted = sql`${events.campaignId} NOT IN (SELECT id FROM campaigns WHERE tenant_id = ${request.tenantId}::uuid AND deleted_at IS NOT NULL)`;
     const baseWhere = campaignId
       ? and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.campaignId, campaignId))
-      : and(eq(events.tenantId, request.tenantId), gte(events.ts, since));
+      : and(eq(events.tenantId, request.tenantId), gte(events.ts, since), notDeleted);
 
     const [row] = await db
       .select({
