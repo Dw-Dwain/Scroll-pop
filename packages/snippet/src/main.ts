@@ -1239,20 +1239,24 @@ function beaconEvent(
   const url = `${EDGE_URL}/e`;
   const body = JSON.stringify(payload);
 
-  if (navigator.sendBeacon) {
-    // MUST use text/plain for sendBeacon to avoid CORS preflight issues that cause silent failure
-    navigator.sendBeacon(url, new Blob([body], { type: 'text/plain' }));
-  } else {
-    fetch(url, {
-      method: 'POST',
-      body,
-      keepalive: true,
-      // text/plain is a CORS-safelisted content type → no preflight (the API JSON-parses the
-      // body regardless of header). Matches the sendBeacon path; avoids the OPTIONS round-trip
-      // that fails for strict-privacy/Firefox-ETP visitors.
-      headers: { 'Content-Type': 'text/plain' },
-    }).catch(() => { /* silent fail */ });
-  }
+  // keepalive fetch fallback. text/plain is a CORS-safelisted content type → no preflight (the
+  // API JSON-parses the body regardless of header); credentials are omitted so Firefox ETP /
+  // strict-privacy doesn't treat it as third-party tracking storage and block it.
+  const sendFetch = () => fetch(url, {
+    method: 'POST',
+    body,
+    keepalive: true,
+    // credentials omitted (cross-origin default already sends no cookies) — keeps it
+    // out of "third-party tracking storage" heuristics that block Firefox-ETP visitors.
+    credentials: 'omit',
+    headers: { 'Content-Type': 'text/plain' },
+  }).catch(() => { /* silent fail */ });
+
+  // sendBeacon returns false when the UA refuses to queue the request — e.g. Firefox ETP /
+  // strict-privacy silently drops a third-party beacon. We MUST honour that return value and
+  // fall back to fetch, or the event is lost (the analytics undercount these visitors caused).
+  if (navigator.sendBeacon && navigator.sendBeacon(url, new Blob([body], { type: 'text/plain' }))) return;
+  sendFetch();
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
