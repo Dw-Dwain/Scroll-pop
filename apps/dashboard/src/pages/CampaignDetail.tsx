@@ -14,7 +14,7 @@ interface CampaignDetailProps {
   onNavigate: (path: string) => void;
 }
 
-type RuleItem = { id: string; type?: string; params?: Record<string, number>; kind?: string; operator?: string; value?: Record<string, unknown>; frequency?: string; intervalDays?: number };
+type RuleItem = { id: string; type?: string; params?: Record<string, number>; kind?: string; operator?: string; value?: Record<string, unknown>; frequency?: string; intervalDays?: number; maxDisplayCount?: number | null; cooldownSeconds?: number | null; showAgainIfConverts?: boolean };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -756,6 +756,13 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-300)' }}>
                 {frequency?.frequency ?? 'once_per_session'}
               </span>
+              {(frequency?.maxDisplayCount || frequency?.cooldownSeconds || frequency?.showAgainIfConverts) ? (
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.5 }}>
+                  ↻ {frequency?.maxDisplayCount ? `Max ${frequency.maxDisplayCount} displays` : 'Unlimited displays'}
+                  {frequency?.cooldownSeconds ? ` · ≥${Math.round((frequency.cooldownSeconds as number) / 60)} min gap` : ''}
+                  {` · ${frequency?.showAgainIfConverts ? 'shows after convert' : 'stops after convert'}`}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
