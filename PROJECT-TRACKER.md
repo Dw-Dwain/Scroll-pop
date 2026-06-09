@@ -23,6 +23,31 @@
 
 ---
 
+## ⏭️ Next Session Queue — Cleanup & Completion (queued June 9, 2026)
+
+> Owner-set queue for the next session. Sourced from the graphify app-map + pending-flow analysis (graph: 2483 nodes / 254 files, commit `5537e8f`). Tackle in this order.
+
+| # | Action | Item | Detail / where |
+|---|---|---|---|
+| NQ-1 | **clean** | Dead UI-kit pages | `apps/dashboard/src/pages/`: `SupportChat`, `ImageGallery`, `CalendarPage`, `MessagesPage`, `FormsPage`, `TablesPage` — unrouted (see `main.tsx` comment), hardcoded sample data, no backend. Delete the files + any stray imports. |
+| NQ-2 | **fix** | Experiments save but don't run | `routes/experiments.ts` persists `experimentsV1` into `design.config` (real CRUD), but the **snippet never consumes experiment allocation/guardrails** — A/B serving uses the separate variant-weight path. Either wire the snippet to allocate by experiment + enforce guardrails, or gate the UI honestly. Flag `ff_experiments_v1` (off). |
+| NQ-3 | **fix & complete** | Settings — partial wiring | `pages/Settings.tsx`: `webhookSecret: 'whsec_placeholder_32chars_min'` hardcoded; global webhook field only **test-pings** (`fetch`), never persists (per-campaign outbound webhooks are the real path); affiliate-network "auto-tagging product URLs **coming soon**" not built. Confirm affiliate-link + webhook config actually persist (tenant/integrations), finish or remove the half-wired bits. |
+| NQ-4 | **remove** | Stale comments | e.g. Dashboard.tsx:423 "Events over time — area chart **placeholder**" (it actually renders a real `<EventsAreaChart>` with live data). Sweep for other lies-in-comments. |
+| NQ-5 | **remove** | Dead duplicate source trees | Repo-root `src/`, `scrollpop-campaign-designer/`, `site-plan/` are git-tracked duplicates of the deployed `apps/dashboard` (original Figma-make exports). Confirm nothing in the build references them, then delete. They inflate the graph + carry stale "coming soon" copy. |
+| NQ-6 | **fix e2e** | Journeys runtime (→ FU-7) | `routes/journeys.ts` `/journeys/:id/diagnose` returns **fabricated** `topBlockedReasons` (hardcoded 40/35/25 % split). Wire it to real block telemetry, and connect the Journeys UI to the **FU-7 sequence runtime** (now shipped: `journey.js` + `design.uiTriggers.sequence*`). Flag `ff_journeys_ui` (off). |
+| NQ-7 | **fix (quick)** | ClientSwitcher light-mode contrast | The "+ New client" row uses `var(--accent-400)` (#?) which is too light on the light dropdown surface — unreadable in light mode (owner-reported). Use `var(--accent-600)`/`--accent-500` (or `--text-primary`). File: `components/ClientSwitcher.tsx`. |
+
+### AG-6 — Extend client-scoping beyond Sites (PARTIAL — deferred to next session)
+Client switcher currently re-scopes only **Sites**. AG-6 extends it to **Campaigns / Analytics / Leads** via the site→campaign chain.
+- **Done but UNCOMMITTED in the working tree** (do NOT lose — typecheck-clean):
+  - `apps/api/src/routes/campaigns.ts` — `GET /campaigns?clientId=` filters by `site.client_id` subquery.
+  - `apps/api/src/routes/leads.ts` — `?clientId` on list + export (leads carry `siteId`); `clientLeadFilter` helper.
+  - `apps/api/src/routes/analytics.ts` — `clientEventFilter` helper applied to overview / campaigns / daily / breakdown / revenue / funnel (events→campaign→site→client).
+  - `apps/dashboard/src/providers/dataProvider.ts` — `getList` auto-appends `clientId` (from `localStorage.sp_active_client`) for `campaigns` + `leads` resources.
+- **Remaining:** wire `clientId` into the **Analytics + Dashboard** pages' `useCustom` analytics calls (they bypass `getList`); typecheck + lint + verify with a real client; commit + push both remotes.
+
+---
+
 ## 🏢 June 9, 2026 (cont.) — Agency SaaS Layer + Analytics/Designer Polish
 
 > New feature work beyond the original 54-item audit. Built the agency multi-tenant layer (client workspaces + coupled-login team invites), fixed the `/e` analytics undercount at its true root cause, and shipped the Creatives picker + Simulate-preview polish. All commits on **origin** + **dwain-coder**.
