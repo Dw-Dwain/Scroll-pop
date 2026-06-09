@@ -729,12 +729,16 @@ export default function Canvas({
                             onDoubleClick={(e) => {
                               if (!isLocked) { e.stopPropagation(); setIsEditingText(el.id); }
                             }}
-                            className="w-full h-full select-text break-words leading-tight flex items-center justify-center text-center font-bold tracking-tight"
+                            className="w-full h-full select-text break-words leading-tight flex items-center font-bold tracking-tight"
                             style={{
                               color: el.color || '#111827',
                               fontSize: `${el.fontSize || 24}px`,
                               fontFamily: el.fontFamily || 'sans-serif',
+                              // Honor the saved alignment (matches the live snippet). Previously the
+                              // hardcoded `justify-center text-center` classes always centered the
+                              // heading, so the editor showed centered even when align was 'left'.
                               textAlign: el.align || 'center',
+                              justifyContent: el.align === 'right' ? 'flex-end' : el.align === 'left' ? 'flex-start' : 'center',
                             }}
                           >
                             {el.content}
