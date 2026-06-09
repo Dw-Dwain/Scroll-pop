@@ -1,12 +1,51 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 8, 2026 · v0.1.5-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
+> Last updated: June 9, 2026 · v0.1.6-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
 > Status detail lives in **`PROJECT-TRACKER.md`** (single source of truth) — this file links there rather than duplicating it.
 > 4 ops-only tasks remain (Stripe keys, 2× DNS/CDN, marketing deploy) + P1-14 deferred by owner decision.
 > **P3-2 complete**: dashboard at 0 ESLint warnings + 0 TypeScript errors (full strict). Dormant keys (Sentry/PostHog/Resend) activated.
 > **June 7 security code review (CR-01→08) complete** — 8 findings fixed, no backdoors found.
-> **June 8:** deploy pipeline fixed (pushes now auto-deploy), end-to-end lead capture verified live, DNT→GPC, marketing-consent checkbox, modal-backdrop fix, manual snippet verify, **multi-country geo (US+JP)**, keyboard element nudging. Owner confirmed JP+USA not EU → EU consent work deprioritized. Open: snippet size pass, marketing CI deploy, legal review (CCPA+APPI).
+> **June 8:** deploy pipeline fixed (pushes now auto-deploy), end-to-end lead capture verified live, DNT→GPC, marketing-consent checkbox, modal-backdrop fix, manual snippet verify, **multi-country geo (US+JP)**, keyboard element nudging.
+> **June 9:** live Shopify/WordPress debugging — fixed **host `display:none`** (theme hid the popup), **leads on `email_capture`** (origin gate dropped conversions on custom domains), **`/spin.js` 404** (not on R2), **custom-domain analytics** (`sites.custom_domain`), **heading WYSIWYG** (editor lied about alignment), center-modal positioning, custom Success screen, `/e` CORS. Plus **recurrence frequency model** (max displays + cooldown + show-after-convert) and snippet **refactor** (removed dead flat-render path −370B; **per-chunk CI budgets**). Open: continue lazy-chunk extraction (Journey/Targeting), popup sequences, legal review (CCPA+APPI).
+
+---
+
+## 📅 June 9, 2026 — Session Summary
+
+**Live debugging on Shopify (sakananet.com) + WordPress (gourmet-meat.com): popup not showing, leads not saving, spin not rendering. Root-caused all, then shipped a recurrence model + began the snippet refactor.**
+
+### Root causes found
+- **Popup invisible on Shopify (every device):** the theme applies a global reset that forces `display:none` on `<body>`-appended elements, so the snippet's popup host (and its entire closed Shadow DOM) was hidden. It *rendered* (impression/view fired) but never painted. WordPress had no such rule → looked "Shopify-only."
+- **Leads not saving (both platforms):** the lead row was inserted **only on `conversion`**, and `conversion` is dropped by the anti-forgery **origin gate** when the page domain isn't a known site domain (Shopify served on custom `sakananet.com` vs registered `*.myshopify.com`). `email_capture` (not gated) carried the same email but never triggered a lead.
+- **Spin wheel never appeared:** the snippet lazy-loads `${EDGE}/spin.js`, but the Worker only served `/p.js` and CI only uploaded `p.js` to R2 → `/spin.js` was a guaranteed 404.
+- **Heading "left vs center" mismatch:** the designer's heading `<h2>` had hardcoded `justify-center text-center`, so it *always displayed centered* regardless of the saved `align`. Operators saw centered; the stored value was the template default `left`; the snippet faithfully rendered `left`. Editor was lying, not the snippet.
+- **"Campaign not serving" / IMPRESSIONS 0:** campaign was `paused` (config only serves `active`); impressions/conversions also dropped by the origin gate on the custom domain.
+- **gourmet 404:** stale/wrong embed `public_key` after the site was recreated.
+
+### Shipped (commits)
+- **Host `display:block!important`** (`3b65c8a`) — pins the popup host visible so a host theme's `display:none` reset can't suppress it. *The fix that made the live popup appear.*
+- **Leads on `email_capture`** (`b71b671`) — lead saves on conversion **or** email_capture (origin-gate-immune) → works on every domain.
+- **Serve `/spin.js`** (`b71b671`) — Worker serves the chunk from R2; CI uploads it. **CI now uploads every `dist/*.js`** (`2844032`) so no future chunk can 404.
+- **Custom storefront domain (Option A)** (`2844032`) — `sites.custom_domain` + origin gate accepts it (registrable match) → restores impression/conversion analytics on Shopify custom domains. SCHEMA_VERSION 13→14→**15** (`63dc5de`, `7c7cdc6`); column also added manually in Neon (skip-flag had blocked the first redeploy).
+- **Heading WYSIWYG** (`a3bd6ba` editor + `4ba57c6` snippet) — editor honors `el.align`; live snippet honors `align` via flex `justify-content`. What you set = what saves = what renders.
+- **Custom Success screen** (`4ba57c6`) — element-mode campaigns render the designed Success step instead of the built-in coupon card.
+- **Center-modal positioning** (`14b9f77`) — center via the `translate` CSS property so entrance animations (bounce/zoom) don't knock the modal off-screen.
+- **`/e` CORS** (`966288b`) — fetch fallback uses `text/plain` (no preflight) for strict-privacy/Firefox visitors.
+- **Recurrence frequency model** (`7c7cdc6` snippet+schema+API · `a00dbc0` persistence · `685489d` dashboard) — `maxDisplayCount` + `cooldownSeconds` + `showAgainIfConverts` (PromoLayer-style), layered on the legacy `frequency` enum (backward-compatible). Full stack: snippet enforces · `frequency_rules` columns · `/c` serves · `/campaigns/:id/frequency` persists · designer control under Display Frequency.
+- **Refactor — removed dead flat-render path** (`2ace8a9`) — every campaign is element-mode (verified 10/6/10/8 elements; spin delegated). −370B gzip (core 10229→9857, then 9987 after recurrence).
+- **Per-chunk CI budgets** (`4b9a6e6`) — core ≤10KB (8KB target), spin ≤3KB, journey ≤3KB, targeting ≤2KB, unknown ≤3KB default. Enforces the module-budget model.
+
+### Deploy notes
+- API changes (leads, custom-domain gate, recurrence) require a **Render redeploy**; SCHEMA_VERSION 15 auto-adds columns on boot. Worker/snippet deploy via CI → R2.
+- Manual one-time: `ALTER TABLE sites ADD COLUMN IF NOT EXISTS custom_domain TEXT;` + `UPDATE sites SET custom_domain='sakananet.com' WHERE public_key='68f53e…'`.
+- Verified live: leads now save. Pending owner verify: spin renders post-deploy; re-center the 2 left-stored headings in the now-truthful editor; impression/conversion counts on the custom domain.
+
+### Open follow-ups
+- **Refactor continues:** extract Journey / Advanced-Targeting / Element-Extras lazy chunks (budgets in place). FU-2 size pass effectively underway (383B headroom freed).
+- **Popup sequences / chaining** (discussed) — advance-on-dismiss, max-2 + delay guard; belongs in the Journey runtime. UX/policy caution noted (popup-trap adjacency).
+- **FU-3** marketing CI deploy · **FU-4** legal review (CCPA+APPI).
+- `designs.config` is stored as a **double-encoded JSON scalar** (string) — noted; not a live bug (serving path parses it) but the flat-mode/JSON queries must unwrap via `(config #>> '{}')::jsonb`.
 
 ---
 
