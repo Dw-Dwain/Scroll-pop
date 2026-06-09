@@ -32,6 +32,7 @@ import { TargetingRuleBuilder } from './TargetingRuleBuilder';
 
 interface SidebarLeftProps {
   campaign: Campaign;
+  siblingCampaigns?: { id: string; name: string }[];
   activeStep: 'teaser' | 'main' | 'success';
   onUpdateStepConfig: (keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
   onUpdateTriggers: (key: string, value: unknown) => void;
@@ -233,6 +234,7 @@ const getDefaultTriggers = (): CampaignTriggers => ({
 
 export default function SidebarLeft({
   campaign,
+  siblingCampaigns = [],
   activeStep,
   onUpdateStepConfig,
   onUpdateTriggers,
@@ -1547,6 +1549,52 @@ export default function SidebarLeft({
                   )}
                   <p className="text-[10.5px] text-zinc-600 leading-normal">
                     Re-shows the popup on the same page after it's closed. A 15s minimum gap is enforced; keep reopens low (e.g. 1). The X/close keeps the same behavior each cycle.
+                  </p>
+                </div>
+
+                {/* Sequence chaining (FU-7) — advance to another campaign's popup */}
+                <div className="pt-2 mt-1 border-t border-zinc-800 space-y-2">
+                  <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Next popup (sequence)</span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-zinc-300 flex-1">Then show</label>
+                    <select
+                      value={campaign.triggers.sequenceNextCampaignId ?? ''}
+                      onChange={(e) => onUpdateTriggers('sequenceNextCampaignId', e.target.value)}
+                      className="w-40 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
+                    >
+                      <option value="">— None (off) —</option>
+                      {siblingCampaigns.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {!!campaign.triggers.sequenceNextCampaignId && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] text-zinc-300 flex-1">Advance on</label>
+                        <select
+                          value={campaign.triggers.sequenceAdvanceOn ?? 'dismiss'}
+                          onChange={(e) => onUpdateTriggers('sequenceAdvanceOn', e.target.value)}
+                          className="w-40 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
+                        >
+                          <option value="dismiss">Dismiss / close</option>
+                          <option value="convert">Conversion</option>
+                          <option value="both">Either</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] text-zinc-300 flex-1">Delay <span className="text-zinc-600">(seconds, min 5)</span></label>
+                        <input
+                          type="number" min={5} max={300}
+                          value={campaign.triggers.sequenceDelaySeconds ?? 5}
+                          onChange={(e) => onUpdateTriggers('sequenceDelaySeconds', Math.max(0, Math.min(300, parseInt(e.target.value) || 0)))}
+                          className="w-16 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1 focus:outline-hidden focus:border-indigo-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  <p className="text-[10.5px] text-zinc-600 leading-normal">
+                    Chains to a second popup after this one. Hard limits protect the visitor: at most <b>2</b> chained popups per page, never the same one twice, and a <b>5s+</b> gap. Use a different campaign as the follow-up (e.g. offer → email capture).
                   </p>
                 </div>
 

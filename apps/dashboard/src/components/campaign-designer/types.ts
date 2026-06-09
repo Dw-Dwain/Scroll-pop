@@ -125,6 +125,12 @@ export interface CampaignTriggers {
   // Same-page auto-reopen (re-engagement). Stored in config.uiTriggers (no API dependency).
   reopenAfterSeconds?: number;    // seconds after close to auto-reopen on the same page; 0 = off
   reopenMaxTimes?: number;        // max auto-reopens on one page load
+  // Sequence chaining (FU-7) — advance to another campaign's popup after this one is
+  // dismissed/converts. Stored in config.uiTriggers; the snippet loads journey.js to run it
+  // (hard guards: max 2 chained popups/page, no repeats, ≥5s gap). Empty = off.
+  sequenceNextCampaignId?: string;                       // the campaign to show next
+  sequenceAdvanceOn?: 'dismiss' | 'convert' | 'both';    // which event triggers the advance
+  sequenceDelaySeconds?: number;                         // delay before the next popup (min 5s at runtime)
 }
 
 export interface Campaign {

@@ -151,6 +151,10 @@ let adTriggerEnabled = false; // growth+ plans only
 let sitePlan = 'free'; // tenant plan — gates the "Powered by ScrollPop" badge
 let visitorCountry = ''; // ISO country from the edge (config.geo.country) for geo targeting
 
+// All served campaigns, keyed by id — lets the lazy journey.js sequence runtime present a
+// chained "next" popup by id (advance-on-dismiss/convert). Populated during boot.
+const campaignById = new Map<string, CampaignConfig>();
+
 // Track when the snippet loaded so we can report time-on-page at trigger
 const _pageLoadTime = Date.now();
 let _skipTracking = false;
@@ -263,6 +267,7 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     if (needsTargeting) await loadChunk('targeting.js');
 
     for (const campaign of config.campaigns) {
+      campaignById.set(campaign.id, campaign); // registry for sequence chaining
       if (!withinSchedule(campaign.design)) {
         console.log('[ScrollPop] Campaign outside its scheduled window:', campaign.id);
         continue;
@@ -751,6 +756,42 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
   return out.join('');
 }
 
+// ─── Sequence chaining (FU-7) ─────────────────────────────────────────────────
+// Present a campaign programmatically (used by the lazy journey.js runtime to chain to a
+// "next" popup). Respects the next campaign's frequency cap; beacons a 'sequence' impression.
+function presentCampaign(campaign: CampaignConfig): boolean {
+  if (!checkFrequencyCap(campaign.id, campaign.frequency)) return false;
+  resolveVariant(campaign);
+  beaconEvent(campaign, 'impression', undefined, { triggerType: 'sequence' });
+  renderPopup(campaign);
+  setFrequencyCap(campaign.id, campaign.frequency);
+  return true;
+}
+
+// Seam exposed to the lazy journey.js chunk: show a chained popup by id. journey.js owns the
+// anti-trap guards (max chain length, no repeats, min delay) — see src/journey.ts.
+(window as unknown as { __sp_core?: { show: (id: string) => boolean } }).__sp_core = {
+  show: (id: string) => {
+    const c = campaignById.get(id);
+    return c ? presentCampaign(c) : false;
+  },
+};
+
+// If this campaign declares a follow-up sequence, hand it to the journey runtime (lazy-loaded).
+// `on` is the event that just happened ('dismiss' | 'convert'); the configured advanceOn must
+// match (or be 'both'). Never chains to itself.
+function maybeAdvanceSequence(campaign: CampaignConfig, design: DesignConfig, on: 'dismiss' | 'convert'): void {
+  // Cheap guard so we only fetch journey.js when a sequence is actually configured (the flat
+  // uiTriggers fields ride the design save like auto-reopen). The chunk owns the advanceOn match,
+  // delay, and anti-trap guards — keeps those bytes out of the core bundle.
+  const ui = (design as { uiTriggers?: Record<string, unknown> }).uiTriggers;
+  if (!ui || !ui['sequenceNextCampaignId']) return;
+  void loadChunk('journey.js').then(() => {
+    (window as unknown as { __sp_journey?: { advance: (selfId: string, ui: Record<string, unknown>, on: string) => void } })
+      .__sp_journey?.advance(campaign.id, ui, on);
+  });
+}
+
 // ─── Popup Rendering (Shadow DOM) ─────────────────────────────────────────────
 
 // A/B: weighted, sticky-per-visitor variant allocation. Records the chosen variant id for
@@ -1015,6 +1056,10 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
         reopen();
         beaconEvent(campaign, 'impression', undefined, { triggerType: 'auto_reopen' });
       }, reopenAfter * 1000);
+    } else {
+      // Sequence chaining only when auto-reopen isn't re-engaging this same popup (never stack
+      // both — that's the popup-trap pattern). Advance to the configured next campaign.
+      maybeAdvanceSequence(campaign, design, 'dismiss');
     }
   };
 
@@ -1040,6 +1085,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     }
     beaconEvent(campaign, 'conversion', slot?.id, { email, ...consentMeta });
     markConverted(campaign.id); // recurrence: stops re-showing unless showAgainIfConverts
+    maybeAdvanceSequence(campaign, design, 'convert'); // chain to next popup if advanceOn=convert/both
 
     const successStep = getStep('success');
     if (successStep?.enabled === false) {

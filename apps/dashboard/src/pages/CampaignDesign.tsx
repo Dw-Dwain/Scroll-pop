@@ -1,5 +1,5 @@
 import React from 'react';
-import { useOne, useApiUrl, useCustom, useCustomMutation } from '@refinedev/core';
+import { useOne, useApiUrl, useCustom, useCustomMutation, useList } from '@refinedev/core';
 
 // Upgraded Canvas Designer Components
 import TopBar from '../components/campaign-designer/TopBar';
@@ -434,6 +434,14 @@ function mapCampaignToDesign(campaign: Campaign) {
 
 export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNavigate }) => {
   const { data: campaignData, isLoading: isCampaignLoading, isError: _isCampaignError } = useOne({ resource: 'campaigns', id: campaignId });
+  // Sibling campaigns for the FU-7 sequence picker (exclude this one; skip archived).
+  const { data: campaignsListData } = useList({ resource: 'campaigns', pagination: { pageSize: 100 } });
+  const siblingCampaigns = React.useMemo(
+    () => ((campaignsListData?.data ?? []) as Array<{ id: string; name: string; status?: string }>)
+      .filter((c) => c.id !== campaignId && c.status !== 'archived')
+      .map((c) => ({ id: c.id, name: c.name })),
+    [campaignsListData, campaignId],
+  );
   const apiUrl = useApiUrl();
   // A/B variant editing: when ?variant=<id> is present this builder edits that variant's design
   // (loaded from / saved to /variants/:id) instead of the campaign's base design. Triggers/
@@ -891,6 +899,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
         {/* Left Toolbox Drawer */}
         <SidebarLeft
           campaign={campaign}
+          siblingCampaigns={siblingCampaigns}
           activeStep={activeStep}
           onUpdateStepConfig={handleUpdateStepConfig}
           onUpdateTriggers={handleUpdateTriggers}

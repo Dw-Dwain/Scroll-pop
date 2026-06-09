@@ -86,10 +86,19 @@ const targetingCtx = await esbuild.context({
   outfile: 'dist/targeting.js',
 });
 
+// Journey/sequence lazy chunk — built separately; the core fetches it only when a campaign
+// declares a `sequence` (advance-on-dismiss/convert) block. Budget: ≤3 KB gzip.
+const journeyCtx = await esbuild.context({
+  ...sharedOpts,
+  entryPoints: ['src/journey.ts'],
+  outfile: 'dist/journey.js',
+});
+
 if (watch) {
   await ctx.watch();
   await spinCtx.watch();
   await targetingCtx.watch();
+  await journeyCtx.watch();
   console.log('Watching for changes...');
 } else {
   await ctx.rebuild();
@@ -98,5 +107,7 @@ if (watch) {
   await spinCtx.dispose();
   await targetingCtx.rebuild();
   await targetingCtx.dispose();
-  console.log('Snippet built → dist/p.js + dist/spin.js + dist/targeting.js');
+  await journeyCtx.rebuild();
+  await journeyCtx.dispose();
+  console.log('Snippet built → dist/p.js + dist/spin.js + dist/targeting.js + dist/journey.js');
 }
