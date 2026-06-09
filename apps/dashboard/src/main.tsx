@@ -105,6 +105,7 @@ import { Analytics } from './pages/Analytics';
 import { Profile } from './pages/Profile';
 import { Billing } from './pages/Billing';
 import { Settings } from './pages/Settings';
+import { Team } from './pages/Team';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { AdminPanel } from './pages/AdminPanel';
@@ -206,6 +207,7 @@ const ClerkAppContent: React.FC = () => {
             {currentPath === '/analytics' ? <Analytics onNavigate={navigate} /> : null}
             {currentPath === '/billing' ? <Billing onNavigate={navigate} /> : null}
             {currentPath === '/settings' ? <Settings /> : null}
+            {currentPath === '/team' ? <Team onNavigate={navigate} /> : null}
             {currentPath === '/profile' ? <Profile onNavigate={navigate} /> : null}
             {currentPath === '/admin' ? <AdminPanel onNavigate={navigate} /> : null}
 

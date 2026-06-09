@@ -19,6 +19,7 @@ import {
   Plus,
   Sun,
   Moon,
+  Users,
 } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import { usePlan } from '../hooks/usePlan';
@@ -26,6 +27,7 @@ import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
 import { NotificationBell } from './NotificationBell';
 import { ClientSwitcher } from './ClientSwitcher';
+import { PendingInvites } from './PendingInvites';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -64,7 +66,8 @@ export const Layout: React.FC<LayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
   const [userProfile, setUserProfile] = React.useState(loadProfileFromStorage);
-  const { plan, isAdmin } = usePlan();
+  const { plan, isAdmin, isUnlimited } = usePlan();
+  const isAgency = plan === 'agency' || isUnlimited;
 
   // ── Global theme ────────────────────────────────────────────
   const [isDarkTheme, setIsDarkTheme] = React.useState(() => {
@@ -118,6 +121,7 @@ export const Layout: React.FC<LayoutProps> = ({
     { label: 'Campaigns',   path: '/campaigns', icon: Megaphone },
     { label: 'Leads',       path: '/leads',     icon: Mail },
     { label: 'Analytics',   path: '/analytics', icon: BarChart2 },
+    ...(isAgency           ? [{ label: 'Team',        path: '/team',        icon: Users }] : []),
     ...(journeysEnabled    ? [{ label: 'Journeys',    path: '/journeys',    icon: Radar,        beta: true }] : []),
     ...(experimentsEnabled ? [{ label: 'Experiments', path: '/experiments', icon: FlaskConical, beta: true }] : []),
     ...(opsEnabled         ? [{ label: 'Ops',         path: '/ops',         icon: Radio }] : []),
@@ -416,6 +420,7 @@ export const Layout: React.FC<LayoutProps> = ({
             overflow: isSplitPage ? 'hidden' : 'visible',
           }}
         >
+          {!isFullScreenEditor && !isSplitPage && <PendingInvites />}
           {children}
         </div>
       </main>
