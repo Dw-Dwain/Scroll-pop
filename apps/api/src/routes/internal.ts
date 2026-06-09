@@ -158,7 +158,12 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
               design: design.config,
               triggers: (triggersByCampaign.get(campaign.id) ?? []).map((t) => ({ id: t.id, type: t.type, params: t.params })),
               targeting: (targetingByCampaign.get(campaign.id) ?? []).map((r) => ({ id: r.id, kind: r.kind, operator: r.operator, value: r.value })),
-              frequency: { frequency: freqByCampaign.get(campaign.id)?.frequency ?? 'once_per_session' },
+              frequency: {
+                frequency: freqByCampaign.get(campaign.id)?.frequency ?? 'once_per_session',
+                maxDisplayCount: freqByCampaign.get(campaign.id)?.maxDisplayCount ?? null,
+                cooldownSeconds: freqByCampaign.get(campaign.id)?.cooldownSeconds ?? null,
+                showAgainIfConverts: freqByCampaign.get(campaign.id)?.showAgainIfConverts ?? false,
+              },
               affiliateSlots: design.affiliateSlots,
               ...(vs.length > 0 ? { variants: vs } : {}),
             };
