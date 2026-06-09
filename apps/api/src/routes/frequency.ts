@@ -7,6 +7,11 @@ import { campaigns, frequencyRules } from '../db/schema.js';
 const UpsertFrequencyBody = z.object({
   frequency: z.enum(['once_per_session', 'once_per_day', 'once_per_visitor', 'always']),
   intervalDays: z.number().int().min(1).optional(),
+  // Recurrence model. maxDisplayCount: 0/null = unlimited; cooldownSeconds: min gap between
+  // displays (0/null = none); showAgainIfConverts: keep showing after a conversion.
+  maxDisplayCount: z.number().int().min(0).max(1000).nullable().optional(),
+  cooldownSeconds: z.number().int().min(0).max(31536000).nullable().optional(),
+  showAgainIfConverts: z.boolean().optional(),
 });
 
 export const frequencyRoutes: FastifyPluginAsync = async (fastify) => {
@@ -49,6 +54,9 @@ export const frequencyRoutes: FastifyPluginAsync = async (fastify) => {
           tenantId: request.tenantId,
           frequency: body.frequency,
           intervalDays: body.intervalDays ?? null,
+          maxDisplayCount: body.maxDisplayCount ?? null,
+          cooldownSeconds: body.cooldownSeconds ?? null,
+          showAgainIfConverts: body.showAgainIfConverts ?? false,
         })
         .returning();
 
@@ -57,7 +65,13 @@ export const frequencyRoutes: FastifyPluginAsync = async (fastify) => {
 
     const [updated] = await db
       .update(frequencyRules)
-      .set({ frequency: body.frequency, intervalDays: body.intervalDays ?? null })
+      .set({
+        frequency: body.frequency,
+        intervalDays: body.intervalDays ?? null,
+        maxDisplayCount: body.maxDisplayCount ?? null,
+        cooldownSeconds: body.cooldownSeconds ?? null,
+        showAgainIfConverts: body.showAgainIfConverts ?? false,
+      })
       .where(and(eq(frequencyRules.id, existing.id), eq(frequencyRules.tenantId, request.tenantId)))
       .returning();
 
