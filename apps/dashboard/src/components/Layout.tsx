@@ -25,6 +25,7 @@ import { usePlan } from '../hooks/usePlan';
 import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
 import { NotificationBell } from './NotificationBell';
+import { ClientSwitcher } from './ClientSwitcher';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -178,6 +179,9 @@ export const Layout: React.FC<LayoutProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Agency client-workspace switcher (hidden for non-agency tenants) */}
+        <div className="hidden md:block"><ClientSwitcher /></div>
 
         {/* Primary nav — desktop */}
         <nav

@@ -7,6 +7,7 @@ import {
 import { useList, useCreate, useDelete, useUpdate, useCustomMutation } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
+import { useClients, useActiveClient } from '../hooks/useClients';
 import { LimitBanner } from '../components/PlanGate';
 
 // ─── Site type ───────────────────────────────────────────────────────────────
@@ -14,7 +15,7 @@ type SiteRecord = {
   id: string; name: string; domain: string; platform: string;
   publicKey?: string; isActive?: boolean; verifiedAt?: string | null;
   shopifyShop?: string; wpSiteUrl?: string; lastSeenAt?: string;
-  totalViews?: number; campaignCount?: number;
+  totalViews?: number; campaignCount?: number; clientId?: string | null;
 };
 
 // ─── Platform icons ───────────────────────────────────────────────────────────
@@ -386,8 +387,15 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const { mutate: updateSite } = useUpdate();
   const { mutateAsync: customMutate } = useCustomMutation<{ disconnected: boolean }>();
   const { withinLimit: _withinLimit, limits, isAdmin } = usePlan();
+  const { clients, isAgency } = useClients();
+  const { activeClientId } = useActiveClient();
 
-  const siteCount = sitesData?.data?.length ?? 0;
+  const allSites = (sitesData?.data as SiteRecord[] | undefined) ?? [];
+  // Agency client filter: when a client workspace is active, only show its sites.
+  const visibleSites = activeClientId ? allSites.filter((s) => s.clientId === activeClientId) : allSites;
+  const clientName = (id?: string | null) => clients.find((c) => c.id === id)?.name;
+
+  const siteCount = allSites.length; // plan limit is tenant-wide, not per-client
   const atSiteLimit = !isAdmin && siteCount >= limits.maxSites;
 
   const [isAddOpen, setIsAddOpen] = React.useState(false);
@@ -400,7 +408,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const [embedMode, setEmbedMode] = React.useState<'cdn' | 'dev'>('cdn');
   const [devUrl, setDevUrl] = React.useState(''); // operator pastes their own tunnel URL
   const [isEditOpen, setIsEditOpen] = React.useState(false);
-  const [editSite, setEditSite] = React.useState({ id: '', name: '', platform: 'html' });
+  const [editSite, setEditSite] = React.useState({ id: '', name: '', platform: 'html', clientId: '' });
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
 
   // Detect Shopify OAuth success redirect
@@ -446,6 +454,11 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
         refetch();
         const site = data?.data ?? null;
         if (site) {
+          // Inherit the active client workspace so the new site stays in the current view.
+          if (activeClientId) {
+            updateSite({ resource: 'sites', id: site.id, values: { clientId: activeClientId }, successNotification: false }, { onSuccess: () => refetch() });
+            site.clientId = activeClientId;
+          }
           setSelectedSite(site);
           if (site.platform === 'shopify') setActiveTab('shopify');
           else if (site.platform === 'wordpress') setActiveTab('wordpress');
@@ -529,7 +542,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 </script>`;
   };
 
-  const liveSites = sitesData?.data?.filter((s) => (s as SiteRecord).verifiedAt)?.length ?? 0;
+  const liveSites = visibleSites.filter((s) => s.verifiedAt).length;
 
   // Available tabs for a given site
   const tabsFor = (site: SiteRecord) => {
@@ -586,9 +599,9 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 
       {/* Master-detail: site list (left) + setup/detail (right) */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, alignItems: 'flex-start' }}>
-      {sitesData?.data && sitesData.data.length > 0 ? (
+      {visibleSites.length > 0 ? (
         <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
-          {(sitesData.data as SiteRecord[]).map((site) => (
+          {visibleSites.map((site) => (
             <div key={site.id}
               onClick={() => setSelectedSite(site)}
               style={{
@@ -613,7 +626,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       className="btn btn-icon"
-                      onClick={() => { setEditSite({ id: site.id, name: site.name, platform: site.platform }); setIsEditOpen(true); }}
+                      onClick={() => { setEditSite({ id: site.id, name: site.name, platform: site.platform, clientId: site.clientId ?? '' }); setIsEditOpen(true); }}
                       title="Edit"
                     >
                       <Edit size={14} />
@@ -639,6 +652,12 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 {site.campaignCount ?? 0} campaign{(site.campaignCount ?? 0) === 1 ? '' : 's'} · {(site.totalViews ?? 0) >= 1000 ? `${((site.totalViews ?? 0) / 1000).toFixed(1)}k` : (site.totalViews ?? 0)} views
               </div>
+              {/* Client workspace chip — only when viewing "All clients" on the agency plan */}
+              {isAgency && !activeClientId && site.clientId && clientName(site.clientId) && (
+                <span style={{ alignSelf: 'flex-start', fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'rgba(var(--accent-rgb),0.1)', color: 'var(--accent-400)', border: '1px solid rgba(var(--accent-rgb),0.25)' }}>
+                  {clientName(site.clientId)}
+                </span>
+              )}
               {!site.verifiedAt && site.platform !== 'shopify' && site.platform !== 'wordpress' && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleVerify(site.id); }}
@@ -847,9 +866,11 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
         </div>
       ) : (
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          {sitesData?.data && sitesData.data.length > 0
+          {visibleSites.length > 0
             ? 'Select a site on the left to manage its setup, snippet, and connection.'
-            : 'No sites yet — connect one below to get started.'}
+            : activeClientId
+              ? 'No sites in this client workspace yet. Click “+ New Site” to add one, or assign an existing site to this client via its Edit dialog.'
+              : 'No sites yet — connect one below to get started.'}
         </div>
       )}
       </div>
@@ -984,7 +1005,11 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                 e.preventDefault();
                 updateSite({
                   resource: 'sites', id: editSite.id,
-                  values: { name: editSite.name, platform: editSite.platform },
+                  values: {
+                    name: editSite.name,
+                    platform: editSite.platform,
+                    ...(isAgency ? { clientId: editSite.clientId || null } : {}),
+                  },
                   successNotification: () => ({ message: 'Site updated', type: 'success' }),
                 }, { onSuccess: () => { refetch(); setIsEditOpen(false); } });
               }}
@@ -1005,6 +1030,20 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                   <option value="other">Other CMS</option>
                 </select>
               </div>
+              {isAgency && (
+                <div>
+                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Client Workspace</label>
+                  <select className="input" value={editSite.clientId} onChange={(e) => setEditSite({ ...editSite, clientId: e.target.value })}>
+                    <option value="">— Unassigned (agency-level) —</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                    Assign this site to a client to group it under that workspace in the client switcher.
+                  </p>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setIsEditOpen(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save Changes</button>
