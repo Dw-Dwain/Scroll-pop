@@ -15,7 +15,7 @@
 
 import {
   escapeHtml, safeHref, safeCssColor, safeCssUrl, safeCssInt,
-  cssNum, cssFont, cssAlign, cssWeight, cssLen, isSafeRegex,
+  cssNum, cssFont, cssAlign, cssWeight, cssLen,
 } from './sanitize.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -128,6 +128,24 @@ function getEdgeUrl(): string {
 
 const EDGE_URL = getEdgeUrl();
 
+// ─── Lazy chunk loader ──────────────────────────────────────────────────────────
+// Loads an optional sibling bundle (spin.js, targeting.js, …) on demand so the core
+// p.js stays under its 10 KB gate. Each chunk attaches itself to a window.__sp_* global.
+// Cached per file; resolves on load OR error (the caller guards on the chunk's global so a
+// failed/blocked fetch degrades gracefully and never throws onto the host page).
+const _chunkBase = EDGE_URL.replace(/\/c\/.*/, '');
+const _chunkLoads: Record<string, Promise<void>> = {};
+function loadChunk(file: string): Promise<void> {
+  return (_chunkLoads[file] ||= new Promise<void>((resolve) => {
+    const s = document.createElement('script');
+    s.src = `${_chunkBase}/${file}`;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => resolve();
+    document.head.appendChild(s);
+  }));
+}
+
 let activeSiteId = '';
 let adTriggerEnabled = false; // growth+ plans only
 let sitePlan = 'free'; // tenant plan — gates the "Powered by ScrollPop" badge
@@ -237,6 +255,13 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
       return;
     }
 
+    // Lazy-load the advanced-targeting evaluator before we evaluate rules, but only if a
+    // campaign actually uses one of its rule kinds (keeps it off the critical path otherwise).
+    const needsTargeting = config.campaigns.some(
+      (c) => c.targeting?.some((r) => ADVANCED_TARGET_KINDS.has(r.kind)),
+    );
+    if (needsTargeting) await loadChunk('targeting.js');
+
     for (const campaign of config.campaigns) {
       if (!withinSchedule(campaign.design)) {
         console.log('[ScrollPop] Campaign outside its scheduled window:', campaign.id);
@@ -292,16 +317,6 @@ function evaluateRule(rule: TargetingRule): boolean {
     case 'url_contains':
       return url.includes(value['pattern'] as string);
 
-    case 'url_regex': {
-      try {
-        const pattern = (value['pattern'] as string) || '';
-        if (!isSafeRegex(pattern)) return false;
-        return new RegExp(pattern).test(url);
-      } catch {
-        return false;
-      }
-    }
-
     case 'device': {
       const target = (value['device'] as string) ?? 'all';
       if (target === 'all') return true;
@@ -313,12 +328,6 @@ function evaluateRule(rule: TargetingRule): boolean {
       return true;
     }
 
-    case 'returning_visitor': {
-      const isReturning = !!localStorage.getItem('_sp_visited');
-      localStorage.setItem('_sp_visited', '1');
-      return isReturning === (value['is_returning'] as boolean);
-    }
-
     case 'geo': {
       // Country match against the edge-injected visitor country (ISO alpha-2, uppercase).
       // Fail open if the edge couldn't resolve a country. Supports a multi-country list
@@ -328,35 +337,27 @@ function evaluateRule(rule: TargetingRule): boolean {
       return Array.isArray(cs) ? cs.includes(visitorCountry) : visitorCountry === value['country'];
     }
 
-    case 'session_page_views': {
-      let c = +(sessionStorage.getItem('_sp_pc') || 0);
-      if (!sessionStorage.getItem('_sp_pcd')) {
-        sessionStorage.setItem('_sp_pc', ++c + '');
-        sessionStorage.setItem('_sp_pcd', '1');
-      }
-      return c >= +(value['count'] || 0);
-    }
-
-    case 'utm': {
-      // Match a UTM param (utm_source/medium/campaign/term/content) against the current
-      // URL, falling back to the first-touch query string saved in localStorage. We store
-      // the raw search string (cheap) rather than a parsed object. Legacy rules used
-      // { source }; current rules use { param, value }.
-      const s = location.search, h = s.indexOf('utm_') >= 0;
-      let ft = localStorage.getItem('_sp_utm');
-      if (h && !ft) localStorage.setItem('_sp_utm', ft = s);
-      const got = new URLSearchParams(h ? s : (ft || '')).get((value['param'] as string) || 'utm_source') || '';
-      return got.toLowerCase() === String(value['value'] ?? '').toLowerCase();
-    }
-
     // ab_test: real variant allocation is built in the A/B testing feature (backlog #6).
     // Until then this is a passthrough — the percentage gate is rebuilt there properly.
     case 'ab_test': return true;
+
+    // Heavier rule kinds live in the lazy targeting.js chunk (loaded on the boot path before
+    // this runs when any campaign needs them). Delegate to it; fail closed if it didn't load.
+    case 'url_regex':
+    case 'returning_visitor':
+    case 'session_page_views':
+    case 'utm': {
+      const t = (window as unknown as { __sp_targeting?: { evaluateRule: (r: TargetingRule) => boolean } }).__sp_targeting;
+      return t ? t.evaluateRule(rule) : false;
+    }
 
     default:
       return true;
   }
 }
+
+// Rule kinds whose evaluation lives in the lazy targeting.js chunk.
+const ADVANCED_TARGET_KINDS = new Set(['url_regex', 'returning_visitor', 'session_page_views', 'utm']);
 
 // ─── Triggers ─────────────────────────────────────────────────────────────────
 
@@ -780,7 +781,6 @@ function resolveVariant(campaign: CampaignConfig): { design: DesignConfig; affil
 // under the 10 KB gate. The chunk sets window.__sp_spin = { render }.
 
 function launchSpinWheel(campaign: CampaignConfig): void {
-  const spinUrl = `${EDGE_URL.replace(/\/c\/.*/, '')}/spin.js`;
   const doLaunch = () => {
     const spinMod = (window as any).__sp_spin;
     if (!spinMod?.render) return;
@@ -805,15 +805,7 @@ function launchSpinWheel(campaign: CampaignConfig): void {
     beaconEvent(campaign, 'impression');
   };
 
-  if ((window as any).__sp_spin) {
-    doLaunch();
-  } else {
-    const s = document.createElement('script');
-    s.src = spinUrl;
-    s.async = true;
-    s.onload = doLaunch;
-    document.head.appendChild(s);
-  }
+  void loadChunk('spin.js').then(doLaunch);
 }
 
 function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {

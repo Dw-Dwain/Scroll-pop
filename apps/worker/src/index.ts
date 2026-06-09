@@ -42,11 +42,13 @@ export default Sentry.withSentry(
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    // GET …/p.js (core snippet) or …/spin.js (lazy spin-wheel chunk) — served from R2.
-    // p.js falls back to the bundled copy if the R2 object is missing; lazy chunks (spin.js)
-    // have no embedded fallback, so they MUST be uploaded to R2 by CI (see deploy-worker).
-    if (request.method === 'GET' && (url.pathname.endsWith('/p.js') || url.pathname.endsWith('/spin.js'))) {
-      const file = url.pathname.endsWith('/spin.js') ? 'spin.js' : 'p.js';
+    // GET …/<name>.js — core snippet (p.js) or any lazy chunk (spin.js, targeting.js, …),
+    // served from R2. p.js falls back to the bundled copy if the R2 object is missing; lazy
+    // chunks have no embedded fallback, so they MUST be uploaded to R2 by CI (see deploy-worker).
+    // The flat allowlist (lowercase name, no slashes) blocks path traversal.
+    const jsMatch = request.method === 'GET' ? /\/([a-z0-9_-]+)\.js$/.exec(url.pathname) : null;
+    if (jsMatch) {
+      const file = `${jsMatch[1]}.js`;
       const snippetHeaders = {
         'Content-Type': 'application/javascript',
         'X-Content-Type-Options': 'nosniff',
@@ -60,8 +62,8 @@ export default Sentry.withSentry(
         }
       }
       if (file === 'p.js') return new Response(snippetCode, { headers: snippetHeaders });
-      // spin.js missing from R2 — surface a clear 404 instead of a silent empty body.
-      return new Response('/* spin chunk not deployed */', { status: 404, headers: snippetHeaders });
+      // Lazy chunk missing from R2 — surface a clear 404 instead of a silent empty body.
+      return new Response(`/* ${file} not deployed */`, { status: 404, headers: snippetHeaders });
     }
 
     // GET /creatives — list available creative names (for the dashboard thumbnail picker).
