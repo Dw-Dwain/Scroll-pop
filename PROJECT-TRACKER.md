@@ -4,6 +4,8 @@
 > Sourced from `CTO-AUDIT.md` (June 4, 2026). Last reconciled: **June 10, 2026**.
 > **Priority:** P0 = launch blocker · P1 = high · P2 = medium · P3 = low
 > **Status:** ⬜ Todo · 🔄 In progress · ✅ Done · ❌ Won't build
+>
+> **🔄 June 10, 2026 (cont.) — infra now on Fly.io.** The API + Postgres run on **Fly.io** (`scrollpop-api` + `scrollpop-db`), and **Render + Neon are decommissioned (deleted)**. All "Render env var" / "in Render" references below now mean **Fly secrets** (`fly secrets set … -a scrollpop-api`). Today's cutover work: Render/Neon deleted, `API_BASE_URL` Fly secret fixed (was still `scroll-pop.onrender.com`), **Clerk webhook repointed to `…fly.dev/api/v1/webhooks/clerk` and tested (Succeeded)**. Dated historical session logs further down still say "Render redeploy" — those are accurate records of past work, left as-is.
 
 ---
 
@@ -19,7 +21,7 @@
 
 > **Code status: 100% complete.** Every tracker item that required writing code has been built, tested, and reviewed (including a full multi-angle security code review on June 7 — see below). The remaining items are pure ops tasks (set Stripe env vars, configure DNS, deploy static site, re-upload the corrected WP plugin zip — see OPS-WP1 / BUG-1) and the owner-deferred Shopify App Store submission. Dormant integration keys (Sentry, PostHog, Resend) are now **activated**.
 >
-> **The app is ready to go live — the only thing standing between now and revenue is the Stripe ops config (P0-2), which the owner is handling.**
+> **The app is ready to go live — the only thing standing between now and revenue is the Stripe ops config (P0-2): set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` + 4 price IDs as Fly secrets and repoint the Stripe webhook to `…fly.dev/api/v1/webhooks/stripe`. (Confirmed June 10: those Stripe secrets are not yet set on Fly.)**
 
 ---
 
@@ -181,7 +183,7 @@ CI's `deploy-worker`/`deploy-dashboard` jobs were **failing** (not skipping) bec
 | Code quality | 60/100 | 72/100 | 100/100 | **100/100** | P3-2: 401 → 0 ESLint warnings, 0 TypeScript errors, full strict |
 | **Overall** | **61/100** | **84/100** | **92/100** | **94/100** | **+2 points (June 7 security code review)** |
 
-> **The only launch blocker is P0-2 (Stripe keys — ops, not code).** All code for every feature, security hardening, and quality item is complete. Revenue is possible the moment the Stripe env vars are set in Render.
+> **The only launch blocker is P0-2 (Stripe keys — ops, not code).** All code for every feature, security hardening, and quality item is complete. Revenue is possible the moment the Stripe env vars are set on Fly (`fly secrets set … -a scrollpop-api`).
 
 ---
 
@@ -266,7 +268,7 @@ Nothing ships without these.
 | # | Status | Category | Item | Evidence | Notes |
 |---|---|---|---|---|---|
 | P0-1 | ✅ | Bug | **Stripe webhook rawBody bug** — `JSON.stringify(request.body)` used for signature verification instead of raw bytes. | `webhooks.ts:227` | Registered `@fastify/rawbody`. Using `request.rawBody` in both handlers. |
-| P0-2 | ⬜ | Config | **Stripe billing not activated** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and 4 price IDs not set. No revenue possible. | Render env vars | Code is complete. Set keys in Render, run one end-to-end checkout test, verify webhook fires. ~3 hours ops work. |
+| P0-2 | ⬜ | Config | **Stripe billing not activated** — `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and 4 price IDs not set (confirmed missing on Fly June 10). No revenue possible. | Fly secrets | Code is complete. `fly secrets set STRIPE_SECRET_KEY=… STRIPE_WEBHOOK_SECRET=… STRIPE_PRICE_*=… -a scrollpop-api`, repoint the Stripe webhook to `…fly.dev/api/v1/webhooks/stripe`, run one end-to-end checkout test, verify webhook fires. ~3 hours ops work. |
 | P0-3 | ✅ | Feature | **No email lead storage** — Popup form submissions not persisted. No dashboard UI. | `schema.ts` | `leads` table, `/api/v1/leads`, Leads page with CSV export + GDPR delete. |
 | P0-4 | ✅ | Bug | **A/B testing passthrough deceives users** — Live UI slider did nothing. | `snippet/main.ts` | Real weighted sticky allocation, dashboard A/B panel, per-variant analytics. |
 | P0-5 | ✅ | Bug | **Campaign activate/pause does not bust KV cache** — Popups kept serving after pause. | `campaigns.ts` | `purgeSiteConfigCache()` called on activate/pause/delete. |
@@ -320,7 +322,7 @@ Nothing ships without these.
 | P2-2 | ✅ | Security | **Internal secret IP spoofing** | `index.ts:397` | Policy: quarterly rotation in CONTRIBUTING. Code already gated correctly. |
 | P2-3 | ✅ | Security | **Client-controlled country field** | `index.ts:495` | country only trusted from Worker (proven by INTERNAL_SECRET header). |
 | P2-4 | ✅ | Security | **No audit log for admin operations** | `admin.ts` | `admin_audit_log` table, migration 0007 + RLS + boot self-heal. |
-| P2-5 | ✅ | Security | **Shopify tokens plaintext** — Already AES-256-GCM encrypted via `token-crypto.ts`. Audit was stale. | `token-crypto.ts` | Done. Requires `SHOPIFY_ENCRYPTION_KEY` on Render. |
+| P2-5 | ✅ | Security | **Shopify tokens plaintext** — Already AES-256-GCM encrypted via `token-crypto.ts`. Audit was stale. | `token-crypto.ts` | Done. Requires `SHOPIFY_ENCRYPTION_KEY` on Fly (set). |
 | P2-6 | ✅ | Security | **Admin sync 500-user cap** — Duplicate of P3-8. | `admin.ts` | Fixed in security sprint. |
 
 ### Performance
@@ -343,7 +345,7 @@ Nothing ships without these.
 | P2-15 | ✅ | UX | **Journeys + Experiments pages broken** | N/A | Honest "coming soon" screens. Experiments links to the live A/B panel. |
 | P2-16 | ✅ | UX | **Agency multi-tenant limitation** | N/A | Documented in Settings → Team tab. Per-client workspace isolation is v2. |
 | P2-17 | ✅ | Feature | **Team invitations UI** | ❓ | Settings → Team tab: member list, pending invites with revoke, invite form via Clerk `organization.inviteMember()`. |
-| P2-18 | ⬜ | Infra | **`api.scrollpop.online` custom domain** — API served from `scroll-pop.onrender.com`. | N/A | Cloudflare DNS CNAME → Render. 30-minute ops task. Not blocking launch. |
+| P2-18 | ⬜ | Infra | **`api.scrollpop.online` custom domain** — API served from `scrollpop-api.fly.dev`. | N/A | Optional: add the hostname via `fly certs add api.scrollpop.online -a scrollpop-api` + a Cloudflare CNAME (DNS-only) → `scrollpop-api.fly.dev`, then update `API_BASE_URL`. 30-minute ops task. Not blocking launch. |
 | P2-19 | ✅ | Security | **No rate limit on admin routes** | `admin.ts` | 30/min on all `/api/v1/admin/*`. |
 
 ---
@@ -358,11 +360,11 @@ Nothing ships without these.
 | P3-4 | ✅ | Security | **No session revocation** — Compromised JWT stays valid until expiry. | `webhooks.ts`, `me.ts` | `revokeAllUserSessions()` added; called on `user.deleted` webhook. `DELETE /api/v1/me` endpoint revokes sessions before DB cleanup. |
 | P3-5 | ⬜ | Feature | **`scrollpop.online` marketing site** — No inbound discovery for non-Shopify operators. | ✅ Promolayer | **Ops:** `cd site-plan && pnpm build`, then `npx wrangler pages deploy dist --project-name scrollpop-marketing`. First deploy will prompt to create the project. `site-plan/` is a full Vite app ready to deploy. |
 | P3-6 | ✅ | Infra | **Pre-deploy runbook entry** | `MASTER.md §27` | Diagnosis, manual migration, rollback via `.down.sql`, drizzle-kit push warning. |
-| P3-7 | ✅ | Scale | **`resolveCampaignMeta` cache is instance-local** — Cold cache on 2+ Render instances. | `index.ts` | Redis hash `sp_campaign_meta:{id}` as L2 (300s TTL). In-process Map stays as L1. Falls through to DB on Redis error. |
+| P3-7 | ✅ | Scale | **`resolveCampaignMeta` cache is instance-local** — Cold cache on 2+ Fly machines. | `index.ts` | Redis hash `sp_campaign_meta:{id}` as L2 (300s TTL). In-process Map stays as L1. Falls through to DB on Redis error. |
 | P3-8 | ✅ | Scale | **Admin Clerk sync not paginated** | `admin.ts:178` | Paginated with Clerk cursor. |
 | P3-9 | ✅ | Feature | **Coupon validation on `/e` ingest** | `index.ts` | Validates code exists, not expired, within max uses; atomically increments `uses`. |
 | P3-10 | ✅ | Feature | **Mobile-specific trigger overrides** — No per-device scroll %/dwell thresholds. | Promolayer marketing | `mobileOverrides: { pct?, seconds? }` added to `scroll_pct`, `dwell_time`, `inactivity` in shared schema. Snippet applies overrides via `effectiveParams()` on mobile (`maxTouchPoints > 0`). |
-| P3-11 | ✅ | Debt | **`ensure-*.ts` scripts run on every cold start** — Adds latency to every Render spin-up. | `index.ts` | Redis key `sp_schema_v13` with 24h TTL; warm restarts skip the idempotent schema ensures. Bump `SCHEMA_VERSION` when adding a new ensure-* call. **Note (CR-02):** `ensureEventPartitions()` is deliberately excluded from the skip and runs every boot — partition creation is time-sensitive and must never be gated by a version flag. |
+| P3-11 | ✅ | Debt | **`ensure-*.ts` scripts run on every cold start** — Adds latency to every Fly machine cold start. | `index.ts` | Redis key `sp_schema_v13` with 24h TTL; warm restarts skip the idempotent schema ensures. Bump `SCHEMA_VERSION` when adding a new ensure-* call. **Note (CR-02):** `ensureEventPartitions()` is deliberately excluded from the skip and runs every boot — partition creation is time-sensitive and must never be gated by a version flag. |
 | P3-12 | ✅ | Debt | **Conversion milestone counter starts from feature launch** — Historical conversions not counted. | `index.ts` | On first `incr` (result = 1), backfills `sp_conv:{tenantId}` from DB `count(*)` of historical conversion events. |
 
 ---
@@ -413,7 +415,7 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 ### Immediate — Revenue Gate (~3 hours, ops only) — ⬜ owner handling
 
-**P0-2 only.** Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 `STRIPE_PRICE_*` IDs in Render. Run one end-to-end test: checkout → Stripe test webhook → plan update → verify dashboard reflects new plan. That's it. The app is then live and can charge customers.
+**P0-2 only.** Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 `STRIPE_PRICE_*` IDs on Fly (`fly secrets set … -a scrollpop-api`) and repoint the Stripe webhook endpoint to `https://scrollpop-api.fly.dev/api/v1/webhooks/stripe`. Run one end-to-end test: checkout → Stripe test webhook → plan update → verify dashboard reflects new plan. That's it. The app is then live and can charge customers.
 
 ### ✅ Sprint A — Email Integration — COMPLETED
 
@@ -425,7 +427,7 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 ### Sprint C — Domain & CDN (2 hours, ops) — ⬜
 
-**P2-18 + P3-3.** Add `api.scrollpop.online` CNAME in Cloudflare (30 min). Add `cdn.scrollpop.online` custom domain to the R2 bucket (30 min). Update `API_BASE_URL` and `SNIPPET_CDN_URL` references. Removes Render vendor lock-in from public URLs and upgrades the snippet CDN from the rate-limited r2.dev domain.
+**P2-18 + P3-3.** Add `api.scrollpop.online` (`fly certs add` + Cloudflare DNS-only CNAME → `scrollpop-api.fly.dev`, 30 min). Add `cdn.scrollpop.online` custom domain to the R2 bucket (30 min). Update `API_BASE_URL` and `SNIPPET_CDN_URL` references. Gives a vendor-neutral public API URL and upgrades the snippet CDN from the rate-limited r2.dev domain.
 
 ### Sprint D — Marketing Site (2–3 days, design + code) — ⬜
 
@@ -435,7 +437,7 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 **P3-2** ✅ Done — 0 ESLint warnings + 0 TS errors.  
 **P3-4** ✅ Done — session revocation on user delete + `DELETE /me`.  
-**P3-7** Redis campaign meta cache — only matters if Render scales to 2+ instances.  
+**P3-7** Redis campaign meta cache — only matters if Fly scales to 2+ machines.  
 **P3-10** ✅ Done — mobile trigger overrides shipped.  
 **P3-11** ensure-* startup overhead — convert to proper migrations in next schema sprint.  
 **P3-12** Milestone backfill — one-time script, run manually when needed.  
@@ -446,7 +448,7 @@ P3-3 (R2 custom domain) ⬜ — also covers cdn.scrollpop.online
 
 | Milestone | Work | Status |
 |---|---|---|
-| **Soft launch — first paying customer possible** | Configure Stripe in Render (~3 hrs ops). App is code-complete. | ⬜ Owner handling (the only launch blocker) |
+| **Soft launch — first paying customer possible** | Configure Stripe on Fly (~3 hrs ops). App is code-complete. | ⬜ Owner handling (the only launch blocker) |
 | **Growth launch — email capture useful for Shopify operators** | Klaviyo + Mailchimp adapters (P1-8 + P1-9) | ✅ Shipped + hardened |
 | **Full launch — Zapier + clean URLs** | Outbound webhooks (P2-14) ✅ · domain ops (P2-18/P3-3) ⬜ | 🔄 Code done; domain ops remain |
 | **Discovery launch — inbound traffic possible** | P3-5 marketing site live | ⬜ Ops (deploy `site-plan/`) |
@@ -512,7 +514,7 @@ Plus `DraftBuilderElement` exported from `types/campaign.ts` and `lib/templates.
 
 **API suite now 75/75** (was 71). Typecheck clean.
 
-**Scope of this proof:** it validates cryptographic signature verification + forgery resistance in isolation with a test secret. It does **not** exercise the end-to-end money flow (real checkout → `checkout.session.completed`/`customer.subscription.created` → price-ID→plan mapping → tenant row update → cache bust). That still needs the **one live test charge** under P0-2, and depends on the 4 `STRIPE_PRICE_*` env vars matching the actual Stripe price IDs (a mismatch would verify the signature but silently skip the plan update). Verify `request.rawBody` populates in the Render runtime during that test.
+**Scope of this proof:** it validates cryptographic signature verification + forgery resistance in isolation with a test secret. It does **not** exercise the end-to-end money flow (real checkout → `checkout.session.completed`/`customer.subscription.created` → price-ID→plan mapping → tenant row update → cache bust). That still needs the **one live test charge** under P0-2, and depends on the 4 `STRIPE_PRICE_*` env vars matching the actual Stripe price IDs (a mismatch would verify the signature but silently skip the plan update). Verify `request.rawBody` populates in the Fly runtime during that test.
 
 **Conclusion:** billing webhook is cryptographically sound. Remaining billing risk is config (price IDs / env), not vulnerability.
 
@@ -552,9 +554,9 @@ Plus `DraftBuilderElement` exported from `types/campaign.ts` and `lib/templates.
 
 | ID | Status | Item | Est. |
 |---|---|---|---|
-| P0-2  | ⬜ | Set Stripe keys in Render env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs) | 2h |
+| P0-2  | ⬜ | Set Stripe keys as Fly secrets (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 4 price IDs) + repoint Stripe webhook → `…fly.dev/api/v1/webhooks/stripe` | 2h |
 | OPS-WP1 | ✅ | **Re-uploaded corrected WP plugin zip to R2** (Jun 8) — verified live: `pub-0a090ba944…r2.dev/scrollpop-wp.zip` now serves forward-slash `scrollpop/` entries. | done |
-| P2-18 | ⬜ | `api.scrollpop.online` CNAME → Render in Cloudflare DNS | 30 min |
+| P2-18 | ⬜ | `api.scrollpop.online` → Fly (`fly certs add` + Cloudflare DNS-only CNAME → `scrollpop-api.fly.dev`) | 30 min |
 | P3-3  | ⬜ | `cdn.scrollpop.online` custom domain on R2 bucket `scrollpop-assets` | 30 min |
 | P3-5  | ⬜ | `pnpm build` + `wrangler pages deploy dist --project-name scrollpop-marketing` | 30 min |
 | P1-14 | ⬜ | Shopify App Store submission (App Embed Block already built) — deferred by owner | 2h |

@@ -26,6 +26,12 @@
       "port": null
     },
     {
+      "name": "Snippet repro",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".preview-test/server.mjs"],
+      "port": 4555
+    },
+    {
       "name": "CONTRIBUTING preview",
       "runtimeExecutable": "node",
       "runtimeArgs": [".preview/server.mjs"],

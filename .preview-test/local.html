@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><title>spin repro</title></head>
+<body style="height:4000px">
+<h1>spin-to-win repro (local p.js + live spin.js chunk)</h1>
+<script>
+// The snippet reads its key from the /v1/<key>/p.js URL or window.__sp — not data-key.
+window.__sp = { publicKey: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' };
+// Intercept the config fetch and serve a spin_wheel campaign. The spin.js chunk itself
+// is fetched from the real edge (edge.scrollpop.online/spin.js) — proves the deployed chunk.
+const realFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const u = String(input);
+  if (u.includes('/c/')) {
+    return Promise.resolve(new Response(JSON.stringify({
+      siteId: '00000000-0000-0000-0000-000000000001',
+      plan: 'agency',
+      requireConsent: false,
+      campaigns: [{
+        id: '00000000-0000-0000-0000-0000000000bb',
+        triggers: [{ id: 't1', type: 'scroll_pct', params: { pct: 10 } }],
+        targeting: [],
+        frequency: { frequency: 'always', maxDisplayCount: null, cooldownSeconds: null, showAgainIfConverts: false },
+        affiliateSlots: [],
+        design: {
+          kind: 'spin_wheel',
+          headline: 'Spin to Win!',
+          subheadline: 'Try your luck for a discount',
+          ctaText: 'SPIN',
+          accentColor: '#6366f1',
+          textColor: '#111111',
+          backgroundColor: '#ffffff',
+          showPoweredBy: false,
+          slices: [
+            { label: '10% OFF', color: '#6366f1', coupon: 'SPIN10' },
+            { label: 'Try again', color: '#ec4899' },
+            { label: '20% OFF', color: '#10b981', coupon: 'SPIN20' },
+            { label: 'Free ship', color: '#f59e0b', coupon: 'SHIPFREE' },
+            { label: '5% OFF', color: '#3b82f6', coupon: 'SPIN5' },
+            { label: 'Try again', color: '#ef4444' }
+          ],
+          steps: { main: { elements: [] } }
+        }
+      }]
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  }
+  return realFetch(input, init);
+};
+</script>
+<script src="/p.js?v=spin1" async></script>
+</body></html>

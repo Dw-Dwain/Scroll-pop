@@ -13,6 +13,8 @@
 > **June 10 (cont.):** **Render → Fly.io migration started** (API + Postgres, replacing Render + Neon; Cloudflare Workers/Pages untouched). Step 1 (config, zero-risk): root `Dockerfile` (pnpm workspace build → `node apps/api/dist/index.js` on port 8080) + `.dockerignore` + `fly.toml` (shared-cpu-1x/512MB, `ord` region, `/health` check, `release_command` runs `drizzle-kit migrate`) added.
 > **June 10 (cont. 2):** **`scrollpop-db` recreated on Fly** from a custom `flyio/postgres-flex:17.2` image rebuilt with **TimescaleDB 2.27.2** (`infra/db/Dockerfile-timescaledb`-derived, pushed to `registry.fly.io/scrollpop-db:timescaledb`); machine updated, healthy 3/3, `timescaledb` extension created in `scrollpop_api` DB. **`scrollpop-api` deployed to Fly** — `drizzle-kit migrate` ran clean (21 migrations), `events` hypertable confirmed, `/health` returns `{"ok":true}`. Worker `API_ORIGIN` and dashboard CI `VITE_API_URL` repointed to `https://scrollpop-api.fly.dev`; `shopify.app.toml` + Shopify fallback URL updated (Shopify Partners dashboard still needs matching update). Corrected long-standing doc error: stack docs said "Supabase" but prod DB has **always been Neon** — `CLAUDE.md`/`SPEC.md`/docs now say Fly Postgres (current) and `infra/supabase/` renamed to `infra/db/`. **Data migrated:** `pg_dump`/`pg_restore` from Neon (`withered-hill-10483240`) → `scrollpop-db` complete — 6 tenants, 10 sites, 21 campaigns/designs, 4 users, 5 tenant_members, 4 variants, 2 leads, and all 2,708 `events` rows (loaded into the new hypertable via CSV `\copy`, since Neon used native monthly partitions vs. the new TimescaleDB chunks). Row counts verified against source; `clients`/`coupons`/`team_invites`/`shopify_installations` confirmed empty on both. **Outstanding:** Render + Neon decommission + DNS cutover (custom domains/Stripe webhook/Shopify Partners app URL still need pointing at `scrollpop-api.fly.dev`).
 > **June 10 (cont. 3):** **Repo consolidation — `dwain-coder/Scroll-pop` retired.** It existed solely so Render's auto-deploy had a source repo (manual `git push --force` sync after every merge). Now that CI's `deploy-api` job deploys straight to Fly via `flyctl`, that split serves no purpose. `Dw-Dwain/Scroll-pop` is the single repo for all CI deploys (API → Fly, Worker → Cloudflare, Dashboard → Cloudflare Pages). Updated: root `package.json` `deploy` script (no longer pushes to `dwain-coder`), `packages/shopify-app-embed/package.json` `--source-control-url`, `CONTRIBUTING.md` (removed dwain-coder sync step + two-repo section, Fly-ified secrets/migration instructions), `SPEC.md` deployment section, `apps/dashboard/public/_headers` CSP `connect-src` (→ `scrollpop-api.fly.dev`), and MASTER §15 CI/CD pipeline + §16 env var examples. `dwain-coder/Scroll-pop` left in place as a backup/mirror — owner will delete or keep at their discretion.
+> **June 10 (cont. 4):** **Render + Neon decommissioned (deleted) — migration complete.** Verified the live stack is 100% on Fly before/after deletion: `scrollpop-api` `/health` `200`, edge `/c/<key>` returns real data from `scrollpop-db`, old `scroll-pop.onrender.com` now `404`. `DATABASE_URL` confirmed already pointing at `scrollpop-db.flycast` (not Neon). Fixed a stale **`API_BASE_URL` Fly secret** (was still `scroll-pop.onrender.com` → now `https://scrollpop-api.fly.dev`; redeployed so both machines converged on the new value — a rolling `secrets set` had left one machine behind). **Clerk webhook repointed** to `…fly.dev/api/v1/webhooks/clerk` and tested (delivery **Succeeded**, signing secret unchanged). Snippet image-preload fix + core budget bump to 10300B committed/pushed (`15b2c2b`, `69d1935`). **Still open (external dashboards, no code/key changes):** Stripe webhook URL → `…fly.dev/api/v1/webhooks/stripe` **and** set `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/4 price IDs as Fly secrets (confirmed missing); Shopify Partners App URL + redirect URIs → `scrollpop-api.fly.dev`. Optional: `api.scrollpop.online`/`cdn.scrollpop.online` custom domains, marketing-site deploy.
+> **June 10 (cont. 5):** **"Popups not rendering" investigated — infra healthy, root causes were targeting/frequency gates + one real bug.** Verified every hop live post-migration (Fly `/health` 200, Worker→API secret OK, KV serving, R2 chunks all 200) and rendered the gourmet Rakuten popup + a spin-to-win wheel end-to-end through the production chain. Hiding factors: **geo rules** (sakananet + gourmet C1 are JP-only; owner browses from IN), **frequency caps** (`once_per_visitor`/`once_per_session` suppress re-display after first view — retest in incognito), and **`url_exact` bug (fixed, `438a651`)**: stored scheme-less URLs ("www.site.com/") never matched `location.href` — now compared normalized (no scheme/#fragment/trailing slash). Deployed + verified live on CDN. Notes: prod snippet strips all `console.*` (silence ≠ failure); gourmet C2 design still references placeholder `creatives/REPLACE-ME.png` (404s every load — swap/delete the `cr-img` element in the builder); **spin-to-win works** but no active campaign uses `kind='spin_wheel'`. New local repro harness in `.preview-test/` (launch.json "Snippet repro", port 4555, stubs config + serves dist chunks). Fly health-check blip during deploy was the rolling restart — passing.
 
 ---
 
@@ -539,8 +541,8 @@ scrollpop/
 │
 ├── infra/
 │   ├── cloudflare/       wrangler.toml + KV namespace IDs
-│   ├── fly/              fly.toml (unused — API is on Render)
-│   └── supabase/         Supabase migration files (not production DB)
+│   ├── fly/              fly.toml (legacy location; the active config is fly.toml at repo root)
+│   └── db/              Drizzle/SQL migration files (renamed from supabase/)
 │
 ├── CLAUDE.md             AI coding rules for this project
 ├── MASTER.md             ← this file
@@ -553,11 +555,11 @@ scrollpop/
 
 | Layer | Choice | Version | Hosted At |
 |---|---|---|---|
-| Runtime | Node.js LTS | 22 | Render.com |
+| Runtime | Node.js LTS | 22 | Fly.io |
 | Language | TypeScript | 5.x | — |
-| Backend | Fastify | 5.x | Render.com |
+| Backend | Fastify | 5.x | Fly.io (`scrollpop-api`) |
 | ORM | Drizzle ORM | 0.30.x | — |
-| Database | PostgreSQL 16 | TimescaleDB ext | Neon |
+| Database | PostgreSQL 17 | TimescaleDB ext | Fly.io (`scrollpop-db`) |
 | Cache / Queue | Redis | Upstash REST | Upstash |
 | Edge | Cloudflare Workers | — | Cloudflare |
 | Edge Storage | KV + R2 | — | Cloudflare |
@@ -584,12 +586,12 @@ scrollpop/
 | Service | URL | Host |
 |---|---|---|
 | **Marketing site** | **https://scrollpop.online** | Cloudflare Pages (`scrollpop-site` project) |
-| API | https://scrollpop-api.fly.dev | Fly.io (`scrollpop-api`, shared-cpu-1x/512MB, `ord`) — Render decommission pending |
+| API | https://scrollpop-api.fly.dev | Fly.io (`scrollpop-api`, shared-cpu-1x/512MB, `ord`) — Render decommissioned ✅ |
 | Dashboard (app) | https://dashboard.scrollpop.online | Cloudflare Pages (`scrollpop-dashboard` project) |
 | Dashboard (CF alias) | https://scrollpop-dashboard.pages.dev | Cloudflare Pages (auto alias) |
 | Snippet CDN | **https://cdn.scrollpop.online** | Cloudflare Worker custom domain ✅ live |
 | Edge / Config / Events | **https://edge.scrollpop.online** | Cloudflare Worker custom domain ✅ live |
-| Neon DB | ep-autumn-frost-aoudjxlw.c-2.ap-southeast-1.aws.neon.tech | Neon (ap-southeast-1) |
+| Postgres DB | scrollpop-db.flycast (internal) | Fly.io Postgres `scrollpop-db` (TimescaleDB 2.27.2, `ord`) — Neon decommissioned ✅ |
 | Clerk Auth | https://clerk.scrollpop.online | Clerk (production instance) |
 | Clerk Accounts Portal | https://accounts.scrollpop.online | Clerk |
 
