@@ -8,8 +8,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import sanitizeHtml from 'sanitize-html';
-import { db } from './db/client.js';
+import { db, rlsEnforced } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
+import { ensureRlsSchema } from './db/ensure-rls.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
 import { ensureAuditLogSchema } from './db/ensure-audit-log.js';
 import { ensureLeadsSchema } from './db/ensure-leads.js';
@@ -45,6 +46,7 @@ import { outboundWebhookRoutes, fireOutboundWebhook } from './routes/outbound-we
 import { integrationRoutes } from './routes/integrations.js';
 import { espConfigRoutes } from './routes/esp-config.js';
 import { dispatchToEsps } from './lib/esp.js';
+import { decryptToken } from './lib/token-crypto.js';
 import { meRoutes } from './routes/me.js';
 import { tenantRoutes } from './routes/tenants.js';
 import { opsRoutes } from './routes/ops.js';
@@ -90,11 +92,16 @@ async function bootstrap() {
   const pagesPreviewPattern = /^https:\/\/[a-z0-9-]+\.scrollpop-dashboard\.pages\.dev$/;
   await app.register(cors, {
     origin: (origin, cb) => {
-      // Allow requests with no origin (curl, Postman, server-to-server)
+      // No-origin requests (curl, Postman, server-to-server) are allowed through, but they
+      // get NO credentialed-CORS reflection — see the onSend hook below which only echoes
+      // Access-Control-Allow-Credentials for an explicitly allow-listed Origin (M-5).
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin) || pagesPreviewPattern.test(origin)) return cb(null, true);
       cb(new Error(`Origin ${origin} not allowed by CORS`), false);
     },
+    // The dashboard authenticates with a Bearer JWT (Authorization header), not cookies, so the
+    // API never needs to reflect credentials for a wildcard/no-origin request. @fastify/cors only
+    // emits Allow-Credentials when the origin matched the allow-list above, so this stays scoped.
     credentials: true,
     // Explicitly allow the methods/headers the dashboard uses — the design editor
     // saves via PUT, which was missing from the default preflight allow-list.
@@ -179,6 +186,9 @@ async function bootstrap() {
   app.get<{ Params: { publicKey: string } }>(
     '/v1/:publicKey/p.js',
     async (request, reply) => {
+      // M-4: production serves the snippet from the Cloudflare CDN/Worker, never from the API.
+      // Disable this dev-only route in prod so it isn't a second, un-cap-enforced surface.
+      if (!isDev) return reply.code(404).send('Not found');
       const filePath = path.resolve(__dirname, '../../../packages/snippet/dist/p.js');
       try {
         const content = await fs.promises.readFile(filePath, 'utf8');
@@ -206,6 +216,10 @@ async function bootstrap() {
   app.get<{ Params: { publicKey: string } }>(
     '/c/:publicKey',
     async (request, reply) => {
+      // M-4: production config is served by the Cloudflare edge Worker (which enforces the
+      // real-time monthly view cap + strips internal fields). This dev-only mirror skips both,
+      // so it must not be reachable in prod.
+      if (!isDev) return reply.code(404).send({ error: 'Not found' });
       const { publicKey } = request.params;
       const cacheKey = `sp_config:${publicKey}`;
 
@@ -684,7 +698,11 @@ async function bootstrap() {
         // arbitrary strings so attackers can't inflate unique-visitor counts with junk IDs.
         const safeVisitorId = typeof visitorId === 'string' && UUID_RE.test(visitorId) ? visitorId : null;
         const safeSessionId = typeof sessionId === 'string' && UUID_RE.test(sessionId) ? sessionId : null;
-        const safeRevenueCents = revenueCents != null
+        // L-3: revenue is authoritative only from the Shopify orders/paid webhook (which inserts
+        // server-side, not via /e). A direct caller to /e could otherwise inflate revenue
+        // analytics up to the clamp. Only accept client-supplied revenue when the event was
+        // forwarded by our own edge Worker; drop it for direct public callers.
+        const safeRevenueCents = (fromWorker && revenueCents != null)
           ? Math.min(Math.max(0, Math.round(Number(revenueCents))), 1_000_000)
           : null;
         const safeScrollDepth = scrollDepthPct != null
@@ -847,8 +865,18 @@ async function bootstrap() {
                     ...(fullName?.includes(' ') ? { lastName: fullName.split(' ').slice(1).join(' ') } : {}),
                   };
 
+                  // ESP API keys are stored encrypted at rest (M-1) — decrypt before use.
+                  // decryptToken passes legacy plaintext through unchanged.
+                  const rawIntegrations = (espTenant.integrations ?? {}) as Record<string, { apiKey?: string } | undefined>;
+                  const dec = (p?: { apiKey?: string }) =>
+                    p ? { ...p, apiKey: p.apiKey ? decryptToken(p.apiKey) : undefined } : undefined;
+                  const integrations = {
+                    klaviyo: dec(rawIntegrations['klaviyo']),
+                    mailchimp: dec(rawIntegrations['mailchimp']),
+                  } as Parameters<typeof dispatchToEsps>[0];
+
                   await dispatchToEsps(
-                    (espTenant.integrations ?? {}) as Parameters<typeof dispatchToEsps>[0],
+                    integrations,
                     (espCam.espConfig ?? {}) as Parameters<typeof dispatchToEsps>[1],
                     contact,
                   );
@@ -939,10 +967,12 @@ async function bootstrap() {
     void reply
       .type('application/json')
       .headers({
+        // Public, unauthenticated beacon endpoint — wildcard origin, NO credentials. Echoing
+        // Allow-Credentials:true alongside ACAO:* is a misconfiguration browsers reject; the
+        // /e path never needs cookies, so it's removed (M-5).
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Credentials': 'true',
       })
       .send({ received: true });
   });
@@ -966,6 +996,12 @@ async function bootstrap() {
   // month would be silently dropped ("analytics dies at month rollover"). It's an idempotent
   // cheap no-op when the partitions already exist. Safe no-op locally.
   await ensureEventPartitions(app.log);
+
+  // Row-level security (C-1). Runs on EVERY boot when enabled (not gated behind the schema-skip
+  // flag) so policy changes always converge; the DDL is idempotent. When disabled this is a no-op.
+  if (rlsEnforced) {
+    await ensureRlsSchema(app.log);
+  }
 
   if (schemaAlreadyRan) {
     app.log.info('[schema] ensure-* scripts skipped (already ran this version)');

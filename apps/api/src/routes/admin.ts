@@ -11,7 +11,10 @@
  */
 
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { db } from '../db/client.js';
+// The super-admin console reads/writes ACROSS all tenants by design, so it uses the system
+// (RLS-bypass) pool rather than the request's tenant-scoped connection. Access is still gated by
+// assertSuperAdmin on every route. (C-1)
+import { systemDb as db } from '../db/client.js';
 import { users, tenants, tenantMembers, sites, campaigns, adminAuditLog } from '../db/schema.js';
 import { eq, sql, isNull, and, like, inArray } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
@@ -56,6 +59,12 @@ function isAdminUser(email: string): boolean {
   return ADMIN_EMAIL !== '' && email.toLowerCase() === ADMIN_EMAIL;
 }
 
+// Short-TTL cache of clerkUserIds that recently passed a LIVE Clerk primary-email verification.
+// Lets the super-admin check fail CLOSED on a Clerk API error (H-1) without locking the owner
+// out during a transient Clerk blip — but only if they verified successfully in the last 5 min.
+const ADMIN_VERIFY_TTL_MS = 5 * 60 * 1000;
+const recentlyVerifiedAdmins = new Map<string, number>();
+
 /** Rejects the request if the calling user is not the super admin. */
 async function assertSuperAdmin(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const user = await db.query.users.findFirst({
@@ -72,29 +81,43 @@ async function assertSuperAdmin(request: FastifyRequest, reply: FastifyReply): P
   const emailMatches = !!user && isAdminUser(user.email);
   let verified = false;
   if (emailMatches) {
+    const clerkUserId = user!.clerkUserId;
     try {
-      const cu = await clerkClient.users.getUser(user!.clerkUserId);
+      const cu = await clerkClient.users.getUser(clerkUserId);
       const primary =
         cu.emailAddresses.find((e) => e.id === cu.primaryEmailAddressId) ?? cu.emailAddresses[0];
       verified =
         !!primary &&
         primary.verification?.status === 'verified' &&
         primary.emailAddress.toLowerCase() === ADMIN_EMAIL;
-      if (!verified) {
+      if (verified) {
+        recentlyVerifiedAdmins.set(clerkUserId, Date.now() + ADMIN_VERIFY_TTL_MS);
+      } else {
+        // An explicit "not verified / not primary" answer from Clerk is a hard denial — and it
+        // invalidates any cached pass so a downgraded account can't ride a stale entry.
+        recentlyVerifiedAdmins.delete(clerkUserId);
         request.log.warn(
-          { clerkUserId: user!.clerkUserId, primaryEmail: primary?.emailAddress, status: primary?.verification?.status },
+          { clerkUserId, status: primary?.verification?.status },
           '[admin] super-admin denied: Clerk primary email not verified/matching',
         );
       }
     } catch (err) {
-      request.log.error({ err }, '[admin] Clerk verification call failed — falling back to DB email match');
-      verified = true; // DB email already matched ADMIN_EMAIL and is webhook-sourced (not spoofable)
+      // FAIL CLOSED on a Clerk API error (H-1). Only allow if this exact user passed a LIVE
+      // verification within the TTL window — never fall back to the DB email alone, which the
+      // Clerk user.updated webhook can populate with an unverified address.
+      const until = recentlyVerifiedAdmins.get(clerkUserId);
+      if (until && until > Date.now()) {
+        verified = true;
+        request.log.warn({ clerkUserId }, '[admin] Clerk verification errored — honoring recent verified-cache entry');
+      } else {
+        request.log.error({ err: err instanceof Error ? err.message : 'error' }, '[admin] Clerk verification failed and no recent verified-cache entry — denying');
+      }
     }
   }
 
   if (!verified) {
     request.log.warn(
-      { userId: request.userId, hasUser: !!user, dbEmail: user?.email, emailMatches, adminEmailConfigured: ADMIN_EMAIL !== '' },
+      { userId: request.userId, hasUser: !!user, emailMatches, adminEmailConfigured: ADMIN_EMAIL !== '' },
       '[admin] super-admin check failed',
     );
     await reply.code(403).send({

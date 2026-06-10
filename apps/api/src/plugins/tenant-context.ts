@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { db } from '../db/client.js';
+import { db, beginTenantScope, rlsEnforced } from '../db/client.js';
 import { tenants, users, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAuth, clerkClient } from '@clerk/fastify';
@@ -70,6 +70,9 @@ declare module 'fastify' {
     // (client workspaces, team management) work even when the user's own tenant isn't on the
     // agency plan. Defaults to false; set on the elevated auth paths below.
     isUnlimited: boolean;
+    // Releases the request's reserved RLS connection (set only when DB_RLS_ENFORCED). Called in
+    // the onResponse/onError hooks below.
+    rlsRelease?: () => void;
   }
 }
 
@@ -377,6 +380,22 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     request.userId = user.id;
     request.memberRole = membership?.role ?? 'owner';
   });
+
+  // ─── RLS tenant scope (C-1) ────────────────────────────────────────────────────
+  // After the tenant is resolved, reserve a connection with `app.current_tenant` set so every
+  // query in the handler is DB-enforced to this tenant. No-op unless DB_RLS_ENFORCED=true. Runs
+  // as a SECOND preHandler so it only fires when the first one resolved a tenant (and didn't 401).
+  if (rlsEnforced) {
+    fastify.addHook('preHandler', async (request: FastifyRequest) => {
+      if (request.tenantId) {
+        request.rlsRelease = await beginTenantScope(request.tenantId);
+      }
+    });
+    // Release the reserved connection on every terminal outcome (idempotent).
+    fastify.addHook('onResponse', async (request: FastifyRequest) => { request.rlsRelease?.(); });
+    fastify.addHook('onError', async (request: FastifyRequest) => { request.rlsRelease?.(); });
+    fastify.addHook('onTimeout', async (request: FastifyRequest) => { request.rlsRelease?.(); });
+  }
 };
 
 export const tenantContextPlugin = fp(tenantContextPluginImpl);

@@ -89,25 +89,30 @@ vi.mock('./db/client.js', () => {
     return { set: vi.fn().mockReturnValue({ where: vi.fn().mockImplementation(mkw) }) };
   };
   const q = () => ({ findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) });
-  return {
-    db: {
-      query: {
-        sites: q(), campaigns: q(), tenants: q(), users: q(), tenantMembers: q(),
-        frequencyRules: q(), notifications: q(), leads: q(), variants: q(),
-        coupons: q(), targetingRules: q(), designs: q(), triggers: q(),
-        shopifyInstallations: q(), adminAuditLog: q(),
-      },
-      select: vi.fn().mockImplementation(() => chain()),
-      insert: vi.fn().mockImplementation(() => ins()),
-      update: vi.fn().mockImplementation(() => upd()),
-      delete: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([]),
-          then: Promise.resolve([]).then.bind(Promise.resolve([])),
-        }),
-      }),
+  const dbMock = {
+    query: {
+      sites: q(), campaigns: q(), tenants: q(), users: q(), tenantMembers: q(),
+      frequencyRules: q(), notifications: q(), leads: q(), variants: q(),
+      coupons: q(), targetingRules: q(), designs: q(), triggers: q(),
+      shopifyInstallations: q(), adminAuditLog: q(),
     },
+    select: vi.fn().mockImplementation(() => chain()),
+    insert: vi.fn().mockImplementation(() => ins()),
+    update: vi.fn().mockImplementation(() => upd()),
+    delete: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([]),
+        then: Promise.resolve([]).then.bind(Promise.resolve([])),
+      }),
+    }),
+  };
+  return {
+    db: dbMock,
     sqlClient: { unsafe: vi.fn().mockResolvedValue(null) },
+    // RLS plumbing (C-1) — mocked so bootstrap doesn't try to reserve real connections.
+    systemDb: dbMock,
+    rlsEnforced: false,
+    beginTenantScope: vi.fn().mockResolvedValue(() => {}),
   };
 });
 

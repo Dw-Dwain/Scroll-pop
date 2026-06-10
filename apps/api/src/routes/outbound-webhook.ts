@@ -4,44 +4,12 @@ import { db } from '../db/client.js';
 import { campaigns } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import crypto from 'node:crypto';
-import dns from 'node:dns/promises';
+import { isPublicUrl } from '../lib/url-guard.js';
+import { encryptToken, decryptToken } from '../lib/token-crypto.js';
 
 // Allowed event types operators can subscribe to via outbound webhook.
 const WEBHOOK_EVENTS = ['email_capture', 'conversion', 'click', 'dismiss'] as const;
 type WebhookEvent = typeof WEBHOOK_EVENTS[number];
-
-// SSRF guard — reject URLs whose hostname resolves to a private/loopback/link-local
-// address. Checked at fire time (not just write time) to defeat DNS rebinding.
-const PRIVATE_RANGES = [
-  // IPv4 private / loopback / link-local / "this host"
-  /^127\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./,
-  /^169\.254\./, /^0\./,
-  // IPv6 loopback, unspecified, unique-local (fc00::/7 → fc/fd), link-local (fe80::/10)
-  /^::1$/, /^::$/, /^fc/i, /^fd/i, /^fe80:/i,
-];
-
-function isPrivateAddress(address: string): boolean {
-  // Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) down to the embedded IPv4
-  // so the IPv4 ranges above catch it.
-  const addr = address.replace(/^::ffff:/i, '');
-  return PRIVATE_RANGES.some((r) => r.test(addr));
-}
-
-async function isPublicUrl(rawUrl: string): Promise<boolean> {
-  try {
-    const { hostname, protocol } = new URL(rawUrl);
-    if (protocol !== 'https:' && protocol !== 'http:') return false;
-    // Resolve ALL addresses (both families). A hostname with multiple A/AAAA records — one
-    // public, one private — must be rejected: dns.lookup() without {all} returns only the
-    // first record, letting an attacker hide 169.254.169.254 behind a public record. If ANY
-    // resolved address is private, refuse to fire.
-    const records = await dns.lookup(hostname, { all: true });
-    if (records.length === 0) return false;
-    return records.every((r) => !isPrivateAddress(r.address));
-  } catch {
-    return false;
-  }
-}
 
 const OutboundWebhookBody = z.object({
   enabled: z.boolean(),
@@ -94,7 +62,10 @@ export async function fireOutboundWebhook(opts: {
   };
 
   // HMAC-SHA256 signature so receivers can verify the payload wasn't tampered with.
-  const secret = typeof config['secret'] === 'string' ? config['secret'] : null;
+  // The secret is stored encrypted at rest (M-2) — decrypt before signing. decryptToken
+  // passes through legacy plaintext values unchanged, so pre-encryption configs still work.
+  const storedSecret = typeof config['secret'] === 'string' ? config['secret'] : null;
+  const secret = storedSecret ? decryptToken(storedSecret) : null;
   if (secret) {
     const sig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
     headers['x-scrollpop-signature'] = `sha256=${sig}`;
@@ -161,8 +132,9 @@ export const outboundWebhookRoutes: FastifyPluginAsync = async (fastify) => {
     const merged = {
       ...prev,
       ...body,
-      // Keep previous secret unless a new one is explicitly supplied.
-      secret: body.secret ?? prev['secret'],
+      // Keep previous secret unless a new one is explicitly supplied. A newly-supplied secret
+      // is encrypted at rest (M-2); the previous value is already stored encrypted.
+      secret: body.secret ? encryptToken(body.secret) : prev['secret'],
     };
 
     const [updated] = await db

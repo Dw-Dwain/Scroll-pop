@@ -37,10 +37,33 @@ interface ClerkUserEvent {
   type: string;
   data: {
     id: string;
-    email_addresses: Array<{ email_address: string }>;
+    email_addresses: Array<{
+      id?: string;
+      email_address: string;
+      verification?: { status?: string } | null;
+    }>;
+    primary_email_address_id?: string | null;
     first_name?: string;
     last_name?: string;
   };
+}
+
+/**
+ * Resolve the email to store for a Clerk user (H-2). Prefer the VERIFIED primary address; never
+ * silently store an unverified secondary (which an attacker could attach to impersonate another
+ * address downstream and feed the admin-email check). Falls back to the verified-primary even if
+ * unverified is the only option, but flags it so callers know it's not trustworthy.
+ */
+export function resolveClerkEmail(data: ClerkUserEvent['data']): { email: string; verified: boolean } {
+  const addrs = data.email_addresses ?? [];
+  const primary = addrs.find((e) => e.id && e.id === data.primary_email_address_id);
+  const isVerified = (e?: { verification?: { status?: string } | null }) => e?.verification?.status === 'verified';
+  if (primary && isVerified(primary)) return { email: primary.email_address, verified: true };
+  const anyVerified = addrs.find(isVerified);
+  if (anyVerified) return { email: anyVerified.email_address, verified: true };
+  // No verified address — store the primary (or first) but mark untrusted.
+  const fallback = primary?.email_address ?? addrs[0]?.email_address;
+  return { email: fallback ?? `${data.id}@noemail.scrollpop.local`, verified: false };
 }
 
 // ─── Stripe Webhook ───────────────────────────────────────────────────────────
@@ -139,13 +162,15 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
         case 'user.created':
         case 'user.updated': {
           const data = (evt as ClerkUserEvent).data;
-          // SR-14: phone-only or social-OAuth accounts may share no email. Storing ''
-          // silently breaks ESP sync, auto-responders, and admin display. Fall back to a
-          // synthetic, non-deliverable placeholder so the value is recognizable as "no email".
-          const email = data.email_addresses[0]?.email_address
-            ?? `${data.id}@noemail.scrollpop.local`;
-          if (!data.email_addresses[0]?.email_address) {
-            fastify.log.info({ clerkUserId: data.id }, '[webhook] user has no email — using placeholder');
+          // H-2: store the VERIFIED PRIMARY email, not email_addresses[0]. An attacker could
+          // otherwise attach an unverified address (e.g. the platform admin email) as the first
+          // entry and pollute users.email, which feeds the admin-console check and invite lookups.
+          // SR-14: phone-only/social accounts may have no email — fall back to a synthetic
+          // non-deliverable placeholder so the value reads clearly as "no email".
+          const resolved = resolveClerkEmail(data);
+          const email = resolved.email;
+          if (!resolved.verified) {
+            fastify.log.info({ clerkUserId: data.id }, '[webhook] user has no verified email — stored value is untrusted');
           }
           const name = [data.first_name, data.last_name].filter(Boolean).join(' ') || null;
 

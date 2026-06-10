@@ -3,6 +3,8 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { campaigns, events } from '../db/schema.js';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const since30d = () => {
   const d = new Date();
   d.setDate(d.getDate() - 30);
@@ -52,7 +54,9 @@ export const opsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { campaignId?: string; limit?: string } }>('/ops/live-events', async (request, reply) => {
     const limit = Number.parseInt(request.query.limit ?? '50', 10);
     const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 50;
-    const campaignId = request.query.campaignId?.trim();
+    // L-2: only accept a well-formed UUID; ignore anything else rather than passing junk to the query.
+    const rawCampaignId = request.query.campaignId?.trim();
+    const campaignId = rawCampaignId && UUID_RE.test(rawCampaignId) ? rawCampaignId : undefined;
 
     const rows = await db
       .select({

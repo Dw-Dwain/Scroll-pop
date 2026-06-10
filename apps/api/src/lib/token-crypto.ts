@@ -17,7 +17,14 @@ const TAG_LEN = 16;
 
 function getKey(): Buffer | null {
   const b64 = process.env['SHOPIFY_ENCRYPTION_KEY'];
-  if (!b64) return null;
+  if (!b64) {
+    // In production a missing key must be a hard failure — silently storing OAuth tokens
+    // and ESP/webhook secrets as plaintext is a data-at-rest breach waiting to happen (M-3).
+    if (process.env['NODE_ENV'] === 'production') {
+      throw new Error('SHOPIFY_ENCRYPTION_KEY is required in production — refusing to store secrets as plaintext');
+    }
+    return null;
+  }
   const key = Buffer.from(b64, 'base64');
   if (key.length !== 32) {
     throw new Error('SHOPIFY_ENCRYPTION_KEY must be exactly 32 bytes (base64-encoded)');
@@ -27,7 +34,7 @@ function getKey(): Buffer | null {
 
 export function encryptToken(plaintext: string): string {
   const key = getKey();
-  if (!key) return plaintext; // No key configured — store as plaintext (dev/unconfigured)
+  if (!key) return plaintext; // No key configured — store as plaintext (dev/unconfigured only; prod throws above)
 
   const iv = crypto.randomBytes(IV_LEN);
   const cipher = crypto.createCipheriv(ALGO, key, iv);

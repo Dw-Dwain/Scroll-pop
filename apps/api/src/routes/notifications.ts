@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { and, eq, isNull, desc, sql } from 'drizzle-orm';
-import { db } from '../db/client.js';
+import { db, systemDb } from '../db/client.js';
 import { notifications, tenants, tenantMembers, users } from '../db/schema.js';
 import { sendEmail, emailEnabled } from '../lib/email.js';
 
@@ -18,7 +18,10 @@ export async function emitNotification(
   n: { type: string; title: string; body?: string; href?: string },
 ): Promise<void> {
   try {
-    const tenant = await db.query.tenants.findFirst({
+    // Uses systemDb (RLS-bypass): emitNotification is fire-and-forget and may run after the
+    // originating request's tenant connection is released, so it must not depend on it. It writes
+    // only to the explicitly-passed tenantId. (C-1)
+    const tenant = await systemDb.query.tenants.findFirst({
       where: eq(tenants.id, tenantId),
       columns: { notificationPrefs: true },
     });
@@ -27,7 +30,7 @@ export async function emitNotification(
 
     // In-app channel (on unless explicitly disabled).
     if (prefs['notif_channels_inapp'] !== false) {
-      await db.insert(notifications).values({
+      await systemDb.insert(notifications).values({
         tenantId,
         type: n.type,
         title: n.title,
@@ -54,7 +57,7 @@ async function sendNotificationEmail(
   n: { type: string; title: string; body?: string; href?: string },
 ): Promise<void> {
   try {
-    const [owner] = await db
+    const [owner] = await systemDb
       .select({ email: users.email })
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))

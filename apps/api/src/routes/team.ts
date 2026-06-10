@@ -1,6 +1,10 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { db } from '../db/client.js';
+// Team-invite flows are inherently CROSS-TENANT: an invitee accepting joins a *different* tenant
+// than their current one, so the invite/membership rows can't be read/written under the accepting
+// user's tenant-scoped RLS connection. Use the system (bypass) pool — every query here still
+// filters explicitly by tenantId/email, and write paths re-verify the user's email. (C-1)
+import { systemDb as db } from '../db/client.js';
 import { teamInvites, tenantMembers, tenants, users } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { sites, campaigns, events } from '../db/schema.js';
 import { eq, and, isNull, sql, gte } from 'drizzle-orm';
+import { isPublicUrl } from '../lib/url-guard.js';
 
 const CreateSiteBody = z.object({
   name: z.string().min(1).max(100),
@@ -273,11 +274,20 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
     const wpBase = site.wpSiteUrl ?? `https://${site.domain}`;
     const statusUrl = `${wpBase.replace(/\/$/, '')}/wp-json/scrollpop/v1/status`;
 
+    // SSRF guard (H-3): the WP URL is operator-supplied; refuse to fetch anything that
+    // resolves to a private/loopback/link-local/metadata address.
+    if (!(await isPublicUrl(statusUrl))) {
+      return reply.code(422).send({
+        error: { code: 'WP_UNREACHABLE', message: 'WordPress site URL must be a public address.', statusUrl },
+      });
+    }
+
     let wpResponse: { public_key?: string; enabled?: boolean; plugin?: string; version?: string } = {};
     try {
       const res = await fetch(statusUrl, {
         signal: AbortSignal.timeout(8000),
         headers: { Accept: 'application/json' },
+        redirect: 'error', // a redirect could bounce the request to an internal host
       });
       if (!res.ok) {
         return reply.code(422).send({
@@ -300,12 +310,14 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // Verify the plugin returned our public key
+    // Verify the plugin returned our public key. Do NOT echo back the fetched response's
+    // public_key (H-3): reflecting an arbitrary fetched value would turn this into a blind-SSRF
+    // read primitive. Compare server-side only.
     if (wpResponse.public_key !== site.publicKey) {
       return reply.code(422).send({
         error: {
           code: 'KEY_MISMATCH',
-          message: `Public key mismatch. The plugin has "${wpResponse.public_key ?? '(empty)'}" but this site's key is "${site.publicKey}". Update the key in WordPress Settings → ScrollPop.`,
+          message: `Public key mismatch. The ScrollPop plugin on your WordPress site isn't configured with this site's key. Set it to "${site.publicKey}" in WordPress Settings → ScrollPop.`,
         },
       });
     }
@@ -359,9 +371,14 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
       : null;
     const base = `https://${shopHost ?? site.domain}`.replace(/\/$/, '');
 
+    // SSRF guard (H-3): refuse to fetch a domain that resolves to a private/internal address.
+    if (!(await isPublicUrl(base))) {
+      return reply.code(422).send({ error: { code: 'UNREACHABLE', message: 'Site domain must be a public address.', url: base } });
+    }
+
     let html = '';
     try {
-      const res = await fetch(base, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'ScrollPop-Verify/1.0' } });
+      const res = await fetch(base, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'ScrollPop-Verify/1.0' }, redirect: 'error' });
       if (!res.ok) {
         return reply.code(422).send({ error: { code: 'UNREACHABLE', message: `Site returned HTTP ${res.status} at ${base}.`, url: base } });
       }

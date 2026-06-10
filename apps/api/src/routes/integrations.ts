@@ -11,6 +11,7 @@ import { db } from '../db/client.js';
 import { tenants } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { syncToKlaviyo, syncToMailchimp } from '../lib/esp.js';
+import { encryptToken, decryptToken } from '../lib/token-crypto.js';
 
 const EspProviderBody = z.object({
   enabled: z.boolean(),
@@ -26,8 +27,15 @@ const IntegrationsBody = z.object({
 type ProviderConfig = { enabled: boolean; apiKey?: string | undefined; listId?: string | undefined };
 type IntegrationsCfg = { klaviyo?: ProviderConfig; mailchimp?: ProviderConfig };
 
-/** Replace API key with "••••<last4>" for safe GET responses. */
-function maskKey(key: string | undefined): string | undefined {
+/** Decrypt a stored API key for use/masking. Legacy plaintext passes through unchanged. */
+function readKey(stored: string | undefined): string | undefined {
+  if (!stored) return undefined;
+  try { return decryptToken(stored); } catch { return undefined; }
+}
+
+/** Replace API key with "••••<last4>" for safe GET responses. Operates on the decrypted value. */
+function maskKey(stored: string | undefined): string | undefined {
+  const key = readKey(stored);
   if (!key) return undefined;
   return key.length > 4 ? `${'•'.repeat(Math.min(key.length - 4, 12))}${key.slice(-4)}` : '••••';
 }
@@ -68,20 +76,28 @@ export const integrationRoutes: FastifyPluginAsync = async (fastify) => {
 
     const merged: IntegrationsCfg = { ...existing };
 
+    // New keys are encrypted at rest (M-1); an omitted key preserves the (already-encrypted)
+    // existing value. A masked value echoed back from a GET (contains "•") is treated as
+    // "unchanged" so re-saving the form doesn't overwrite the real key with bullets.
+    const isMasked = (k: string | undefined) => typeof k === 'string' && k.includes('•');
+
     if (body.klaviyo !== undefined) {
+      const newKey = body.klaviyo.apiKey && !isMasked(body.klaviyo.apiKey)
+        ? encryptToken(body.klaviyo.apiKey) : existing.klaviyo?.apiKey;
       merged.klaviyo = {
         enabled: body.klaviyo.enabled,
         listId: body.klaviyo.listId ?? existing.klaviyo?.listId,
-        // Preserve existing key if no new key provided
-        apiKey: body.klaviyo.apiKey ?? existing.klaviyo?.apiKey,
+        apiKey: newKey,
       };
     }
 
     if (body.mailchimp !== undefined) {
+      const newKey = body.mailchimp.apiKey && !isMasked(body.mailchimp.apiKey)
+        ? encryptToken(body.mailchimp.apiKey) : existing.mailchimp?.apiKey;
       merged.mailchimp = {
         enabled: body.mailchimp.enabled,
         listId: body.mailchimp.listId ?? existing.mailchimp?.listId,
-        apiKey: body.mailchimp.apiKey ?? existing.mailchimp?.apiKey,
+        apiKey: newKey,
       };
     }
 
@@ -121,16 +137,18 @@ export const integrationRoutes: FastifyPluginAsync = async (fastify) => {
       let result;
       if (provider === 'klaviyo') {
         const kl = cfg.klaviyo;
-        if (!kl?.apiKey || !kl?.listId) {
+        const apiKey = readKey(kl?.apiKey);
+        if (!apiKey || !kl?.listId) {
           return reply.code(400).send({ error: { code: 'NOT_CONFIGURED', message: 'Klaviyo API key and list ID required' } });
         }
-        result = await syncToKlaviyo({ apiKey: kl.apiKey, listId: kl.listId, contact: { email: testEmail }, testMode: true });
+        result = await syncToKlaviyo({ apiKey, listId: kl.listId, contact: { email: testEmail }, testMode: true });
       } else {
         const mc = cfg.mailchimp;
-        if (!mc?.apiKey || !mc?.listId) {
+        const apiKey = readKey(mc?.apiKey);
+        if (!apiKey || !mc?.listId) {
           return reply.code(400).send({ error: { code: 'NOT_CONFIGURED', message: 'Mailchimp API key and list ID required' } });
         }
-        result = await syncToMailchimp({ apiKey: mc.apiKey, listId: mc.listId, contact: { email: testEmail }, testMode: true });
+        result = await syncToMailchimp({ apiKey, listId: mc.listId, contact: { email: testEmail }, testMode: true });
       }
 
       if (!result.ok) {
