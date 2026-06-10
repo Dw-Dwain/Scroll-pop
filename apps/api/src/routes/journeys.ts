@@ -10,9 +10,17 @@ const since30d = () => {
 };
 
 export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/journeys', async (request, reply) => {
+  fastify.get<{ Querystring: { clientId?: string } }>('/journeys', async (request, reply) => {
+    const { clientId } = request.query;
     const rows = await db.query.campaigns.findMany({
-      where: and(eq(campaigns.tenantId, request.tenantId), isNull(campaigns.deletedAt)),
+      where: and(
+        eq(campaigns.tenantId, request.tenantId),
+        isNull(campaigns.deletedAt),
+        // Agency client scoping: restrict to campaigns whose site belongs to the active client.
+        clientId
+          ? sql`${campaigns.siteId} IN (SELECT id FROM sites WHERE client_id = ${clientId}::uuid AND tenant_id = ${request.tenantId}::uuid)`
+          : undefined
+      ),
     });
 
     const allDesigns = await db.query.designs.findMany({
@@ -69,18 +77,37 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
     const views = counts['view'] ?? 0;
     const clicks = counts['click'] ?? 0;
     const dismissals = counts['dismiss'] ?? 0;
+    const triggered = counts['trigger_fired'] ?? 0;
+    const blockedTotal = counts['trigger_blocked'] ?? 0;
+
+    // Real block-reason breakdown from trigger_blocked events (metadata.reason). No fabrication —
+    // an empty array simply means nothing has been blocked yet (or the snippet predates this).
+    const blockedRows = await db
+      .select({
+        reason: sql<string>`coalesce(${events.metadata} ->> 'reason', 'unknown')`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(events)
+      .where(
+        and(
+          eq(events.tenantId, request.tenantId),
+          eq(events.campaignId, request.params.id),
+          eq(events.eventType, 'trigger_blocked'),
+          gte(events.ts, since30d())
+        )
+      )
+      .groupBy(sql`coalesce(${events.metadata} ->> 'reason', 'unknown')`)
+      .orderBy(sql`count(*) desc`);
 
     return reply.send({
       data: {
         campaignId: request.params.id,
-        rulesEvaluated: impressions,
-        fired: views,
-        blocked: Math.max(impressions - views, 0),
-        topBlockedReasons: [
-          { reason: 'frequency_cap', count: Math.max(Math.floor((impressions - views) * 0.4), 0) },
-          { reason: 'targeting_miss', count: Math.max(Math.floor((impressions - views) * 0.35), 0) },
-          { reason: 'priority_lost', count: Math.max(Math.floor((impressions - views) * 0.25), 0) },
-        ],
+        // "Rules evaluated" = times the trigger condition was met (real trigger_fired); fall back to
+        // shown+blocked for campaigns whose events predate trigger_fired instrumentation.
+        rulesEvaluated: triggered || impressions + blockedTotal,
+        fired: impressions,
+        blocked: blockedTotal,
+        topBlockedReasons: blockedRows.map((r) => ({ reason: r.reason, count: r.count })),
         ctr: impressions > 0 ? Number((clicks / impressions).toFixed(4)) : 0,
         dismissRate: impressions > 0 ? Number((dismissals / impressions).toFixed(4)) : 0,
       },

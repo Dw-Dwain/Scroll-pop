@@ -419,7 +419,7 @@ async function bootstrap() {
     'impression', 'view', 'click', 'dismiss', 'conversion',
     'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
     'email_capture', 'sms_capture', 'discount_redeemed',
-    'checkout_started', 'purchase_completed', 'trigger_fired',
+    'checkout_started', 'purchase_completed', 'trigger_fired', 'trigger_blocked',
   ]);
   const ALLOWED_DEVICES = new Set(['mobile', 'desktop', 'tablet']);
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

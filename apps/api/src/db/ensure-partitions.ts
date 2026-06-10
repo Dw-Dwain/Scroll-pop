@@ -18,6 +18,15 @@ export async function ensureEventPartitions(
   log: { info: (msg: string) => void; warn: (msg: string) => void; error: (obj: unknown, msg: string) => void },
 ): Promise<void> {
   try {
+    // Ensure newer event_type enum values exist before any insert path needs them. ALTER TYPE
+    // ADD VALUE is non-transactional, and IF NOT EXISTS makes it a safe idempotent no-op. Without
+    // this, a 'trigger_blocked' insert (Journeys block telemetry) would be silently rejected.
+    try {
+      await sqlClient.unsafe(`ALTER TYPE event_type ADD VALUE IF NOT EXISTS 'trigger_blocked'`);
+    } catch (e) {
+      log.warn(`[partitions] could not ensure event_type values (continuing): ${String(e)}`);
+    }
+
     // Is `events` a RANGE-partitioned parent table? (relkind 'p' + range strategy 'r')
     const rows = await sqlClient<{ strategy: string }[]>`
       SELECT pt.partstrat AS strategy

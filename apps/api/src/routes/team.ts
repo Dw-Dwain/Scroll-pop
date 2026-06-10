@@ -4,6 +4,11 @@ import { db } from '../db/client.js';
 import { teamInvites, tenantMembers, tenants, users } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
+import { sendEmail } from '../lib/email.js';
+
+const DASHBOARD_URL = process.env['DASHBOARD_URL'] ?? 'https://dashboard.scrollpop.online';
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 const InviteBody = z.object({
   email: z.string().email().max(254),
@@ -18,7 +23,7 @@ async function isAgencyTenant(tenantId: string): Promise<boolean> {
 
 /** Owner/admin + agency-plan gate for managing the team. */
 async function requireOwner(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-  if (!(await isAgencyTenant(request.tenantId))) {
+  if (!(await isAgencyTenant(request.tenantId)) && !request.isUnlimited) {
     void reply.code(403).send({ error: { code: 'AGENCY_ONLY', message: 'Team management is an Agency-plan feature.' } });
     return false;
   }
@@ -93,6 +98,29 @@ export const teamRoutes: FastifyPluginAsync = async (fastify) => {
         set: { role, status: 'pending', invitedByUserId: request.userId, acceptedUserId: null, acceptedAt: null, updatedAt: new Date() },
       })
       .returning();
+
+    // Notify the invitee by email (best-effort; dormant until Resend is configured, never blocks
+    // the invite). The accept flow is email-match based — they sign in with this exact address and
+    // accept from the PendingInvites banner, so no token link is needed.
+    try {
+      const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, request.tenantId), columns: { name: true } });
+      const agencyName = escapeHtml(tenant?.name || 'a ScrollPop workspace');
+      const roleEsc = escapeHtml(role);
+      const toEsc = escapeHtml(normalized);
+      await sendEmail({
+        to: normalized,
+        subject: `You're invited to join ${tenant?.name || 'a ScrollPop workspace'} on ScrollPop`,
+        html: `<div style="font-family:system-ui,sans-serif;max-width:480px">
+          <h2 style="margin:0 0 12px">You've been invited to ScrollPop</h2>
+          <p>You're invited to join <strong>${agencyName}</strong> as a <strong>${roleEsc}</strong>.</p>
+          <p>Sign in (or create your account) with <strong>${toEsc}</strong> at
+             <a href="${DASHBOARD_URL}">${DASHBOARD_URL}</a> and accept the invite from the banner at the top of the dashboard.</p>
+          <p style="color:#888;font-size:12px;margin-top:20px">If you weren't expecting this, you can safely ignore this email.</p>
+        </div>`,
+        text: `You're invited to join ${tenant?.name || 'a ScrollPop workspace'} as a ${role} on ScrollPop.\n\nSign in with ${normalized} at ${DASHBOARD_URL} and accept the pending invite from the banner at the top.`,
+      });
+    } catch { /* email is best-effort — the in-app PendingInvites banner is the source of truth */ }
+
     return reply.code(201).send({ data: invite });
   });
 

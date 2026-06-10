@@ -12,7 +12,7 @@ async function requireAgencyOwner(request: FastifyRequest, reply: FastifyReply):
     where: eq(tenants.id, request.tenantId),
     columns: { plan: true },
   });
-  if (tenant?.plan !== 'agency') {
+  if (tenant?.plan !== 'agency' && !request.isUnlimited) {
     void reply.code(403).send({ error: { code: 'AGENCY_ONLY', message: 'Client workspaces are an Agency-plan feature.' } });
     return false;
   }
@@ -30,7 +30,7 @@ export const clientRoutes: FastifyPluginAsync = async (fastify) => {
       where: eq(tenants.id, request.tenantId),
       columns: { plan: true },
     });
-    if (tenant?.plan !== 'agency') return reply.send({ data: [] }); // non-agency tenants have no clients
+    if (tenant?.plan !== 'agency' && !request.isUnlimited) return reply.send({ data: [] }); // non-agency tenants have no clients
     const rows = await db.query.clients.findMany({
       where: and(eq(clients.tenantId, request.tenantId), isNull(clients.deletedAt)),
       orderBy: (c, { asc }) => [asc(c.name)],

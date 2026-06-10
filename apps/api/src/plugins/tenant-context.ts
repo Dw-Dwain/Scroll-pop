@@ -66,6 +66,10 @@ declare module 'fastify' {
     tenantId: string;
     userId: string;
     memberRole: string;
+    // True for verified platform super-admin / @novatise.com users. Lets agency-only features
+    // (client workspaces, team management) work even when the user's own tenant isn't on the
+    // agency plan. Defaults to false; set on the elevated auth paths below.
+    isUnlimited: boolean;
   }
 }
 
@@ -85,6 +89,8 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', async (request: FastifyRequest, reply) => {
     // Skip public routes
     if (PUBLIC_ROUTES.some((r) => request.url.startsWith(r))) return;
+
+    request.isUnlimited = false; // overridden true on the verified-elevated paths below
 
     // Get Clerk session claims via getAuth helper
     const auth = getAuth(request);
@@ -209,6 +215,7 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
       // Auto-upgrade novatise.com / admin users to unlimited — only if their email is verified.
       if (isUnlimitedUser(user.email) && (await isVerifiedPrimaryEmail(clerkUserId, user.email))) {
         await ensureUnlimitedTenant(tenant.id);
+        request.isUnlimited = true;
       }
 
       request.tenantId = tenant.id;
@@ -260,6 +267,7 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     const isElevatedCandidate = isUnlimitedUser(userEmail);
     const emailVerified =
       isElevatedCandidate && (await isVerifiedPrimaryEmail(clerkUserId, userEmail, clerkUser));
+    request.isUnlimited = isElevatedCandidate && emailVerified;
 
     // ─── @novatise.com → shared Novatise org tenant ───────────────────────────
     // All Novatise emails share a single org rather than getting personal tenants.
