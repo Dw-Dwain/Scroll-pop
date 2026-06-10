@@ -272,6 +272,7 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
       }
       if (meetsTargetingRules(campaign.targeting)) {
         console.log('[ScrollPop] Registering triggers for campaign:', campaign.id);
+        preloadCampaignImages(campaign);
         registerCampaignTriggers(campaign);
       } else {
         console.log('[ScrollPop] Campaign targeting rules not met for:', campaign.id);
@@ -361,6 +362,16 @@ function evaluateRule(rule: TargetingRule): boolean {
 
 // Rule kinds whose evaluation lives in the lazy targeting.js chunk.
 const ADVANCED_TARGET_KINDS = new Set(['url_regex', 'returning_visitor', 'session_page_views', 'utm']);
+
+// Kick off the download of any configured `image`-element URLs as soon as a campaign is
+// scheduled to show — well before its trigger fires. Without this, full-bleed image
+// templates show a blank popup until the <img> (only created at render time) finishes
+// downloading. The browser image cache makes this a no-op cost if the image was already
+// loaded elsewhere on the page.
+function preloadCampaignImages(campaign: CampaignConfig): void {
+  for (const el of (campaign.design as any)?.steps?.main?.elements || [])
+    if (el.type === 'image') new Image().src = safeHref(el.content);
+}
 
 // ─── Triggers ─────────────────────────────────────────────────────────────────
 
