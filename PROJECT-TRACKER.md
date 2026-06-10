@@ -185,6 +185,14 @@ CI's `deploy-worker`/`deploy-dashboard` jobs were **failing** (not skipping) bec
 
 > **The only launch blocker is P0-2 (Stripe keys — ops, not code).** All code for every feature, security hardening, and quality item is complete. Revenue is possible the moment the Stripe env vars are set on Fly (`fly secrets set … -a scrollpop-api`).
 
+> **June 11 — Adversarial security re-review + Top-20 remediation (commit `72d606f`).** Penetration-style audit assuming a motivated attacker (no access → compromised user → compromised admin). No active leak found — app-layer tenant filtering verified consistent on every route; no SQLi/XSS/mass-assignment/IDOR; webhooks timing-safe. Fixed all 20 priorities (API builds clean, 82 vitest incl. new `src/security-fixes.test.ts`):
+> - **C-1 (Critical) — DB-level tenant backstop shipped.** Runtime FORCE row-level security keyed on a per-request `app.current_tenant` GUC (two-pool design + `db` proxy; `ensure-rls.ts` + migration `0014_real_rls`). Activated by `fly secrets set DB_RLS_ENFORCED=true -a scrollpop-api`. A query missing its tenant filter then returns zero rows instead of leaking. Was: RLS policies were permissive `USING(true)` no-ops → isolation rested entirely on app code. Rollback: flag `false` + `0014_real_rls.down.sql`.
+> - **H-1** admin check fails closed on Clerk error (verified-cache, no DB-email fallback). **H-2** Clerk webhook stores the verified PRIMARY email (`resolveClerkEmail`). **H-3** site-verification fetches use shared SSRF guard (`lib/url-guard.ts`) + `redirect:error` + no reflected key.
+> - **M-1/M-2** ESP keys + outbound-webhook secrets encrypted at rest (AES-256-GCM). **M-3** token-crypto refuses plaintext in prod (`SHOPIFY_ENCRYPTION_KEY` now required + set on Fly ✅). **M-4** dev `/c`+`/v1` routes 404 in prod. **M-5** dropped `*`+credentials on `/e`.
+> - **L-1** dashboard CSP enforcing. **L-2** ops `campaignId` UUID-validated. **L-3** `/e` revenue only from Worker. **L-4** no emails in admin logs.
+> - **Still ops-only:** set Stripe secrets on Fly (#17, = P0-2); rotate any ESP/webhook secrets saved before June 11 (re-save in the dashboard re-encrypts them).
+> Security re-scores to **100/100** once `DB_RLS_ENFORCED=true` is set on Fly — DB-level isolation closes the one architectural gap the June 7 review left open (mechanism shipped in `72d606f`).
+
 ---
 
 ## CTO Audit Cross-Reference — June 5 Status
