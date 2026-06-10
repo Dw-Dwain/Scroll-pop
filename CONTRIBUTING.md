@@ -17,7 +17,7 @@
 
 | Environment | Dashboard | API | Database |
 |-------------|-----------|-----|----------|
-| **Production** | dashboard.scrollpop.online | scroll-pop.onrender.com | Neon `main` branch |
+| **Production** | dashboard.scrollpop.online | scrollpop-api.fly.dev | Neon `main` branch |
 
 ---
 
@@ -59,36 +59,20 @@ When testing is complete:
 2. CI runs — all 4 checks must be green
 3. Once green → **Merge pull request**
 
-**What deploys after merge:**
+**What deploys after merge (all from `Dw-Dwain/Scroll-pop` — single repo):**
 - `dashboard.scrollpop.online` — Cloudflare Pages (`scrollpop-dashboard` project)
 - `scrollpop.online` — Cloudflare Pages (`scrollpop-site` project, marketing site)
-- Worker (snippet + edge) — GitHub Actions from `Dw-Dwain/Scroll-pop`
-- **Render API does NOT auto-deploy** — you must manually sync `dwain-coder` (step 5)
+- Worker (snippet + edge) — GitHub Actions `deploy-worker` job
+- API → Fly.io (`scrollpop-api`) — GitHub Actions `deploy-api` job (`flyctl deploy`)
 
-### 5. Sync dwain-coder (Render's source repo)
+### 5. Apply database migrations to production ⚠️ MANDATORY when a PR adds one
 
-**⚠️ Critical** — Render deploys from `dwain-coder/Scroll-pop`, not `Dw-Dwain`. After every
-PR merge on `Dw-Dwain`, you must push main to `dwain-coder` so the API gets the new code:
-
-```bash
-git checkout main
-git pull origin main
-pnpm run deploy
-```
-
-`allow_force_pushes` is enabled on `dwain-coder/Scroll-pop` at the repo level, so
-`--force` works without touching branch protection settings.
-
-If repos diverge significantly: ask Claude Code to handle the sync.
-
-### 6. Apply database migrations to production ⚠️ MANDATORY when a PR adds one
-
-**Render does NOT run migrations on deploy.** If a merged PR adds a migration
-under `apps/api/drizzle/migrations/` and you don't apply it to the Neon
-production DB, the new API code queries columns/enums that don't exist and
-**every affected request 500s** (the snippet's config endpoint returns 502 → no
-popups, no events, empty analytics). This exact outage happened on June 2 2026
-(`column "interval_days" does not exist`, migration `0005` never applied to prod).
+If a merged PR adds a migration under `apps/api/drizzle/migrations/` and you
+don't apply it to the Neon production DB, the new API code queries
+columns/enums that don't exist and **every affected request 500s** (the
+snippet's config endpoint returns 502 → no popups, no events, empty
+analytics). This exact outage happened on June 2 2026 (`column
+"interval_days" does not exist`, migration `0005` never applied to prod).
 
 After merging a migration, run its SQL in the **Neon SQL Editor → production
 branch**. Notes:
@@ -99,12 +83,6 @@ branch**. Notes:
   execution), then the `ALTER TABLE` / `CREATE INDEX` statements in a **second**
   execution.
 - Verify: `SELECT column_name FROM information_schema.columns WHERE table_name = '<table>';`
-
-**This is now automated via `render.yaml`** — the `preDeployCommand` runs
-`drizzle-kit migrate` before Render swaps traffic to the new instance. If a
-migration fails, Render aborts the deploy and the old instance stays live.
-`DIRECT_DATABASE_URL` must be set in Render → Environment (direct Neon connection,
-not the pooler — drizzle-kit needs it for DDL).
 
 ---
 
@@ -120,7 +98,7 @@ git revert -m 1 abc1234     # -m 1 = keep the main-branch parent
 git push origin main        # triggers a new deploy with the revert
 ```
 
-History is preserved. Render/CF redeploy automatically.
+History is preserved. Fly/CF redeploy automatically.
 
 ### Option B: Reset to a known-good commit (destructive)
 
@@ -134,21 +112,6 @@ git push --force-with-lease origin main
 
 > ⚠️ Rewrites history. Force-push is blocked by branch protection — temporarily
 > disable it in GitHub → Settings → Branches → main → Edit, then re-enable after.
-
----
-
-## Two-repo setup
-
-| Repo | Owner | Deploys |
-|------|-------|---------|
-| `Dw-Dwain/Scroll-pop` | Dw-Dwain | Cloudflare **Worker** (has CF secrets) |
-| `dwain-coder/Scroll-pop` | dwain-coder | Render **API** (connected to Render) |
-
-Both repos have identical code. Every push goes to both:
-
-```bash
-pnpm run deploy   # Pushes to Dw-Dwain (origin) AND dwain-coder (Render)
-```
 
 ---
 
@@ -294,7 +257,7 @@ Optional longer body explaining why (not what — the diff shows what).
 
 | Variable | Set it here |
 |----------|------------|
-| API vars (`DATABASE_URL`, `CLERK_SECRET_KEY`, etc.) | Render → service → Environment |
+| API vars (`DATABASE_URL`, `CLERK_SECRET_KEY`, etc.) | `fly secrets set KEY=value -a scrollpop-api` |
 | Dashboard vars (`VITE_API_URL`, `VITE_CLERK_PUBLISHABLE_KEY`) | Cloudflare Pages → Settings → Environment variables |
 | Worker secrets (`INTERNAL_SECRET`, `REDIS_URL`, `SENTRY_DSN`) | Cloudflare → Workers → scrollpop-worker → Settings |
 | Shopify extension | `npx shopify app deploy` (Shopify CLI) |
@@ -304,7 +267,7 @@ Optional longer body explaining why (not what — the diff shows what).
 
 **Clerk publishable key (both envs):** `pk_live_Y2xlcmsuc2Nyb2xscG9wLm9ubGluZSQ`
 
-### Required secrets checklist (Render → Environment)
+### Required secrets checklist (Fly → `fly secrets set`)
 
 All of these must be set for a valid production deployment:
 
@@ -324,14 +287,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ### Secret rotation schedule
 
 Rotate these secrets every 90 days (add a reminder to your calendar):
-- `INTERNAL_SECRET` — shared between Render API and Cloudflare Worker; must be updated in both simultaneously
+- `INTERNAL_SECRET` — shared between the Fly API and Cloudflare Worker; must be updated in both simultaneously
 - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`
 - GitHub Personal Access Tokens (single-use; revoke immediately after use: https://github.com/settings/tokens)
 
 After rotating `INTERNAL_SECRET`:
-1. Update in Render → Environment → `INTERNAL_SECRET`
+1. Update on Fly → `fly secrets set INTERNAL_SECRET=... -a scrollpop-api`
 2. Update in Cloudflare Worker → `wrangler secret put INTERNAL_SECRET`
-3. Deploy both (Render auto-deploys; re-run `pnpm run deploy` for Worker)
+3. Both redeploy automatically (Fly secrets set triggers a release; re-run `pnpm run deploy` for Worker if needed)
 
 ---
 
@@ -349,17 +312,13 @@ comments — always use environment variables.
 
 These are manual GitHub UI steps — they cannot be automated in code:
 
-### `Dw-Dwain/Scroll-pop`
+### `Dw-Dwain/Scroll-pop` (single repo — all deploys)
 - [ ] Enable 2FA on the `Dw-Dwain` account (Settings → Password and authentication)
 - [ ] Confirm branch protection is enabled on `main` (Settings → Branches → main):
   - Require status checks: `lint`, `typecheck`, `test`, `snippet-size-check`, `no-history-manipulation`, `migration-safety`
   - Require pull request before merging
-
-### `dwain-coder/Scroll-pop`
-- [ ] Enable 2FA on the `dwain-coder` account
-- [ ] **Disable force-push on `main`** (Settings → Branches → main → Allow force pushes → OFF)
-  - `--force-with-lease` is safe for the sync script; `allow_force_pushes` is not needed
-- [ ] Enable Render's deploy confirmation (Render Dashboard → Service → Settings → Deploy confirmation)
+- [ ] Confirm `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` are set under
+  Settings → Secrets and variables → Actions (required for `deploy-api`/`deploy-worker`/`deploy-dashboard`)
 
 ---
 
@@ -377,8 +336,8 @@ Every migration file (`apps/api/drizzle/migrations/*.sql`) must follow these rul
    ```sql
    DROP TABLE old_table; -- REVIEWED: intentional — table replaced by new_table in 0012
    ```
-4. The `preDeployCommand` on Render runs `drizzle-kit migrate` automatically before each deploy.
-   If it fails, Render aborts and the old instance stays live.
+4. Fly's `release_command` (`fly.toml`) runs `drizzle-kit migrate` automatically before each
+   deploy. If it fails, the release is aborted and the old machine stays live.
 
 ---
 

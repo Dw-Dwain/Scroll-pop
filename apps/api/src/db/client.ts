@@ -6,7 +6,7 @@ if (!process.env['DATABASE_URL']) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-// Connection pool (use pooler URL in production with Supabase)
+// Connection pool (use pooler URL in production with Neon)
 const client = postgres(process.env['DATABASE_URL'], {
   max: 10,
   idle_timeout: 20,

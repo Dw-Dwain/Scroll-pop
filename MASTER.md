@@ -10,6 +10,9 @@
 > **June 9:** live Shopify/WordPress debugging — fixed **host `display:none`** (theme hid the popup), **leads on `email_capture`** (origin gate dropped conversions on custom domains), **`/spin.js` 404** (not on R2), **custom-domain analytics** (`sites.custom_domain`), **heading WYSIWYG** (editor lied about alignment), center-modal positioning, custom Success screen, `/e` CORS. Plus **recurrence frequency model** (max displays + cooldown + show-after-convert) and snippet **refactor** (removed dead flat-render path −370B; **per-chunk CI budgets**).
 > **June 9 (cont.):** **Agency SaaS layer** shipped — **client workspaces** (CRUD API + top-nav switcher + per-client site filtering/assignment) and **coupled-login team invites** (owner invites by verified email → employee accepts → shares the agency's data; Novatise `@novatise.com` domain auto-join untouched), all **agency-plan + owner gated**. Plus **`/e` undercount fix** (honour `sendBeacon()`'s `false` return → keepalive `fetch` fallback for Firefox-ETP/strict-privacy visitors), **ScrollPop Creatives thumbnail picker** in the designer, **Simulate preview** top-aligned + height-capped, **deleted-campaign funnel exclusion**, and **`trigger_fired`** funnel tracking. Open: continue lazy-chunk extraction (Journey/Targeting), popup sequences, legal review (CCPA+APPI).
 > **June 10:** Repo cleanup (commit `558ce1f`) — **NQ-1** dead UI-kit pages deleted (CalendarPage, FormsPage, ImageGallery, MessagesPage, SupportChat, TablesPage), **NQ-5** legacy duplicate source trees removed (`scrollpop-campaign-designer/`, root `src/`, root `index.html`/`tsconfig.json`/`vite.config.ts`), **AG-6 partial** client-scoping extended to Campaigns/Leads/Analytics API routes + `dataProvider.ts` auto-appends `clientId`, **NQ-7** ClientSwitcher light-mode contrast fixed. Japanese sales templates committed. Open: wire `clientId` into Analytics/Dashboard `useCustom` calls.
+> **June 10 (cont.):** **Render → Fly.io migration started** (API + Postgres, replacing Render + Neon; Cloudflare Workers/Pages untouched). Step 1 (config, zero-risk): root `Dockerfile` (pnpm workspace build → `node apps/api/dist/index.js` on port 8080) + `.dockerignore` + `fly.toml` (shared-cpu-1x/512MB, `ord` region, `/health` check, `release_command` runs `drizzle-kit migrate`) added.
+> **June 10 (cont. 2):** **`scrollpop-db` recreated on Fly** from a custom `flyio/postgres-flex:17.2` image rebuilt with **TimescaleDB 2.27.2** (`infra/db/Dockerfile-timescaledb`-derived, pushed to `registry.fly.io/scrollpop-db:timescaledb`); machine updated, healthy 3/3, `timescaledb` extension created in `scrollpop_api` DB. **`scrollpop-api` deployed to Fly** — `drizzle-kit migrate` ran clean (21 migrations), `events` hypertable confirmed, `/health` returns `{"ok":true}`. Worker `API_ORIGIN` and dashboard CI `VITE_API_URL` repointed to `https://scrollpop-api.fly.dev`; `shopify.app.toml` + Shopify fallback URL updated (Shopify Partners dashboard still needs matching update). Corrected long-standing doc error: stack docs said "Supabase" but prod DB has **always been Neon** — `CLAUDE.md`/`SPEC.md`/docs now say Fly Postgres (current) and `infra/supabase/` renamed to `infra/db/`. **Data migrated:** `pg_dump`/`pg_restore` from Neon (`withered-hill-10483240`) → `scrollpop-db` complete — 6 tenants, 10 sites, 21 campaigns/designs, 4 users, 5 tenant_members, 4 variants, 2 leads, and all 2,708 `events` rows (loaded into the new hypertable via CSV `\copy`, since Neon used native monthly partitions vs. the new TimescaleDB chunks). Row counts verified against source; `clients`/`coupons`/`team_invites`/`shopify_installations` confirmed empty on both. **Outstanding:** Render + Neon decommission + DNS cutover (custom domains/Stripe webhook/Shopify Partners app URL still need pointing at `scrollpop-api.fly.dev`).
+> **June 10 (cont. 3):** **Repo consolidation — `dwain-coder/Scroll-pop` retired.** It existed solely so Render's auto-deploy had a source repo (manual `git push --force` sync after every merge). Now that CI's `deploy-api` job deploys straight to Fly via `flyctl`, that split serves no purpose. `Dw-Dwain/Scroll-pop` is the single repo for all CI deploys (API → Fly, Worker → Cloudflare, Dashboard → Cloudflare Pages). Updated: root `package.json` `deploy` script (no longer pushes to `dwain-coder`), `packages/shopify-app-embed/package.json` `--source-control-url`, `CONTRIBUTING.md` (removed dwain-coder sync step + two-repo section, Fly-ified secrets/migration instructions), `SPEC.md` deployment section, `apps/dashboard/public/_headers` CSP `connect-src` (→ `scrollpop-api.fly.dev`), and MASTER §15 CI/CD pipeline + §16 env var examples. `dwain-coder/Scroll-pop` left in place as a backup/mirror — owner will delete or keep at their discretion.
 
 ---
 
@@ -581,7 +584,7 @@ scrollpop/
 | Service | URL | Host |
 |---|---|---|
 | **Marketing site** | **https://scrollpop.online** | Cloudflare Pages (`scrollpop-site` project) |
-| API | https://scroll-pop.onrender.com | Render.com **Pro ($25/mo)** — always warm |
+| API | https://scrollpop-api.fly.dev | Fly.io (`scrollpop-api`, shared-cpu-1x/512MB, `ord`) — Render decommission pending |
 | Dashboard (app) | https://dashboard.scrollpop.online | Cloudflare Pages (`scrollpop-dashboard` project) |
 | Dashboard (CF alias) | https://scrollpop-dashboard.pages.dev | Cloudflare Pages (auto alias) |
 | Snippet CDN | **https://cdn.scrollpop.online** | Cloudflare Worker custom domain ✅ live |
@@ -1184,16 +1187,15 @@ push / PR merge to main
   ├── Lint + Typecheck + Unit Tests
   ├── Snippet size check (≤10 KB gzipped)
   ├── No history.*/popstate check
-  ├── Deploy API → Render production (RENDER_DEPLOY_HOOK_URL)
-  │     ⚠️ Render deploys from dwain-coder/Scroll-pop — sync manually after merge (see CONTRIBUTING §5b)
+  ├── Deploy API → Fly.io production (flyctl deploy -a scrollpop-api)
   ├── Deploy Worker → Cloudflare (wrangler deploy)
   └── Deploy Dashboard → Cloudflare Pages (branch=main → dashboard.scrollpop.online)
 ```
 
-### Environment Secrets (GitHub Actions — Dw-Dwain/Scroll-pop)
+### Environment Secrets (GitHub Actions — Dw-Dwain/Scroll-pop, single repo)
 ```
-RENDER_DEPLOY_HOOK_URL            Render production deploy hook
-CLOUDFLARE_API_TOKEN              Worker deploy + KV purge
+FLY_API_TOKEN                     Fly.io deploy token (flyctl deploy)
+CLOUDFLARE_API_TOKEN              Worker + Pages deploy + KV purge + R2 upload
 CLOUDFLARE_ACCOUNT_ID
 VITE_API_URL                      Production API URL (baked into dashboard build)
 VITE_CLERK_PUBLISHABLE_KEY        Same key for both envs
@@ -1201,18 +1203,10 @@ VITE_POSTHOG_KEY
 VITE_STRIPE_PUBLISHABLE_KEY
 ```
 
-### Two-repo deploy split
-| Repo | Owner | CI deploys |
-|---|---|---|
-| `Dw-Dwain/Scroll-pop` | Dw-Dwain | Cloudflare Worker + Cloudflare Pages dashboard |
-| `dwain-coder/Scroll-pop` | dwain-coder | Render API (connected directly to Render) |
-
-After every `main` merge on `Dw-Dwain`, sync `dwain-coder` so Render picks up the new API code:
-```bash
-git checkout main && git pull
-git push "https://ghp_TOKEN@github.com/dwain-coder/Scroll-pop.git" main --force
-```
-`allow_force_pushes` is enabled on `dwain-coder/Scroll-pop` so no branch-protection dance is needed.
+### Single-repo deploy
+All CI deploys (API → Fly, Worker → Cloudflare, Dashboard → Cloudflare Pages) run from
+`Dw-Dwain/Scroll-pop` on push to `main`. The former `dwain-coder/Scroll-pop` mirror (used
+only because Render's auto-deploy was wired to it) is retired — no longer synced.
 
 ---
 
@@ -1239,7 +1233,7 @@ CLOUDFLARE_KV_NAMESPACE_ID=
 SHOPIFY_API_KEY=          From Shopify Partners
 SHOPIFY_API_SECRET=
 SHOPIFY_SCOPES=           read_products,write_script_tags
-API_BASE_URL=             https://scroll-pop.onrender.com
+API_BASE_URL=             https://scrollpop-api.fly.dev
 DASHBOARD_URL=            https://<your-cf-pages-url>
 SNIPPET_CDN_URL=          https://cdn.scrollpop.io
 PORT=                     3001
@@ -1250,7 +1244,7 @@ SENTRY_DSN=
 
 ### apps/dashboard (.env)
 ```
-VITE_API_URL=             https://scroll-pop.onrender.com
+VITE_API_URL=             https://scrollpop-api.fly.dev
 VITE_CLERK_PUBLISHABLE_KEY=  (required — no keyless demo mode)
 VITE_POSTHOG_KEY=
 VITE_STRIPE_PUBLISHABLE_KEY=
@@ -1261,7 +1255,7 @@ VITE_STRIPE_PUBLISHABLE_KEY=
 
 ### apps/worker (wrangler.toml secrets)
 ```
-API_ORIGIN=               https://scroll-pop.onrender.com
+API_ORIGIN=               https://scrollpop-api.fly.dev
 REDIS_URL=
 REDIS_TOKEN=
 SENTRY_DSN=

@@ -35,7 +35,7 @@ function getConfig() {
   const apiSecret = process.env['SHOPIFY_API_SECRET'];
   const scopes = process.env['SHOPIFY_SCOPES'] ?? 'read_products,write_script_tags';
   const dashboardUrl = process.env['DASHBOARD_URL'] ?? 'https://dashboard.scrollpop.online';
-  const apiBaseUrl = process.env['API_BASE_URL'] ?? 'https://scroll-pop.onrender.com';
+  const apiBaseUrl = process.env['API_BASE_URL'] ?? 'https://scrollpop-api.fly.dev';
 
   if (!apiKey || !apiSecret) {
     throw new Error('SHOPIFY_API_KEY and SHOPIFY_API_SECRET must be set');

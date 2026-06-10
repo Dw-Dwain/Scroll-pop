@@ -207,19 +207,22 @@ jobs:
           retention-days: 7
 
   deploy-api:
-    name: Deploy API → Render (production)
+    name: Deploy API → Fly.io (production)
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Trigger Render production deploy hook
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly
         run: |
-          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-            echo "✅ Render production deploy triggered"
-          else
-            echo "⚠️ RENDER_DEPLOY_HOOK_URL not set — Render auto-deploys on push"
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "⏭️  FLY_API_TOKEN not set — skipping Fly deploy."
+            exit 0
           fi
+          flyctl deploy --remote-only -a scrollpop-api
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
 
   deploy-worker:
@@ -288,7 +291,7 @@ jobs:
         working-directory: apps/dashboard
         run: pnpm build
         env:
-          VITE_API_URL: 'https://scroll-pop.onrender.com'
+          VITE_API_URL: 'https://scrollpop-api.fly.dev'
           VITE_CLERK_PUBLISHABLE_KEY: 'pk_live_Y2xlcmsuc2Nyb2xscG9wLm9ubGluZSQ'
           VITE_SENTRY_DSN: 'https://272c6d34c52f23066f09d938eb7cc194@o4511502643167232.ingest.us.sentry.io/4511505632657408'
           VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}

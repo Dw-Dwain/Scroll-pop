@@ -275,7 +275,7 @@ add_action('wp_footer', function() {
       <StepCard number={3} title="Verify connection">
         <P>Click <strong>Verify Installation</strong> in the WordPress tab. ScrollPop will ping your site's REST endpoint (<code style={MONO}>/wp-json/scrollpop/v1/status</code>) and confirm the key matches.</P>
       </StepCard>
-      <Note type="tip">If your WordPress site is behind a WAF that blocks REST API requests, temporarily allow the ScrollPop verification call or whitelist the Render IP range.</Note>
+      <Note type="tip">If your WordPress site is behind a WAF that blocks REST API requests, temporarily allow the ScrollPop verification call or whitelist the Fly.io IP range.</Note>
       <H3>Manual WordPress (without plugin)</H3>
       <P>If you prefer not to use the plugin, you can add the snippet manually:</P>
       <CodeBlock code={wpSnippet} lang="php" />
@@ -667,7 +667,7 @@ function SectionBilling() {
 }
 
 function SectionAPI() {
-  const authExample = `curl https://scroll-pop.onrender.com/api/v1/sites \\
+  const authExample = `curl https://scrollpop-api.fly.dev/api/v1/sites \\
   -H "Authorization: Bearer <clerk_jwt>"`;
 
   const createSite = `POST /api/v1/sites

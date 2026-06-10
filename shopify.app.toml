@@ -1,12 +1,12 @@
 name       = "ScrollPop"
 client_id  = "37618fc8e087622a64ac244a2edd49f1"
 
-application_url = "https://scroll-pop.onrender.com"
+application_url = "https://scrollpop-api.fly.dev"
 embedded        = false
 
 [auth]
 redirect_urls = [
-  "https://scroll-pop.onrender.com/api/v1/shopify/callback",
+  "https://scrollpop-api.fly.dev/api/v1/shopify/callback",
 ]
 
 [webhooks]

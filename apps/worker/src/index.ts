@@ -2,7 +2,7 @@
  * ScrollPop Cloudflare Worker
  *
  * Routes:
- *   GET  /c/:publicKey  → Site config (cached in KV, 60s TTL)
+ *   GET  /c/:publicKey  → Site config (cached in KV, 1h TTL + purge-on-publish)
  *   POST /e             → Event ingest (forwards to Redis stream)
  *
  * IMPORTANT: This worker is a thin edge layer only.
@@ -27,6 +27,22 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+// Fallback Content-Type for /creatives/<name> when the R2 object has no stored
+// httpMetadata.contentType (e.g. uploaded via a tool that doesn't set it). Without
+// this, a .jpg upload would be served as `image/png` — browsers usually sniff and
+// recover, but get the header right so it's correct regardless.
+function creativeContentTypeFromName(name: string): string {
+  const ext = name.toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'webp': return 'image/webp';
+    case 'gif': return 'image/gif';
+    case 'png':
+    default: return 'image/png';
+  }
+}
 
 export default Sentry.withSentry(
   (env: Env) => ({
@@ -94,7 +110,7 @@ export default Sentry.withSentry(
         if (obj) {
           return new Response(obj.body, {
             headers: {
-              'Content-Type': obj.httpMetadata?.contentType || 'image/png',
+              'Content-Type': obj.httpMetadata?.contentType || creativeContentTypeFromName(name),
               'X-Content-Type-Options': 'nosniff',
               ...CORS_HEADERS,
               'Cache-Control': 'public, max-age=86400',
@@ -193,10 +209,14 @@ async function handleConfig(
 
   const configJson = await originResponse.text();
 
-  // Store in KV with 60s TTL (async — don't block response), if KV is bound
+  // Store in KV with 1h TTL (async — don't block response), if KV is bound.
+  // Long TTL is safe: purgeSiteConfigCache() deletes this key immediately on
+  // publish/pause/status change, so the TTL is just a backstop, not the
+  // freshness mechanism. A short TTL just churns KV writes (free-tier limit
+  // is 1,000/day — 3 actively-polled keys at 60s TTL alone burned ~870/day).
   if (env.SCROLLPOP_CONFIG) {
     ctx.waitUntil(
-      env.SCROLLPOP_CONFIG.put(kvKey, configJson, { expirationTtl: 60 })
+      env.SCROLLPOP_CONFIG.put(kvKey, configJson, { expirationTtl: 3600 })
     );
   }
 

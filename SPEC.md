@@ -601,12 +601,12 @@ packages:
 
 ## Deployment
 
-### API (Render.com)
-The API runs on **Render** (`scroll-pop.onrender.com`, Standard plan — always warm),
-**not** Fly.io. `infra/fly/fly.toml` exists but is unused legacy.
-- Source repo: `dwain-coder/Scroll-pop` (Render auto-deploys on push to `main`).
+### API (Fly.io)
+The API runs on **Fly.io** (`scrollpop-api.fly.dev`).
+- Single repo: `Dw-Dwain/Scroll-pop` — CI `deploy-api` job runs `flyctl deploy` on push to `main`.
 - Build: `pnpm --filter api build` · Start: `node apps/api/dist/index.js`
-- Render does **not** run DB migrations — apply them to Neon manually (see CONTRIBUTING §6).
+- Migrations run automatically via `fly.toml`'s `release_command` (`drizzle-kit migrate`)
+  before each deploy — see CONTRIBUTING §5.
 
 ### Worker (Cloudflare)
 - Deploy via `wrangler deploy` in CI (from `Dw-Dwain/Scroll-pop`) on merge to main
@@ -633,7 +633,7 @@ pnpm install
 # Start local Postgres + Redis via Docker
 docker compose up -d
 
-# Run Supabase migrations
+# Run database migrations
 pnpm --filter api db:migrate
 
 # Copy env files

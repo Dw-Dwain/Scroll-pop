@@ -1,0 +1,28 @@
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.turbo
+**/coverage
+.git
+.github
+.wrangler
+.preview
+.claude
+.antigravitycli
+.githooks
+e2e/playwright-report
+e2e/test-results
+e2e/.last-run.json
+
+# Docs / reports — not needed for build
+*.md
+*.pdf
+docs/
+
+# Local env files (secrets) — set via Fly secrets instead
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example

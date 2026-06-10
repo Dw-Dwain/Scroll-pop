@@ -6,7 +6,7 @@ account_id = "ab2fb70a30155f9cd3015fc03c4796e2"
 
 # ── Non-secret vars (safe to commit) ──────────────────────────────────────────
 [vars]
-API_ORIGIN = "https://scroll-pop.onrender.com"
+API_ORIGIN = "https://scrollpop-api.fly.dev"
 # INTERNAL_SECRET is set via: wrangler secret put INTERNAL_SECRET
 # NOTE: INTERNAL_SECRET (here) MUST equal INTERNAL_SECRET on the Render API, or
 # the Worker's config origin calls are rejected with 401.
@@ -35,7 +35,7 @@ binding = "SNIPPET_BUCKET"
 bucket_name = "scrollpop-assets"
 
 # ── KV Namespace: campaign config cache ───────────────────────────────────────
-# Edge cache for site config (60s TTL). The Worker reads/writes this in
+# Edge cache for site config (1h TTL + purge-on-publish). The Worker reads/writes this in
 # handleConfig() — a cache hit avoids the Worker→API→DB round-trip entirely.
 # `id` lives in the CI/deploy account (the scrollpop-worker account), NOT a local
 # `wrangler login` account — else deploy fails with "KV namespace not found" (10041).
@@ -55,5 +55,5 @@ id = "00a5652f5e9d435bbd1ada64fe089088"
 #   pnpm wrangler secret put SENTRY_DSN --env production
 
 [env.production]
-vars = { ENVIRONMENT = "production", API_ORIGIN = "https://scroll-pop.onrender.com" }
+vars = { ENVIRONMENT = "production", API_ORIGIN = "https://scrollpop-api.fly.dev" }
 
