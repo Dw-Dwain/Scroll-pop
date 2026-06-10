@@ -196,7 +196,7 @@ async function handleConfig(
     // Surface the REAL upstream cause instead of a misleading generic "Site not found":
     //   401 → INTERNAL_SECRET mismatch between this Worker and the API
     //   404 → site/public key genuinely not found
-    //   502/503/5xx → origin (Render) down, redeploying, or erroring
+    //   502/503/5xx → origin (Fly.io API) down, redeploying, or erroring
     let reason = 'Config temporarily unavailable';
     if (upstream === 404) reason = 'Site not found';
     else if (upstream === 401) reason = 'Worker/API INTERNAL_SECRET mismatch';
@@ -371,7 +371,7 @@ async function forwardEventsToApi(env: Env, events: unknown[], clientIp: string)
   const url = `${env.API_ORIGIN}/e`;
   const body = JSON.stringify({ events });
   // One retry: a transient origin blip (brief 5xx / network reset) shouldn't silently lose a
-  // batch. Each attempt has its own 10s timeout (Render is always-warm now, but a redeploy can
+  // batch. Each attempt has its own 10s timeout (the Fly API is always-warm, but a redeploy can
   // still blip). 2 attempts max keeps the Worker's waitUntil budget bounded.
   const MAX_ATTEMPTS = 2;
 

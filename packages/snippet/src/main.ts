@@ -316,7 +316,9 @@ function evaluateRule(rule: TargetingRule): boolean {
 
   switch (kind) {
     case 'url_exact':
-      return url === (value['url'] as string);
+      // Operators paste URLs without a scheme ("www.site.com/") — compare scheme-less,
+      // hash- and trailing-slash-insensitive forms so the rule means "this page".
+      return normalizeUrl(url) === normalizeUrl(value['url'] as string);
 
     case 'url_contains':
       return url.includes(value['pattern'] as string);
@@ -362,6 +364,12 @@ function evaluateRule(rule: TargetingRule): boolean {
 
 // Rule kinds whose evaluation lives in the lazy targeting.js chunk.
 const ADVANCED_TARGET_KINDS = new Set(['url_regex', 'returning_visitor', 'session_page_views', 'utm']);
+
+// Lowercase, drop the http(s) scheme, the #fragment, and any trailing slash so a stored
+// "www.site.com/page" matches a live "https://www.site.com/page/#section".
+function normalizeUrl(u: string): string {
+  return (u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/#.*$/, '').replace(/\/+$/, '');
+}
 
 // Kick off the download of any configured `image`-element URLs as soon as a campaign is
 // scheduled to show — well before its trigger fires. Without this, full-bleed image

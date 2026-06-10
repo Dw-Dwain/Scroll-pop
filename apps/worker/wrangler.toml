@@ -8,7 +8,7 @@ account_id = "ab2fb70a30155f9cd3015fc03c4796e2"
 [vars]
 API_ORIGIN = "https://scrollpop-api.fly.dev"
 # INTERNAL_SECRET is set via: wrangler secret put INTERNAL_SECRET
-# NOTE: INTERNAL_SECRET (here) MUST equal INTERNAL_SECRET on the Render API, or
+# NOTE: INTERNAL_SECRET (here) MUST equal INTERNAL_SECRET on the Fly.io API, or
 # the Worker's config origin calls are rejected with 401.
 
 # ── Custom domains (auto-provisions DNS + TLS on deploy) ──────────────────────
