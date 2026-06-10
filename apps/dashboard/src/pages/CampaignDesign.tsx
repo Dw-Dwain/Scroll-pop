@@ -589,6 +589,19 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
         newStepConfig = { ...newStepConfig, ...keyOrObj };
       }
 
+      // #14 — cap the ScrollPop Creative (Vertical) template at 360×600 (a MAX, can go smaller).
+      // Identified by its signature: a full-bleed image + a full-bleed invisible CTA in the main step.
+      if (activeStep === 'main') {
+        const els = (newStepConfig.elements as CampaignElement[] | undefined) ?? [];
+        const isVerticalCreative =
+          els.some((e) => e.type === 'image' && (e.w ?? 0) >= 99 && (e.h ?? 0) >= 99) &&
+          els.some((e) => e.type === 'button' && (e.w ?? 0) >= 99 && (e.h ?? 0) >= 99);
+        if (isVerticalCreative) {
+          if (typeof newStepConfig.width === 'number') newStepConfig.width = Math.min(newStepConfig.width, 360);
+          if (typeof newStepConfig.height === 'number') newStepConfig.height = Math.min(newStepConfig.height, 600);
+        }
+      }
+
       updatedSteps[activeStep] = newStepConfig as unknown as CampaignStepConfig;
       return { ...prev, steps: updatedSteps };
     });

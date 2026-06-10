@@ -224,9 +224,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
     queryOptions: { queryKey: ['analytics/funnel', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: intelligenceResult } = useCustom({
-    url: `${apiUrl}/analytics/intelligence?days=${days}`,
+    url: `${apiUrl}/analytics/intelligence?days=${days}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/intelligence', days], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/intelligence', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
 
   // ── Data extraction ────────────────────────────────────────────────────────
@@ -393,57 +393,72 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>— last {days} days</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {[
-            {
-              icon: DollarSign,
-              label: 'Revenue Generated',
-              value: (revenue?.totals?.revenueDollars ?? 0) > 0 ? `$${(revenue?.totals?.revenueDollars ?? 0).toFixed(2)}` : '—',
-              sub: (revenue?.totals?.purchases ?? 0) > 0 ? `${revenue?.totals?.purchases ?? 0} purchases` : 'No Shopify data yet',
-              color: 'var(--status-success)',
-            },
-            {
-              icon: MousePointer,
-              label: 'Best Campaign',
-              value: intel?.bestCampaign?.campaignName ?? '—',
-              sub: (intel?.bestCampaign?.ctr ?? 0) > 0 ? `${intel?.bestCampaign?.ctr ?? 0}% CTR` : 'No campaign data yet',
-              color: 'var(--data-1)',
-            },
-            {
-              icon: TrendingUp,
-              label: 'Best Traffic Source',
-              value: intel?.bestTrafficSource?.source ?? '—',
-              sub: (intel?.bestTrafficSource?.ctr ?? 0) > 0 ? `${intel?.bestTrafficSource?.ctr ?? 0}% CTR` : 'No traffic data yet',
-              color: 'var(--data-3)',
-            },
-            {
-              icon: Mail,
-              label: 'Emails Captured',
-              value: (revenue?.totals?.emailCaptures ?? 0) > 0 ? (revenue?.totals?.emailCaptures ?? 0).toLocaleString() : '—',
-              sub: impr > 0 && (revenue?.totals?.emailCaptures ?? 0) > 0
-                ? `${(((revenue?.totals?.emailCaptures ?? 0) / impr) * 100).toFixed(1)}% of impressions`
-                : 'No email captures yet',
-              color: 'var(--accent-300)',
-            },
-          ].map(({ icon: Icon, label, value, sub, color }) => (
+          {(() => {
+            const cap = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+            const hasRevenue = (revenue?.totals?.revenueDollars ?? 0) > 0;
+            const hasCampaign = !!intel?.bestCampaign?.campaignName;
+            const hasTraffic = !!intel?.bestTrafficSource?.source;
+            const hasEmails = (revenue?.totals?.emailCaptures ?? 0) > 0;
+            return [
+              {
+                icon: DollarSign, label: 'Revenue Generated', mono: true, empty: !hasRevenue,
+                value: hasRevenue ? `$${(revenue?.totals?.revenueDollars ?? 0).toFixed(2)}` : '—',
+                sub: hasRevenue ? `${revenue?.totals?.purchases ?? 0} purchases` : 'No Shopify data yet',
+                color: 'var(--status-success)',
+              },
+              {
+                icon: MousePointer, label: 'Best Campaign', mono: false, empty: !hasCampaign,
+                value: hasCampaign ? intel!.bestCampaign!.campaignName : '—',
+                sub: (intel?.bestCampaign?.ctr ?? 0) > 0 ? `${intel?.bestCampaign?.ctr ?? 0}% CTR` : 'No campaign data yet',
+                color: 'var(--data-1)',
+              },
+              {
+                icon: TrendingUp, label: 'Best Traffic Source', mono: false, empty: !hasTraffic,
+                value: hasTraffic ? cap(intel!.bestTrafficSource!.source) : '—',
+                sub: (intel?.bestTrafficSource?.ctr ?? 0) > 0 ? `${intel?.bestTrafficSource?.ctr ?? 0}% CTR` : 'No traffic data yet',
+                color: 'var(--data-3)',
+              },
+              {
+                icon: Mail, label: 'Emails Captured', mono: true, empty: !hasEmails,
+                value: hasEmails ? (revenue?.totals?.emailCaptures ?? 0).toLocaleString() : '—',
+                sub: impr > 0 && hasEmails
+                  ? `${(((revenue?.totals?.emailCaptures ?? 0) / impr) * 100).toFixed(1)}% of impressions`
+                  : 'No email captures yet',
+                color: 'var(--accent-300)',
+              },
+            ];
+          })().map(({ icon: Icon, label, value, sub, color, mono, empty }) => (
             <div key={label} style={{
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: 8,
-              padding: '16px 18px',
+              borderRadius: 10,
+              padding: '15px 16px',
               position: 'relative',
               overflow: 'hidden',
+              transition: 'border-color 120ms',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                <div style={{ width: 24, height: 24, borderRadius: 6, background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={12} style={{ color }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: `${color}1f`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon size={13} style={{ color }} />
                 </div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>{label}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>{label}</span>
               </div>
-              <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, letterSpacing: '-0.01em', fontFamily: 'var(--font-mono)' }}>
+              <div
+                title={typeof value === 'string' ? value : undefined}
+                style={{
+                  fontSize: mono ? 20 : 16,
+                  fontWeight: mono ? 600 : 600,
+                  color: empty ? 'var(--text-disabled)' : 'var(--text-primary)',
+                  marginBottom: 4,
+                  letterSpacing: '-0.01em',
+                  fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
                 {value}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub}</div>
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.5 }} />
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: color, opacity: empty ? 0.18 : 0.55 }} />
             </div>
           ))}
         </div>

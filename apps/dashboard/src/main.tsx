@@ -140,8 +140,7 @@ const PUBLISHABLE_KEY =
   (window as { __ENV__?: Record<string, string> }).__ENV__?.['VITE_CLERK_PUBLISHABLE_KEY'];
 
 const OPS_CENTER_ENABLED = isFeatureEnabled('ff_realtime_ops_dashboard');
-const JOURNEYS_ENABLED = isFeatureEnabled('ff_journeys_ui');
-const EXPERIMENTS_ENABLED = isFeatureEnabled('ff_experiments_v1');
+// Journeys + Experiments routing is always on; the pages self-gate to the Agency plan.
 
 // eslint-disable-next-line react-refresh/only-export-components
 const ClerkAppContent: React.FC = () => {
@@ -192,8 +191,10 @@ const ClerkAppContent: React.FC = () => {
             onLogout={handleLogout}
           >
             {currentPath === '/dashboard' || currentPath === '/' ? (OPS_CENTER_ENABLED ? <OpsCenter onNavigate={navigate} /> : <Dashboard onNavigate={navigate} />) : null}
-            {currentPath === '/journeys' && JOURNEYS_ENABLED ? <Journeys onNavigate={navigate} /> : null}
-            {currentPath === '/experiments' && EXPERIMENTS_ENABLED ? <Experiments onNavigate={navigate} /> : null}
+            {/* Journeys + Experiments self-gate to Agency (upgrade screen otherwise); routing is
+                always on so the nav links resolve. The flags stay as a non-agency force-on. */}
+            {currentPath === '/journeys' ? <Journeys onNavigate={navigate} /> : null}
+            {currentPath === '/experiments' ? <Experiments onNavigate={navigate} /> : null}
             {currentPath === '/sites' ? <Sites onNavigate={navigate} /> : null}
             {currentPath === '/campaigns' ? <Campaigns onNavigate={navigate} /> : null}
             {currentPath === '/leads' ? <Leads onNavigate={navigate} /> : null}

@@ -24,7 +24,8 @@ import {
   ArrowDown,
   Eye,
   EyeOff,
-  CheckSquare
+  CheckSquare,
+  Heart
 } from 'lucide-react';
 import { Campaign, CampaignElement, ElementType, PopupType, BrandStyle, CampaignTriggers } from './types';
 import { PREBUILT_TEMPLATES } from './data/templates';
@@ -262,28 +263,40 @@ export default function SidebarLeft({
   const stepConfig = campaign.steps[activeStep];
   const elements = stepConfig.elements;
 
-  // Fully covers all requested categories in organized filter chips
-  const categories = [
-    'All',
-    'Affiliate',
-    'Conversion Patterns',
-    'Ecommerce Goals',
-    'USA Holidays',
-    'Japan Holidays',
-    'Seasons',
-    'Holiday specific sales',
-    'Sales & Store Campaigns',
-    'Affiliate & Widgets',
-    'Layout & Positioning',
-    'Fashion Editorial',
-    'Beauty/Skincare',
-    'Kawaii Japanese Retail',
-    'Spin to Win'
-  ];
+  // Derive categories from the templates that actually exist (drops empty/unused chips),
+  // preserving template order. 'All' always leads.
+  const categories = React.useMemo(() => {
+    const seen: string[] = [];
+    for (const t of PREBUILT_TEMPLATES) {
+      if (t.category && !seen.includes(t.category)) seen.push(t.category);
+    }
+    return ['All', ...seen];
+  }, []);
 
-  const filteredTemplates = selectedTemplateCat === 'All' 
-    ? PREBUILT_TEMPLATES 
-    : PREBUILT_TEMPLATES.filter(t => t.category === selectedTemplateCat);
+  // Template "likes" (per browser). Liked templates float to the top of the list.
+  const LIKES_KEY = '_sp_template_likes';
+  const [likedIds, setLikedIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(LIKES_KEY) || '[]') as string[]); } catch { return new Set(); }
+  });
+  const toggleLike = (id: string) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      try { localStorage.setItem(LIKES_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const filteredTemplates = React.useMemo(() => {
+    const base = selectedTemplateCat === 'All'
+      ? PREBUILT_TEMPLATES
+      : PREBUILT_TEMPLATES.filter((t) => t.category === selectedTemplateCat);
+    // Stable sort: liked first, original order otherwise.
+    return base
+      .map((t, i) => ({ t, i }))
+      .sort((a, b) => (likedIds.has(b.t.id) ? 1 : 0) - (likedIds.has(a.t.id) ? 1 : 0) || a.i - b.i)
+      .map((x) => x.t);
+  }, [selectedTemplateCat, likedIds]);
 
   // Programmatically compiles customized step configs using Canva visual guidelines
   const handleGenerateProceduralMixer = () => {
@@ -1040,9 +1053,32 @@ export default function SidebarLeft({
                           : 'border-zinc-200 hover:border-zinc-400 bg-white'
                       }`}
                     >
-                      {/* Realistic Thumbnail Simulation */}
+                      {/* Thumbnail — render the actual creative image when the template has one
+                          (full-bleed image templates like the Japanese sale creatives), otherwise
+                          fall back to the mini mockup. */}
+                      {(() => {
+                        const heroImg = tpl.steps.main.elements.find(
+                          (e) => e.type === 'image' && typeof e.content === 'string' && e.content.startsWith('http')
+                        );
+                        if (heroImg) {
+                          return (
+                            <div className="relative aspect-video w-full overflow-hidden bg-zinc-100 flex items-center justify-center">
+                              <img
+                                src={heroImg.content}
+                                alt={tpl.name}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                                loading="lazy"
+                              />
+                              <span className="absolute top-1 right-1 text-[6px] font-mono uppercase tracking-wider px-1 bg-black/40 text-white rounded">
+                                {tpl.steps.main.popupType}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
                       <div className="relative aspect-video w-full overflow-hidden bg-zinc-50 p-3 flex items-center justify-center transition-all">
-                        <div 
+                        <div
                           className="w-[90%] h-[90%] rounded shadow-xs border p-2 flex flex-col justify-between overflow-hidden relative"
                           style={{
                              backgroundColor: tpl.steps.main.backgroundColor,
@@ -1081,25 +1117,33 @@ export default function SidebarLeft({
                           </div>
                         </div>
                       </div>
+                        );
+                      })()}
 
-                      {/* Info & Stats */}
+                      {/* Info & like */}
                       <div className="p-3 border-t border-zinc-200 bg-white text-left">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-semibold text-zinc-900 group-hover:text-zinc-950 transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-xs font-semibold text-zinc-900 group-hover:text-zinc-950 transition-colors truncate">
                             {tpl.name}
                           </h4>
-                          <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400">
-                            {tpl.category.split(' ')[0]}
-                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleLike(tpl.id); }}
+                            title={likedIds.has(tpl.id) ? 'Unlike' : 'Like — pins to the top'}
+                            aria-label={likedIds.has(tpl.id) ? 'Unlike template' : 'Like template'}
+                            className="shrink-0 p-1 -m-1 rounded transition-colors"
+                          >
+                            <Heart
+                              className="h-3.5 w-3.5 transition-colors"
+                              style={{
+                                color: likedIds.has(tpl.id) ? '#ef4444' : '#a1a1aa',
+                                fill: likedIds.has(tpl.id) ? '#ef4444' : 'none',
+                              }}
+                            />
+                          </button>
                         </div>
-                        <div className="flex gap-4 mt-2">
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            Views: <strong className="text-zinc-800 font-medium">{(tpl.views).toLocaleString()}</strong>
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            Conv. Rate: <strong className="text-zinc-900 font-semibold">{((tpl.conversions / tpl.views) * 100).toFixed(1)}%</strong>
-                          </span>
-                        </div>
+                        <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400">
+                          {tpl.category.split(' ')[0]}
+                        </span>
                       </div>
 
                       {isActiveTemplate && (

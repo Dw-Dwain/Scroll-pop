@@ -138,6 +138,30 @@ function detectPlanLocal(): PlanId {
   return 'free';
 }
 
+// ─── Super-admin tier override (lead-dev testing, no Stripe) ──────────────────
+// dwain3991 can preview any tier's gating/limits without a real subscription. The override
+// is local-only (never sent to the API) and only honoured for the verified super-admin.
+// 'unlimited' (or unset) keeps full super-admin access; a PlanId simulates that exact tier.
+const PLAN_OVERRIDE_KEY = '_sp_admin_plan_override';
+export const PLAN_OVERRIDE_EVENT = 'sp:plan-override';
+export type PlanOverride = PlanId | 'unlimited' | null;
+
+export function readPlanOverride(): PlanOverride {
+  try {
+    const v = localStorage.getItem(PLAN_OVERRIDE_KEY);
+    if (v === 'unlimited' || (v && (PLAN_ORDER as string[]).includes(v))) return v as PlanOverride;
+  } catch {}
+  return null;
+}
+
+export function setPlanOverride(p: PlanOverride): void {
+  try {
+    if (p) localStorage.setItem(PLAN_OVERRIDE_KEY, p);
+    else localStorage.removeItem(PLAN_OVERRIDE_KEY);
+  } catch {}
+  window.dispatchEvent(new Event(PLAN_OVERRIDE_EVENT));
+}
+
 
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
@@ -155,26 +179,34 @@ export function usePlan() {
   const apiPlan  = mePayload?.tenant?.plan;
   const apiEmail = mePayload?.user?.email;
 
-  // API data wins; fall back to localStorage while loading or in desktop mode.
-  const plan: PlanId = (apiPlan && (PLAN_ORDER as string[]).includes(apiPlan))
-    ? (apiPlan as PlanId)
-    : detectPlanLocal();
-
   // isAdmin = platform super-admin ONLY (exact ADMIN_EMAIL match from API).
   // NO localStorage fallback — admin panel access must be confirmed by the API.
   // If /me hasn't loaded yet, isAdmin is false (never speculatively true).
   const isAdmin: boolean = apiEmail ? isSuperAdminEmail(apiEmail) : false;
 
-  // isUnlimited = super-admin OR @novatise.com (agency plan limits, no admin console).
-  // Determined solely by the /me API email — no client-side fallback.
-  const isUnlimited: boolean = apiEmail ? isUnlimitedEmail(apiEmail) : false;
-
   const [, rerender] = React.useState(0);
   React.useEffect(() => {
-    const onStorage = () => rerender(n => n + 1);
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    const onChange = () => rerender(n => n + 1);
+    window.addEventListener('storage', onChange);
+    window.addEventListener(PLAN_OVERRIDE_EVENT, onChange);
+    return () => {
+      window.removeEventListener('storage', onChange);
+      window.removeEventListener(PLAN_OVERRIDE_EVENT, onChange);
+    };
   }, []);
+
+  // Super-admin tier override (lead-dev testing). Only honoured for the verified super-admin.
+  const planOverride: PlanOverride = isAdmin ? readPlanOverride() : null;
+  const simulatedTier = planOverride && planOverride !== 'unlimited' ? planOverride : null;
+
+  // API data wins; fall back to localStorage while loading. A super-admin tier override
+  // (a concrete tier) takes precedence so the lead dev can preview that exact plan.
+  const plan: PlanId = simulatedTier
+    ?? ((apiPlan && (PLAN_ORDER as string[]).includes(apiPlan)) ? (apiPlan as PlanId) : detectPlanLocal());
+
+  // isUnlimited = super-admin OR @novatise.com (agency limits, no admin console) — UNLESS the
+  // super-admin is simulating a concrete tier, in which case they experience that tier's real gating.
+  const isUnlimited: boolean = simulatedTier ? false : (apiEmail ? isUnlimitedEmail(apiEmail) : false);
 
   const limits: PlanLimits = isUnlimited ? UNLIMITED : PLAN_LIMITS[plan];
 
@@ -187,5 +219,5 @@ export function usePlan() {
   const planRank = (p: PlanId) => PLAN_ORDER.indexOf(p);
   const meetsMinPlan = (required: PlanId): boolean => isUnlimited || planRank(plan) >= planRank(required);
 
-  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan };
+  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan, planOverride };
 }

@@ -27,6 +27,7 @@ import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
 import { NotificationBell } from './NotificationBell';
 import { ClientSwitcher } from './ClientSwitcher';
+import { AdminTierSwitcher } from './AdminTierSwitcher';
 import { PendingInvites } from './PendingInvites';
 
 interface LayoutProps {
@@ -85,9 +86,12 @@ export const Layout: React.FC<LayoutProps> = ({
     return () => { try { localStorage.removeItem('__sp_admin'); } catch {} };
   }, []);
 
-  const journeysEnabled = isFeatureEnabled('ff_journeys_ui');
+  // Journeys + Experiments are Agency features — shown to agency/unlimited tenants. The feature
+  // flags remain as a force-on override for non-agency testing.
+  const isAgencyPlan = plan === 'agency' || isUnlimited;
+  const journeysEnabled = isAgencyPlan || isFeatureEnabled('ff_journeys_ui');
   const opsEnabled = isFeatureEnabled('ff_realtime_ops_dashboard');
-  const experimentsEnabled = isFeatureEnabled('ff_experiments_v1');
+  const experimentsEnabled = isAgencyPlan || isFeatureEnabled('ff_experiments_v1');
 
   React.useEffect(() => {
     const onStorage = () => setUserProfile(loadProfileFromStorage());
@@ -267,6 +271,9 @@ export const Layout: React.FC<LayoutProps> = ({
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'capitalize' }}>{plan}</span>
             </div>
           )}
+
+          {/* Super-admin tier switcher (lead-dev only — preview any plan without Stripe) */}
+          <AdminTierSwitcher />
 
           {/* Notifications */}
           <NotificationBell onNavigate={onNavigate} />
