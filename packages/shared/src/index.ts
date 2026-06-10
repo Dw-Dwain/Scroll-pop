@@ -11,7 +11,7 @@ export const EventType = z.enum([
   'impression', 'view', 'click', 'dismiss', 'conversion',
   'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
   'email_capture', 'sms_capture', 'discount_redeemed',
-  'checkout_started', 'purchase_completed', 'trigger_fired',
+  'checkout_started', 'purchase_completed', 'trigger_fired', 'trigger_blocked',
 ]);
 export const FrequencyType = z.enum(['once_per_session', 'once_per_day', 'once_per_visitor', 'always']);
 

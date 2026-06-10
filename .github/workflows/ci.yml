@@ -258,10 +258,12 @@ jobs:
           # Upload EVERY built chunk (p.js core + every lazy chunk like spin.js). Looping over
           # dist/*.js means a newly-added chunk can never ship without its R2 object — that gap
           # is exactly what made spin.js 404 and the wheel never render.
+          # --remote is REQUIRED: without it wrangler writes to the local miniflare store, not the
+          # production bucket, so the chunks silently never reach R2 (the real cause of spin.js 404).
           for f in packages/snippet/dist/*.js; do
             echo "Uploading $(basename "$f") to R2…"
             npx wrangler r2 object put "scrollpop-assets/$(basename "$f")" \
-              --file "$f" --content-type application/javascript
+              --file "$f" --content-type application/javascript --remote
           done
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

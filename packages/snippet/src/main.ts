@@ -387,7 +387,9 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
     }
 
     if (!checkFrequencyCap(campaign.id, campaign.frequency)) {
-      console.warn('[ScrollPop] Frequency cap met, skipping display for campaign:', campaign.id);
+      // Real block telemetry (Journeys diagnose): the trigger fired but display was suppressed
+      // by the frequency cap. This is the one block reason decided client-side.
+      beaconEvent(campaign, 'trigger_blocked', undefined, { reason: 'frequency_cap' });
       return;
     }
     fired = true;
@@ -1249,7 +1251,7 @@ type BeaconEventType =
   | 'impression' | 'view' | 'click' | 'dismiss' | 'conversion'
   | 'popup_close' | 'popup_submit' | 'popup_expand' | 'popup_minimize'
   | 'email_capture' | 'sms_capture' | 'discount_redeemed'
-  | 'checkout_started' | 'purchase_completed' | 'trigger_fired';
+  | 'checkout_started' | 'purchase_completed' | 'trigger_fired' | 'trigger_blocked';
 
 const getScrollDepthPct = () =>
   Math.round(scrollY / Math.max(document.body.scrollHeight - innerHeight, 1) * 100);
