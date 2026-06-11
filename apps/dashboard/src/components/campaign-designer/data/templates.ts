@@ -610,6 +610,67 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
   },
 ];
 
+// ─── ScrollPop Creative templates — one per creative JPG (fixed 330×560 portrait card) ──────────
+// Replaces the old single generic "vertical" template. Each is a full-bleed creative image with an
+// invisible full-card CTA overlay (set your affiliate href) and a white-circle X close. Lightweight:
+// one image + two overlay primitives, triggers + design primitives included out of the box.
+const CREATIVE_W = 330;   // fixed width
+const CREATIVE_H = 560;   // fixed height
+const creativeUrl = (file: string) => `https://cdn.scrollpop.online/creatives/${encodeURIComponent(file)}.jpg`;
+
+const creativeTemplate = (id: string, name: string, file: string): Campaign => ({
+  id,
+  name,
+  category: 'Affiliate',
+  isActive: true,
+  conversions: 0,
+  views: 0,
+  createdAt: '2026-06-11',
+  triggers: getDefaultTriggers(),
+  steps: {
+    teaser: {
+      enabled: false,
+      popupType: 'floating', position: 'bottom-right',
+      width: 148, height: 56,
+      backgroundColor: 'rgba(15,15,15,0.85)', borderRadius: 14, borderWidth: 0, borderColor: 'transparent',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overlayColor: 'rgba(0,0,0,0)', animationEntrance: 'slide-up',
+      elements: [],
+    },
+    main: {
+      popupType: 'modal', position: 'center',
+      width: CREATIVE_W, height: CREATIVE_H,
+      backgroundColor: 'rgba(0,0,0,0)', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
+      boxShadow: '0 24px 60px rgba(0,0,0,0.45)', overlayColor: 'rgba(0,0,0,0.6)', animationEntrance: 'zoom',
+      elements: [
+        // Full-bleed creative (bottom) → invisible full-card CTA (whole image clickable) → white-circle X (top).
+        { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: creativeUrl(file), borderRadius: 16, zIndex: 1 },
+        { id: 'cta-link', type: 'button', x: 0, y: 0, w: 100, h: 100, content: '', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0)', href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', borderRadius: 16, zIndex: 2 },
+        { id: 'close-btn', type: 'close', x: 88, y: 2.5, w: 9, h: 5.4, content: '✕', color: '#18181b', fontSize: 15, fontWeight: '700', align: 'center', backgroundColor: '#ffffff', borderRadius: 99, zIndex: 100, extraProps: { adClose: false } },
+      ],
+    },
+    success: {
+      enabled: false,
+      popupType: 'modal', position: 'center',
+      width: CREATIVE_W, height: CREATIVE_H,
+      backgroundColor: 'rgba(0,0,0,0)', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
+      boxShadow: '0 24px 60px rgba(0,0,0,0.45)', overlayColor: 'rgba(0,0,0,0.6)', animationEntrance: 'zoom',
+      elements: [],
+    },
+  },
+});
+
+// One template per creative JPG in R2 (cdn.scrollpop.online/creatives/<name>.jpg). Names match the
+// committed assets in "Scrollpop japanese sales templates/". Add a row here when a new creative ships.
+const CREATIVE_TEMPLATES: Campaign[] = [
+  creativeTemplate('creative-amazon-bf', 'Amazon JP — Black Friday', 'AMAZON JAPAN BLACK FRIDAY'),
+  creativeTemplate('creative-amazon-prime', 'Amazon JP — Prime Day', 'AMAZON JAPAN PRIME DAY'),
+  creativeTemplate('creative-amazon-spring', 'Amazon JP — Spring Sale', 'AMAZON JAPAN SPRING SALE'),
+  creativeTemplate('creative-mercari', 'Mercari — Big Sale', 'MERCARI JP BIG SALE'),
+  creativeTemplate('creative-rakuten-ny', 'Rakuten — New Year Fukubukuro', 'RAKUTEN NEW YEAR FUKUBUKURO'),
+  creativeTemplate('creative-rakuten-sale', 'Rakuten — Sale', 'RAKUTEN SALES'),
+  creativeTemplate('creative-yahoo', 'Yahoo! Shopping / PayPay Mall', 'YAHOO SHOPPING PAYPAY MALL'),
+];
+
 // Preserving the 8 premium handcrafted elite assets
 const PRESERVATION_CATALOG: Campaign[] = [
   // 1. Fashion Editorial (Minimalist, elegant serif, high contrast)
@@ -1235,51 +1296,10 @@ const PRESERVATION_CATALOG: Campaign[] = [
     }
   },
 
-  // 3b. ScrollPop Creative (Vertical) — full-bleed creative + invisible CTA overlay + X.
-  // Layering (do not reorder): image zIndex 1 (bottom) → invisible CTA zIndex 2 (whole image
-  // clickable, no label) → X close zIndex 100 (top-right, always clickable above the CTA).
-  // Pick a creative from the ScrollPop Creatives library (cdn.scrollpop.online/creatives/<name>.jpg)
-  // and set the CTA href to your Rakuten/Amazon link. X closes instantly (natural close); enable
-  // ad-then-close per-campaign via the close element's adClose option.
-  {
-    id: 'creative-vertical',
-    name: 'ScrollPop Creative (Vertical)',
-    category: 'Affiliate',
-    isActive: true,
-    conversions: 0,
-    views: 0,
-    createdAt: '2026-06-09',
-    triggers: getDefaultTriggers(),
-    steps: {
-      teaser: {
-        enabled: false,
-        popupType: 'floating', position: 'bottom-right',
-        width: 148, height: 56,
-        backgroundColor: 'rgba(15,15,15,0.85)', borderRadius: 14, borderWidth: 0, borderColor: 'transparent',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overlayColor: 'rgba(0,0,0,0)', animationEntrance: 'slide-up',
-        elements: [],
-      },
-      main: {
-        popupType: 'modal', position: 'center',
-        width: 360, height: 600,
-        backgroundColor: 'rgba(0,0,0,0)', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
-        boxShadow: '0 24px 60px rgba(0,0,0,0.45)', overlayColor: 'rgba(0,0,0,0.6)', animationEntrance: 'zoom',
-        elements: [
-          { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: 'https://cdn.scrollpop.online/creatives/AMAZON%20JAPAN%20BLACK%20FRIDAY.jpg', borderRadius: 16, zIndex: 1 },
-          { id: 'cta-link', type: 'button', x: 0, y: 0, w: 100, h: 100, content: '', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0)', href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', borderRadius: 16, zIndex: 2 },
-          { id: 'close-btn', type: 'close', x: 90, y: 2, w: 8, h: 6, content: '✕', color: '#ffffff', fontSize: 16, fontWeight: '700', align: 'center', backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 99, zIndex: 100, extraProps: { adClose: false } },
-        ],
-      },
-      success: {
-        enabled: false,
-        popupType: 'modal', position: 'center',
-        width: 360, height: 600,
-        backgroundColor: 'rgba(0,0,0,0)', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
-        boxShadow: '0 24px 60px rgba(0,0,0,0.45)', overlayColor: 'rgba(0,0,0,0.6)', animationEntrance: 'zoom',
-        elements: [],
-      },
-    },
-  },
+  // ScrollPop Creative templates — one dedicated preset per creative JPG (fixed 330×560), defined
+  // above as CREATIVE_TEMPLATES and spread in here. Replaces the old single generic "vertical"
+  // template (which required manually swapping the image each time).
+  ...CREATIVE_TEMPLATES,
 
   // 4. Luxury Brand — high contrast, full-bleed background image, serif, single CTA
   {
