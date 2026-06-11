@@ -14,11 +14,19 @@ import { sqlClient } from './client.js';
  * password (see MASTER §RLS); this only grants to it + installs policies.
  */
 
+// Tenant tables that get FULL RLS (ENABLE + FORCE + tenant policy).
 const TENANT_ID_TABLES = [
   'sites', 'campaigns', 'designs', 'triggers', 'targeting_rules', 'frequency_rules',
-  'events', 'leads', 'variants', 'clients', 'coupons', 'team_invites',
+  'leads', 'variants', 'clients', 'coupons', 'team_invites',
   'notifications', 'shopify_installations', 'tenant_members',
 ];
+
+// `events` is a COMPRESSED TimescaleDB hypertable — Postgres/TimescaleDB does not support RLS on
+// compressed hypertables (ALTER ... ROW LEVEL SECURITY → 0A000 "operation not supported on
+// hypertables that have compression enabled"). So events stays on app-layer tenant filtering only
+// (every analytics/ops route filters by request.tenantId; ingest writes via the system pool). The
+// tenant role still needs DML on it so those authenticated read paths work on the tenant pool.
+const GRANT_ONLY_TABLES = ['events'];
 
 const TENANT_ROLE = process.env['DB_TENANT_ROLE'] ?? 'scrollpop_tenant';
 
@@ -37,6 +45,11 @@ export async function ensureRlsSchema(log: FastifyBaseLogger): Promise<boolean> 
     }
 
     await sql.unsafe(`GRANT USAGE ON SCHEMA public TO ${TENANT_ROLE}`);
+
+    // Grant-only tables (no RLS — see GRANT_ONLY_TABLES note). DML so authenticated read paths work.
+    for (const table of GRANT_ONLY_TABLES) {
+      await sql.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO ${TENANT_ROLE}`);
+    }
 
     for (const table of TENANT_ID_TABLES) {
       const policy = `${table}_all_tenant_isolation`;

@@ -8,7 +8,7 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'sites','campaigns','designs','triggers','targeting_rules','frequency_rules',
-    'events','leads','variants','clients','coupons','team_invites',
+    'leads','variants','clients','coupons','team_invites',
     'notifications','shopify_installations','tenant_members'
   ] LOOP
     EXECUTE format('ALTER TABLE %I NO FORCE ROW LEVEL SECURITY', t);

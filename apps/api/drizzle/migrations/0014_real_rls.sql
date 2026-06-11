@@ -23,9 +23,14 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'scrollpop_tenant') THEN
     EXECUTE 'GRANT USAGE ON SCHEMA public TO scrollpop_tenant';
 
+    -- `events` is a COMPRESSED TimescaleDB hypertable; Postgres/TimescaleDB does not allow RLS on
+    -- compressed hypertables. Grant DML (authenticated read paths use the tenant pool) but DO NOT
+    -- enable RLS on it — it stays on app-layer tenant filtering.
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON events TO scrollpop_tenant';
+
     FOREACH t IN ARRAY ARRAY[
       'sites','campaigns','designs','triggers','targeting_rules','frequency_rules',
-      'events','leads','variants','clients','coupons','team_invites',
+      'leads','variants','clients','coupons','team_invites',
       'notifications','shopify_installations','tenant_members'
     ] LOOP
       pred := format('(%I.tenant_id = nullif(current_setting(''app.current_tenant'', true), '''')::uuid)', t);
