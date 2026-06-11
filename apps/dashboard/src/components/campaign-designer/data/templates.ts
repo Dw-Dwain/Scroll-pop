@@ -639,12 +639,13 @@ const creativeTemplate = (id: string, name: string, file: string): Campaign => (
     main: {
       popupType: 'modal', position: 'center',
       width: CREATIVE_W, height: CREATIVE_H,
-      backgroundColor: 'rgba(0,0,0,0)', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
+      // Solid card so the popup is NEVER invisible (even if the creative image is slow/unavailable).
+      backgroundColor: '#0b0b0c', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
       boxShadow: '0 24px 60px rgba(0,0,0,0.45)', overlayColor: 'rgba(0,0,0,0.6)', animationEntrance: 'zoom',
       elements: [
-        // Full-bleed creative (bottom) → invisible full-card CTA (whole image clickable) → white-circle X (top).
-        { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: creativeUrl(file), borderRadius: 16, zIndex: 1 },
-        { id: 'cta-link', type: 'button', x: 0, y: 0, w: 100, h: 100, content: '', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0)', href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', borderRadius: 16, zIndex: 2 },
+        // The creative image IS the click target (href → tracked + opens the affiliate link). No
+        // separate full-card button overlaying it. White-circle X on top to dismiss.
+        { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: creativeUrl(file), href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', borderRadius: 16, zIndex: 1 },
         { id: 'close-btn', type: 'close', x: 88, y: 2.5, w: 9, h: 5.4, content: '✕', color: '#18181b', fontSize: 15, fontWeight: '700', align: 'center', backgroundColor: '#ffffff', borderRadius: 99, zIndex: 100, extraProps: { adClose: false } },
       ],
     },

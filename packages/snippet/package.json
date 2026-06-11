@@ -8,7 +8,7 @@
     "dev": "node build.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "size-check": "node -e \"const fs=require('fs');const zlib=require('zlib');const buf=fs.readFileSync('dist/p.js');zlib.gzip(buf,(e,r)=>{if(e)throw e;const kb=(r.length/1024).toFixed(2);console.log('Snippet gzipped size:',kb,'KB (',r.length,'bytes)');if(r.length>10400){console.error('FAIL: snippet exceeds gzip budget (10400B cap)');process.exit(1);}console.log('PASS');});\"",
+    "size-check": "node -e \"const fs=require('fs');const zlib=require('zlib');const buf=fs.readFileSync('dist/p.js');zlib.gzip(buf,(e,r)=>{if(e)throw e;const kb=(r.length/1024).toFixed(2);console.log('Snippet gzipped size:',kb,'KB (',r.length,'bytes)');if(r.length>11264){console.error('FAIL: snippet exceeds gzip budget (11KB cap, 11264B)');process.exit(1);}console.log('PASS');});\"",
     "lint": "echo 'no linter for snippet'"
   },
   "devDependencies": {

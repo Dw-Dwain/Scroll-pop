@@ -18,6 +18,11 @@ import {
   cssNum, cssFont, cssAlign, cssWeight, cssLen,
 } from './sanitize.js';
 
+// Pin the Shadow DOM host visible against hostile theme resets (some WP/Shopify themes force
+// display:none / visibility:hidden on body-appended nodes). Inline !important wins cross-browser
+// (Firefox/Safari included). Defined once; applied on every render path.
+const HOST_PIN = 'display:block!important;visibility:visible!important';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AffiliateSlot {
@@ -742,14 +747,26 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
       }
       case 'image': {
         const imgSrc = safeHref((smartProduct && smartProduct.image) ? smartProduct.image : content);
-        out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${elBorderR(el.borderRadius, 8)}px;">`);
+        const r = elBorderR(el.borderRadius, 8);
+        // When the image has an href it becomes the click target itself (id=cta-link → tracked +
+        // opens the affiliate link) — no separate full-card button overlaying/hiding it.
+        const imgHref = el.href ? safeHref(injectMacros(String(el.href))) : '';
+        if (imgHref && !usedCtaId) {
+          usedCtaId = true;
+          out.push(`<a id="cta-link" href="${escapeHtml(imgHref)}" target="_blank" rel="noopener" style="${pos}display:block;"><img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="position:absolute;inset:0;object-fit:cover;border-radius:${r}px;"></a>`);
+        } else {
+          out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${r}px;">`);
+        }
         break;
       }
-      case 'close':
-        // Visible white circle + outline + X so it overlays images (matches the designer). Honors a
-        // custom backgroundColor/radius; defaults give the white-circle look.
-        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:${elBgColor(el.backgroundColor, '#fff')};border:1px solid #E4E4E7;border-radius:${elBorderR(el.borderRadius, 999)}px;box-shadow:0 1px 4px rgba(0,0,0,.18);cursor:pointer;color:${elColor(el.color, cssText)};font-size:${cssNum(el.fontSize, 16)}px;">${escapeHtml(content || '✕')}</button>`);
+      case 'close': {
+        // The default '✕' (U+2715) is missing from several UI fonts → rendered blank on the front
+        // end (but fine in the designer). Normalize any X-like glyph to '×' (U+00D7, present in every
+        // font); keep genuinely custom text (e.g. "Close").
+        const cc = content && !/^[×✕✖xX]$/.test(content.trim()) ? content : '×';
+        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:${elBgColor(el.backgroundColor, '#fff')};border:1px solid #E4E4E7;border-radius:${elBorderR(el.borderRadius, 999)}px;box-shadow:0 1px 4px rgba(0,0,0,.18);cursor:pointer;color:${elColor(el.color, cssText)};font-weight:700;font-size:${cssNum(el.fontSize, 16)}px;">${escapeHtml(cc)}</button>`);
         break;
+      }
       case 'shape':
         out.push(`<div style="${pos}background:${elBgColor(el.backgroundColor, '#000')};border-radius:${el.content === 'circle' ? '9999px' : `${elBorderR(el.borderRadius, 0)}px`};border:${el.borderWidth ? `${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, 'transparent')}` : 'none'};"></div>`);
         break;
@@ -849,7 +866,7 @@ function launchSpinWheel(campaign: CampaignConfig): void {
     const { design, affiliateSlots } = resolveVariant(campaign);
     const host = document.createElement('div');
     host.id = `__sp_popup_${campaign.id}`;
-    host.style.cssText = 'display:block!important';
+    host.style.cssText = HOST_PIN;
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: 'closed' });
     spinMod.render(
@@ -916,7 +933,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   // Some host themes hide body-appended elements via a global reset (e.g. a rule that sets
   // `display:none` on unknown `body > *`). Pin the host visible with inline !important so the
   // popup can never be suppressed by the host page's CSS. (Confirmed on Shopify themes.)
-  host.style.cssText = 'display:block!important';
+  host.style.cssText = HOST_PIN;
   host.setAttribute('role', 'dialog');
   host.setAttribute('aria-modal', 'true');
   host.setAttribute('aria-label', design.headline);
