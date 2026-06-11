@@ -4,8 +4,10 @@ import { Readable } from 'node:stream';
 import { db } from '../db/client.js';
 import { campaigns, sites, designs, events, triggers, targetingRules, frequencyRules } from '../db/schema.js';
 import { eq, and, isNull, desc, lt, sql } from 'drizzle-orm';
+import { AffiliateSlotSchema, TriggerParamsSchema } from '@scrollpop/shared';
 import { emitNotification } from './notifications.js';
 import { purgeSiteConfigCache } from '../lib/cache-purge.js';
+import { coerceKind } from './designs.js';
 
 const CreateCampaignBody = z.object({
   siteId: z.string().uuid(),
@@ -19,6 +21,63 @@ const UpdateCampaignBody = z.object({
   startsAt: z.string().datetime().nullable().optional(),
   endsAt: z.string().datetime().nullable().optional(),
 });
+
+// ─── Transactional canvas save (campaign-save reliability) ──────────────────────
+// One atomic write for everything the visual designer edits: design + triggers +
+// frequency + targeting. Previously the dashboard fired four independent HTTP PUTs
+// and reported success even if the trailing three failed, so an edit could persist
+// partially while the UI claimed "published". This endpoint folds all four into a
+// single db.transaction — all-or-nothing — and returns the freshly persisted rows so
+// the client can reconcile its state without a manual refresh.
+
+const CanvasDesignSchema = z.object({
+  kind: z.string().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  affiliateSlots: z.array(AffiliateSlotSchema).max(3).optional(),
+});
+
+const CanvasTriggerSchema = z.object({
+  // back_button_capture is NOT a valid type — CLAUDE.md rule #1.
+  type: z.enum(['scroll_pct', 'dwell_time', 'inactivity', 'exit_intent_mouse', 'click']),
+  params: z.record(z.unknown()).default({}),
+});
+
+const CanvasTargetingSchema = z.object({
+  kind: z.enum(['url_exact', 'url_contains', 'url_regex', 'device', 'returning_visitor', 'geo', 'session_page_views', 'utm', 'ab_test']),
+  operator: z.enum(['include', 'exclude']).default('include'),
+  value: z.record(z.unknown()),
+});
+
+const CanvasFrequencySchema = z.object({
+  frequency: z.enum(['once_per_session', 'once_per_day', 'once_per_visitor', 'always']),
+  intervalDays: z.number().int().min(1).optional(),
+  maxDisplayCount: z.number().int().min(0).max(1000).nullable().optional(),
+  cooldownSeconds: z.number().int().min(0).max(31536000).nullable().optional(),
+  showAgainIfConverts: z.boolean().optional(),
+});
+
+const CanvasBody = z.object({
+  design: CanvasDesignSchema.optional(),
+  triggers: z.array(CanvasTriggerSchema).optional(),
+  targeting: z.array(CanvasTargetingSchema).optional(),
+  frequency: CanvasFrequencySchema.optional(),
+});
+
+// Mirrors the ReDoS guard in routes/targeting.ts so the bundle endpoint can't be
+// used to smuggle a catastrophic-backtracking pattern past the per-route validation.
+function validateCanvasRegex(pattern: unknown): string | null {
+  if (typeof pattern !== 'string') return 'Pattern must be a string';
+  if (pattern.length === 0 || pattern.length > 100) return 'Pattern must be 1–100 characters';
+  try {
+    new RegExp(pattern);
+  } catch {
+    return 'Invalid regular expression';
+  }
+  if (/\([^()]*[+*][^()]*\)[+*{]/.test(pattern)) {
+    return 'Pattern contains nested quantifiers that may cause ReDoS';
+  }
+  return null;
+}
 
 export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
   // Invalidate a campaign's site edge-config cache so status changes propagate immediately
@@ -364,5 +423,131 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Params: { id: string } }>('/campaigns/:id/pause', handlePause);
   fastify.patch<{ Params: { id: string } }>('/campaigns/:id/pause', handlePause);
+
+  // PUT /api/v1/campaigns/:id/canvas — atomic design+triggers+frequency+targeting save.
+  fastify.put<{ Params: { id: string } }>('/campaigns/:id/canvas', async (request, reply) => {
+    const body = CanvasBody.parse(request.body);
+
+    // Validate everything BEFORE opening the transaction so a bad field can't leave a
+    // half-applied write (and so the client gets a clean 400, not a partial 200).
+    if (body.triggers) {
+      for (const t of body.triggers) TriggerParamsSchema.parse({ type: t.type, ...t.params });
+    }
+    if (body.targeting) {
+      for (const rule of body.targeting) {
+        if (rule.kind === 'url_regex') {
+          const err = validateCanvasRegex((rule.value as Record<string, unknown>)['pattern']);
+          if (err) return reply.code(400).send({ error: { code: 'INVALID_REGEX', message: err } });
+        }
+      }
+    }
+
+    const tenantId = request.tenantId;
+    const campaignId = request.params.id;
+
+    const result = await db.transaction(async (tx) => {
+      // Ownership check inside the tx — if the campaign isn't this tenant's (or is
+      // soft-deleted) nothing is written.
+      const campaign = await tx.query.campaigns.findFirst({
+        where: and(eq(campaigns.id, campaignId), eq(campaigns.tenantId, tenantId), isNull(campaigns.deletedAt)),
+      });
+      if (!campaign) return { notFound: true as const };
+
+      // ── Design (upsert, shallow-merge config like routes/designs.ts) ──
+      let savedDesign: typeof designs.$inferSelect | undefined;
+      if (body.design) {
+        const coercedKind = coerceKind(body.design.kind);
+        const existing = await tx.query.designs.findFirst({
+          where: and(eq(designs.campaignId, campaignId), eq(designs.tenantId, tenantId)),
+        });
+        if (existing) {
+          [savedDesign] = await tx
+            .update(designs)
+            .set({
+              kind: coercedKind ?? existing.kind,
+              config: body.design.config ? { ...(existing.config as object), ...body.design.config } : existing.config,
+              affiliateSlots: body.design.affiliateSlots ?? existing.affiliateSlots,
+              updatedAt: new Date(),
+            })
+            .where(eq(designs.id, existing.id))
+            .returning();
+        } else {
+          [savedDesign] = await tx
+            .insert(designs)
+            .values({
+              campaignId,
+              tenantId,
+              kind: coercedKind ?? 'modal',
+              config: body.design.config ?? {},
+              affiliateSlots: body.design.affiliateSlots ?? [],
+            })
+            .returning();
+        }
+      }
+
+      // ── Triggers (full replace) ──
+      let savedTriggers: (typeof triggers.$inferSelect)[] | undefined;
+      if (body.triggers) {
+        await tx.delete(triggers).where(and(eq(triggers.campaignId, campaignId), eq(triggers.tenantId, tenantId)));
+        savedTriggers = body.triggers.length
+          ? await tx.insert(triggers).values(body.triggers.map((t) => ({
+              campaignId, tenantId, type: t.type, params: t.params,
+            }))).returning()
+          : [];
+      }
+
+      // ── Frequency (upsert) ──
+      let savedFrequency: typeof frequencyRules.$inferSelect | undefined;
+      if (body.frequency) {
+        const f = body.frequency;
+        const existing = await tx.query.frequencyRules.findFirst({
+          where: and(eq(frequencyRules.campaignId, campaignId), eq(frequencyRules.tenantId, tenantId)),
+        });
+        const values = {
+          frequency: f.frequency,
+          intervalDays: f.intervalDays ?? null,
+          maxDisplayCount: f.maxDisplayCount ?? null,
+          cooldownSeconds: f.cooldownSeconds ?? null,
+          showAgainIfConverts: f.showAgainIfConverts ?? false,
+        };
+        if (existing) {
+          [savedFrequency] = await tx.update(frequencyRules).set(values)
+            .where(and(eq(frequencyRules.id, existing.id), eq(frequencyRules.tenantId, tenantId))).returning();
+        } else {
+          [savedFrequency] = await tx.insert(frequencyRules).values({ campaignId, tenantId, ...values }).returning();
+        }
+      }
+
+      // ── Targeting (full replace) ──
+      let savedTargeting: (typeof targetingRules.$inferSelect)[] | undefined;
+      if (body.targeting) {
+        await tx.delete(targetingRules).where(and(eq(targetingRules.campaignId, campaignId), eq(targetingRules.tenantId, tenantId)));
+        savedTargeting = body.targeting.length
+          ? await tx.insert(targetingRules).values(body.targeting.map((r) => ({
+              campaignId, tenantId, kind: r.kind, operator: r.operator, value: r.value,
+            }))).returning()
+          : [];
+      }
+
+      return { notFound: false as const, campaign, savedDesign, savedTriggers, savedFrequency, savedTargeting };
+    });
+
+    if (result.notFound) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    // Bust the edge config cache so the saved state serves immediately (best-effort,
+    // post-commit so a cache hiccup can't roll back a committed save).
+    void purgeCampaignSiteCache(result.campaign.siteId);
+
+    return reply.send({
+      data: {
+        design: result.savedDesign ?? null,
+        triggers: result.savedTriggers ?? null,
+        frequency: result.savedFrequency ?? null,
+        targeting: result.savedTargeting ?? null,
+      },
+    });
+  });
 };
 

@@ -25,7 +25,8 @@ import {
   Eye,
   EyeOff,
   CheckSquare,
-  Heart
+  Heart,
+  ChevronDown
 } from 'lucide-react';
 import { Campaign, CampaignElement, ElementType, PopupType, BrandStyle, CampaignTriggers } from './types';
 import { PREBUILT_TEMPLATES } from './data/templates';
@@ -1018,21 +1019,26 @@ export default function SidebarLeft({
               <p className="text-[11px] text-zinc-500 mt-1 leading-normal">Select an expert layout crafted to maximize conversions.</p>
             </div>
 
-            {/* Category selection */}
-            <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-none shrink-0 border-b border-zinc-800 mb-4 select-none">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedTemplateCat(cat)}
-                  className={`px-3 py-1 text-[10px] font-medium rounded-md whitespace-nowrap transition-all duration-150 cursor-pointer ${
-                    selectedTemplateCat === cat
-                      ? 'bg-white text-zinc-900 shadow-xs'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100'
-                  }`}
+            {/* Category selection — a dropdown (not a cramped horizontal chip row) so the list
+                stays readable and doesn't depend on horizontal trackpad scrolling. */}
+            <div className="shrink-0 border-b border-zinc-800 pb-3 mb-4 select-none">
+              <label className="block text-[9px] font-semibold text-zinc-600 tracking-wider uppercase font-mono mb-1.5">
+                Category
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedTemplateCat}
+                  onChange={(e) => setSelectedTemplateCat(e.target.value)}
+                  className="w-full appearance-none bg-zinc-900 border border-zinc-700 rounded-md pl-3 pr-8 py-2 text-[11px] font-medium text-zinc-100 cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
                 >
-                  {cat.split(' ')[0]}
-                </button>
-              ))}
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat} className="bg-zinc-900 text-zinc-100">
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+              </div>
             </div>
 
             {/* Scrollable Template Cards */}

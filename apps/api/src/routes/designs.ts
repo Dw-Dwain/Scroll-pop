@@ -5,8 +5,8 @@ import { db } from '../db/client.js';
 import { designs, campaigns } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 
-const DESIGN_KINDS = ['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'spin_wheel'] as const;
-type DesignKindValue = (typeof DESIGN_KINDS)[number];
+export const DESIGN_KINDS = ['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'spin_wheel'] as const;
+export type DesignKindValue = (typeof DESIGN_KINDS)[number];
 
 // `config` is a jsonb column and the visual builder emits a rich, evolving shape
 // (steps, elements, freeform colors, etc.). We accept any object here rather than
@@ -19,7 +19,7 @@ const UpsertDesignBody = z.object({
 });
 
 // Map any incoming popup type to a valid DB enum value (defaults to modal).
-function coerceKind(kind: string | undefined): DesignKindValue | undefined {
+export function coerceKind(kind: string | undefined): DesignKindValue | undefined {
   if (kind === undefined) return undefined;
   if ((DESIGN_KINDS as readonly string[]).includes(kind)) return kind as DesignKindValue;
   if (kind === 'slide-in' || kind === 'drawer' || kind === 'corner' || kind === 'toast') return 'slide_in';

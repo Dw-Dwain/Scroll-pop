@@ -447,23 +447,23 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
   // (loaded from / saved to /variants/:id) instead of the campaign's base design. Triggers/
   // targeting/frequency are campaign-level and are not touched in variant mode.
   const variantId = React.useMemo(() => new URLSearchParams(window.location.search).get('variant') || undefined, []);
-  const { data: designData, isLoading: isDesignLoading, isError: _isDesignError } = useCustom({
+  const { data: designData, isLoading: isDesignLoading, isError: _isDesignError, refetch: refetchDesign } = useCustom({
     url: variantId ? `${apiUrl}/variants/${variantId}` : `${apiUrl}/campaigns/${campaignId}/design`,
     method: 'get',
   });
-  const { data: triggersData, isLoading: isTriggersLoading } = useCustom({
+  const { data: triggersData, isLoading: isTriggersLoading, refetch: refetchTriggers } = useCustom({
     url: `${apiUrl}/campaigns/${campaignId}/triggers`,
     method: 'get',
   });
-  const { data: targetingData, isLoading: isTargetingLoading } = useCustom({
+  const { data: targetingData, isLoading: isTargetingLoading, refetch: refetchTargeting } = useCustom({
     url: `${apiUrl}/campaigns/${campaignId}/targeting`,
     method: 'get',
   });
-  const { data: frequencyData, isLoading: isFrequencyLoading } = useCustom({
+  const { data: frequencyData, isLoading: isFrequencyLoading, refetch: refetchFrequency } = useCustom({
     url: `${apiUrl}/campaigns/${campaignId}/frequency`,
     method: 'get',
   });
-  const { mutate, mutateAsync } = useCustomMutation();
+  const { mutate } = useCustomMutation();
 
   const [campaign, setCampaign] = React.useState<Campaign | null>(null);
   const [activeStep, setActiveStep] = React.useState<CampaignStep>('main');
@@ -830,27 +830,36 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     const cooldownSeconds = t?.cooldownMinutes && t.cooldownMinutes > 0 ? t.cooldownMinutes * 60 : null;
     const showAgainIfConverts = !!t?.showAgainIfConverts;
 
-    // Save design
+    // ONE atomic write — design + triggers + frequency + targeting in a single DB
+    // transaction. Previously these were four independent PUTs whose failures were
+    // swallowed (console.error) while the UI still claimed success, so a campaign could
+    // persist partially. Now: all-or-nothing, success is only reported if the server
+    // committed, and on failure we surface the real error and stay on the page.
     mutate(
-      { url: `${apiUrl}/campaigns/${campaignId}/design`, method: 'put', values: designPayload },
+      {
+        url: `${apiUrl}/campaigns/${campaignId}/canvas`,
+        method: 'put',
+        values: {
+          design: { kind: designPayload.kind, config: designPayload.config, affiliateSlots: designPayload.affiliateSlots },
+          triggers: triggersList,
+          frequency: { frequency: freqMode, intervalDays: freqInterval, maxDisplayCount, cooldownSeconds, showAgainIfConverts },
+          targeting: targetingList,
+        },
+      },
       {
         onSuccess: async () => {
-          // After design succeeds, save triggers
-          try {
-            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'put', values: triggersList });
-            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/frequency`, method: 'put', values: { frequency: freqMode, intervalDays: freqInterval, maxDisplayCount, cooldownSeconds, showAgainIfConverts } });
-            await mutateAsync({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'put', values: targetingList });
-          } catch (err) {
-            console.error('Failed to save triggers/targeting:', err);
-          }
+          // Re-fetch the persisted state so the canvas reflects exactly what the server
+          // stored — no manual refresh needed. Allow the bootstrap effect to re-run.
+          apiLoadedRef.current = false;
+          await Promise.all([refetchDesign(), refetchTriggers(), refetchTargeting(), refetchFrequency()]);
           setIsSaving(false);
-          toastMessage('💾 Campaign Published & Live Successfully!');
-          // Return to the campaigns list after a brief moment so the toast is seen.
-          setTimeout(() => onNavigate('/campaigns'), 700);
+          toastMessage('💾 Saved — all changes are live.');
         },
-        onError: () => {
+        onError: (err: unknown) => {
           setIsSaving(false);
-          toastMessage('❌ Error: Failed to save changes.');
+          const msg = (err as { message?: string } | undefined)?.message;
+          // Honest failure: nothing was committed (the transaction rolled back).
+          toastMessage(`❌ Save failed — no changes were applied${msg ? `: ${msg}` : '.'}`);
         },
       }
     );

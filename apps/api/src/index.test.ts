@@ -105,6 +105,9 @@ vi.mock('./db/client.js', () => {
         then: Promise.resolve([]).then.bind(Promise.resolve([])),
       }),
     }),
+    // Transactional canvas save runs its body inside db.transaction(fn). The mock just
+    // invokes the callback with the same chainable mock so tx.query/insert/update/delete work.
+    transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(dbMock)),
   };
   return {
     db: dbMock,
@@ -522,6 +525,82 @@ describe('Outbound webhook config validation', () => {
       url: `/api/v1/campaigns/${UUID_A}/webhook`,
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('Transactional canvas save (PUT /campaigns/:id/canvas)', () => {
+  const fullPayload = {
+    design: { kind: 'modal', config: { headline: 'Hi' }, affiliateSlots: [] },
+    triggers: [{ type: 'scroll_pct', params: { pct: 50 } }],
+    frequency: { frequency: 'once_per_session' },
+    targeting: [{ kind: 'url_contains', operator: 'include', value: { pattern: '/shop' } }],
+  };
+
+  it('returns 404 (and writes nothing) when the campaign is not the tenant’s', async () => {
+    const app = await buildTestApp();
+    // Default mock: campaigns.findFirst → null inside the tx → not found.
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/campaigns/${UUID_A}/canvas`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: fullPayload,
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('persists design + triggers + frequency + targeting in one call (200)', async () => {
+    const { db } = await import('./db/client.js');
+    vi.mocked(db.transaction).mockClear();
+    vi.mocked(db.query.campaigns.findFirst).mockResolvedValueOnce({
+      id: UUID_A, tenantId: UUID_B, siteId: UUID_C,
+    } as ReturnType<typeof db.query.campaigns.findFirst> extends Promise<infer T> ? T : never);
+
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/campaigns/${UUID_A}/canvas`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: fullPayload,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: { design: unknown; triggers: unknown; frequency: unknown; targeting: unknown } };
+    expect(body.data).toHaveProperty('design');
+    expect(body.data).toHaveProperty('triggers');
+    expect(body.data).toHaveProperty('frequency');
+    expect(body.data).toHaveProperty('targeting');
+    // The save ran inside a single transaction.
+    expect(vi.mocked(db.transaction)).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('rejects an invalid trigger type with 400 before opening the transaction', async () => {
+    const { db } = await import('./db/client.js');
+    vi.mocked(db.transaction).mockClear();
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/campaigns/${UUID_A}/canvas`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: { ...fullPayload, triggers: [{ type: 'back_button_capture', params: {} }] },
+    });
+    expect(res.statusCode).toBe(400);
+    // No transaction should have been started for an invalid payload — nothing partially written.
+    expect(vi.mocked(db.transaction)).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('rejects a ReDoS url_regex pattern with 400', async () => {
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/campaigns/${UUID_A}/canvas`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: { targeting: [{ kind: 'url_regex', operator: 'include', value: { pattern: '(a+)+b' } }] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { code: 'INVALID_REGEX' } });
     await app.close();
   });
 });

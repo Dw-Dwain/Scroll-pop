@@ -669,7 +669,9 @@ export default function Canvas({
                     top: `${el.y}%`,
                     width: `${el.w}%`,
                     height: `${el.h}%`,
-                    zIndex: el.zIndex,
+                    // Close buttons always float above other elements (e.g. full-bleed images) so
+                    // the visitor can always dismiss the popup.
+                    zIndex: el.type === 'close' ? Math.max(el.zIndex, 900) : el.zIndex,
                     transform: `rotate(${rotAngle}deg)`,
                     transformStyle: 'preserve-3d',
                   }}
@@ -1060,17 +1062,20 @@ export default function Canvas({
                       </div>
                     )}
 
-                    {/* CLOSE BUTTON FOR POPUPS */}
+                    {/* CLOSE BUTTON FOR POPUPS — always a visible white circle with an outline + X,
+                        so it overlays images (and any background) instead of vanishing on a
+                        transparent default. A custom backgroundColor is still honored if set. */}
                     {el.type === 'close' && (() => {
-                      const isTransparentBg = !el.backgroundColor || el.backgroundColor === 'transparent';
+                      const hasCustomBg = !!el.backgroundColor && el.backgroundColor !== 'transparent';
                       return (
                         <div
                           className="w-full h-full flex items-center justify-center transition-colors cursor-pointer font-semibold font-mono"
                           style={{
                             borderRadius: `${el.borderRadius ?? 999}px`,
                             color: el.color || '#18181b',
-                            background: isTransparentBg ? 'transparent' : el.backgroundColor,
-                            border: isTransparentBg ? 'none' : `${el.borderWidth ?? 1}px solid ${el.borderColor || '#E4E4E7'}`,
+                            background: hasCustomBg ? el.backgroundColor : '#ffffff',
+                            border: `${el.borderWidth ?? 1}px solid ${el.borderColor || '#E4E4E7'}`,
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
                             fontSize: `${el.fontSize || 14}px`,
                           }}
                         >

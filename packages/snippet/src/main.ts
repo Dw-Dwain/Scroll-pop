@@ -746,7 +746,9 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
         break;
       }
       case 'close':
-        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:${elColor(el.color, cssText)};font-size:${cssNum(el.fontSize, 16)}px;">${escapeHtml(content || '✕')}</button>`);
+        // Visible white circle + outline + X so it overlays images (matches the designer). Honors a
+        // custom backgroundColor/radius; defaults give the white-circle look.
+        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:${elBgColor(el.backgroundColor, '#fff')};border:1px solid #E4E4E7;border-radius:${elBorderR(el.borderRadius, 999)}px;box-shadow:0 1px 4px rgba(0,0,0,.18);cursor:pointer;color:${elColor(el.color, cssText)};font-size:${cssNum(el.fontSize, 16)}px;">${escapeHtml(content || '✕')}</button>`);
         break;
       case 'shape':
         out.push(`<div style="${pos}background:${elBgColor(el.backgroundColor, '#000')};border-radius:${el.content === 'circle' ? '9999px' : `${elBorderR(el.borderRadius, 0)}px`};border:${el.borderWidth ? `${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, 'transparent')}` : 'none'};"></div>`);
@@ -1179,9 +1181,10 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       try { localStorage.removeItem(`_sp_${campaign.id}`); } catch {}
     }
   });
-  // Overlay/dismiss-text clicks are passive dismissals, not intentional close
+  // An explicit "no thanks" dismiss-text link still closes, but clicking/tapping the dark backdrop
+  // does NOT (intentional: the popup is X-only, so a stray tap outside — common on mobile — can't
+  // dismiss it). The overlay is purely a visual scrim now.
   shadow.getElementById('dismiss-text')?.addEventListener('click', () => dismiss(false));
-  shadow.getElementById('overlay')?.addEventListener('click', () => dismiss(false));
   shadow.getElementById('teaser-badge')?.addEventListener('click', reopen);
 
   // Wire up CTA click → beacon then navigate

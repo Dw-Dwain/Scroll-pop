@@ -4,13 +4,14 @@ import { useCustom, useApiUrl } from '@refinedev/core';
 import { useActiveClient } from '../hooks/useClients';
 import { usePlan } from '../hooks/usePlan';
 import { authedFetch } from '../providers/dataProvider';
+import { DesignThumbnail } from '../components/DesignThumbnail';
 
 interface ExperimentsProps {
   onNavigate: (path: string) => void;
 }
 
 interface Journey { id: string; campaignId: string; name: string; status: string; }
-interface Variant { id: string; name: string; weight: number; }
+interface Variant { id: string; name: string; weight: number; config?: Record<string, unknown> }
 interface VariantResult { variantId: string; impressions: number; clicks: number; conversions: number; }
 interface ExpData { variants: Variant[]; results: Record<string, VariantResult>; }
 
@@ -153,8 +154,31 @@ const ExpResults: React.FC<{ data: ExpData; onManage: () => void }> = ({ data, o
     }
   }
 
+  const letter = (i: number) => String.fromCharCode(65 + i); // A, B, C…
+
   return (
     <div>
+      {/* Real visual copies of each A/B variant — the actual saved design, not just a weight. */}
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, marginBottom: 8 }}>
+        Variant designs (live)
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(variants.length, 3)}, 1fr)`, gap: 10, marginBottom: 16 }}>
+        {variants.map((v, i) => {
+          const isWinner = v.id === winnerId;
+          return (
+            <div key={v.id} style={{ border: `1px solid ${isWinner ? 'var(--status-success)' : 'var(--border-subtle)'}`, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+              <DesignThumbnail config={(v.config ?? {}) as Record<string, unknown>} height={120} showStatus={false} radius="0" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 9px', borderTop: '1px solid var(--border-subtle)' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--accent-500, #6366f1)' }}>{letter(i)}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: isWinner ? 600 : 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.name}</span>
+                {isWinner && <Trophy size={12} style={{ color: 'var(--status-warning)', flexShrink: 0 }} />}
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{v.weight}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(4, 1fr)', gap: 8, fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, paddingBottom: 6, borderBottom: '1px solid var(--border-subtle)' }}>
         <span>Variant</span><span style={{ textAlign: 'right' }}>Weight</span><span style={{ textAlign: 'right' }}>Impr.</span><span style={{ textAlign: 'right' }}>CTR</span><span style={{ textAlign: 'right' }}>CVR</span>
       </div>

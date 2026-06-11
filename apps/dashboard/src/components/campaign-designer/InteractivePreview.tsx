@@ -1076,17 +1076,20 @@ export default function InteractivePreview({
                           />
                         )}
 
-                        {/* Close element — affiliate-gate + respects el.color / el.backgroundColor */}
+                        {/* Close element — affiliate-gate + respects el.color / el.backgroundColor.
+                            Defaults to a visible white circle with an outline + X so it overlays
+                            images instead of vanishing on a transparent default. */}
                         {el.type === 'close' && (() => {
-                          const isTransparentBg = !el.backgroundColor || el.backgroundColor === 'transparent';
+                          const hasCustomBg = !!el.backgroundColor && el.backgroundColor !== 'transparent';
                           return (
                             <div
                               onClick={() => handleAffiliateDismiss(activeStepConfig)}
                               title={awaitingReturn ? 'Close the ad tab first' : 'Close popup'}
                               className="w-full h-full flex items-center justify-center transition-all cursor-pointer font-bold"
                               style={{
-                                background:   awaitingReturn ? '#FEF3C7' : (isTransparentBg ? 'transparent' : el.backgroundColor),
-                                border:       awaitingReturn ? '1px solid #F59E0B' : (isTransparentBg ? 'none' : `1px solid ${el.borderColor || '#E5E7EB'}`),
+                                background:   awaitingReturn ? '#FEF3C7' : (hasCustomBg ? el.backgroundColor : '#ffffff'),
+                                border:       awaitingReturn ? '1px solid #F59E0B' : `1px solid ${el.borderColor || '#E5E7EB'}`,
+                                boxShadow:    '0 1px 4px rgba(0,0,0,0.18)',
                                 borderRadius: `${el.borderRadius ?? 999}px`,
                                 color:        awaitingReturn ? '#92400E' : (el.color || '#1F2937'),
                                 fontSize:     `${el.fontSize || 14}px`,

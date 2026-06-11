@@ -1,8 +1,9 @@
 # ScrollPop — Master Reference Document
 
 > **Audience:** Owner / lead developer. Everything about this product in one place.
-> Last updated: June 10, 2026 · v0.1.7-beta · Tracker: **54/54 code complete** · Launch readiness: **94/100**
+> Last updated: June 11, 2026 · v0.1.7-beta · Tracker: **54/54 code complete** · Launch readiness: **95/100**
 > Status detail lives in **`PROJECT-TRACKER.md`** (single source of truth) — this file links there rather than duplicating it.
+> **June 11 (latest): DB-level RLS is now LIVE on Fly and verified on real data** — dedicated `scrollpop_tenant` role, session-mode `DB_TENANT_URL`, `DB_RLS_ENFORCED=true`. Real isolation proven (a tenant role sees 14 of 22 campaigns, 0 cross-tenant leak, fail-closed with no tenant set). Step-by-step enablement guide: [`infra/db/RLS-ENABLEMENT-RUNBOOK.md`](infra/db/RLS-ENABLEMENT-RUNBOOK.md) and the "June 11 (cont. 2)" session log below.
 > 4 ops-only tasks remain (Stripe keys, 2× DNS/CDN, marketing deploy) + P1-14 deferred by owner decision.
 > **P3-2 complete**: dashboard at 0 ESLint warnings + 0 TypeScript errors (full strict). Dormant keys (Sentry/PostHog/Resend) activated.
 > **June 7 security code review (CR-01→08) complete** — 8 findings fixed, no backdoors found.
@@ -16,6 +17,69 @@
 > **June 10 (cont. 4):** **Render + Neon decommissioned (deleted) — migration complete.** Verified the live stack is 100% on Fly before/after deletion: `scrollpop-api` `/health` `200`, edge `/c/<key>` returns real data from `scrollpop-db`, old `scroll-pop.onrender.com` now `404`. `DATABASE_URL` confirmed already pointing at `scrollpop-db.flycast` (not Neon). Fixed a stale **`API_BASE_URL` Fly secret** (was still `scroll-pop.onrender.com` → now `https://scrollpop-api.fly.dev`; redeployed so both machines converged on the new value — a rolling `secrets set` had left one machine behind). **Clerk webhook repointed** to `…fly.dev/api/v1/webhooks/clerk` and tested (delivery **Succeeded**, signing secret unchanged). Snippet image-preload fix + core budget bump to 10300B committed/pushed (`15b2c2b`, `69d1935`). **Still open (external dashboards, no code/key changes):** Stripe webhook URL → `…fly.dev/api/v1/webhooks/stripe` **and** set `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/4 price IDs as Fly secrets (confirmed missing); Shopify Partners App URL + redirect URIs → `scrollpop-api.fly.dev`. Optional: `api.scrollpop.online`/`cdn.scrollpop.online` custom domains, marketing-site deploy.
 > **June 11:** **Adversarial security re-review + full Top-20 remediation (commit `72d606f`).** Fresh penetration-style audit (auth, multi-tenant, API, infra, snippet, privacy). Verdict: app-layer tenant filtering already consistent on every route; no SQLi/XSS/mass-assignment/IDOR; webhooks timing-safe. Fixed 19 of 20 priorities — API builds clean, **82 vitest pass** (incl. new `src/security-fixes.test.ts`). **C-1 (DB-level RLS backstop): first attempt crash-looped → root-caused → REBUILT + validated.** The first cut (reverted in `d102833`) was broken two ways: it connected the tenant pool as the **superuser** (superusers bypass RLS → it enforced nothing) and set the system bypass via a `-c app.bypass_rls=on` startup param (rejected by pgbouncer → crash-loop). Reproduced both against a real PG17+TimescaleDB container and rebuilt: **system pool bypasses by role attribute (no GUC/param), tenant pool uses a dedicated `scrollpop_tenant` NOBYPASSRLS role on a session-mode connection with a per-request `app.current_tenant` GUC, tenant-predicate-only policies (no GUC escape).** Request wiring switched from `enterWith` (doesn't propagate across Fastify hooks — verified) to a callback-style `onRequest` `AsyncLocalStorage.run(store, done)`. **Validated against the real DB: isolation enforced incl. the `events` hypertable, GUC-escape blocked, ZERO cross-tenant leak across 20 concurrent interleaved requests.** FAIL-SAFE: any setup/connection error degrades to app-layer-only — can't crash boot or a request. Cross-tenant routes (`admin`, `team`, `me`, `notifications.emitNotification`) use `systemDb`. **Gated by `DB_RLS_ENFORCED` + `DB_TENANT_URL` — NOT yet enabled in prod; needs the one-time `scrollpop_tenant` role + session-mode `DB_TENANT_URL`, staging-tested first (see §RLS).** Tenant isolation remains enforced at the app layer meanwhile (verified consistent). Other fixes (all live): **H-1** admin check fails CLOSED on Clerk error (5-min verified-cache, no DB-email fallback); **H-2** Clerk webhook stores the verified PRIMARY email; **H-3** site-verification fetches use a shared SSRF guard (`lib/url-guard.ts`) + `redirect:error` + no reflected key; **M-1/M-2** ESP keys + outbound-webhook secrets encrypted at rest (AES-256-GCM); **M-3** token-crypto refuses plaintext in prod (now requires `SHOPIFY_ENCRYPTION_KEY`, **set on Fly ✅**); **M-4** dev `/c`+`/v1` routes 404 in prod; **M-5** dropped `*`+credentials on `/e`; **L-1** dashboard CSP now enforcing; **L-2** ops `campaignId` UUID-validated; **L-3** `/e` revenue honored only from the Worker; **L-4** no emails in admin logs. Still ops-only: set Stripe secrets on Fly; rotate any pre-June-11 ESP/webhook secrets (re-save in dashboard re-encrypts).
 > **June 10 (cont. 5):** **"Popups not rendering" investigated — infra healthy, root causes were targeting/frequency gates + one real bug.** Verified every hop live post-migration (Fly `/health` 200, Worker→API secret OK, KV serving, R2 chunks all 200) and rendered the gourmet Rakuten popup + a spin-to-win wheel end-to-end through the production chain. Hiding factors: **geo rules** (sakananet + gourmet C1 are JP-only; owner browses from IN), **frequency caps** (`once_per_visitor`/`once_per_session` suppress re-display after first view — retest in incognito), and **`url_exact` bug (fixed, `438a651`)**: stored scheme-less URLs ("www.site.com/") never matched `location.href` — now compared normalized (no scheme/#fragment/trailing slash). Deployed + verified live on CDN. Notes: prod snippet strips all `console.*` (silence ≠ failure); gourmet C2 design still references placeholder `creatives/REPLACE-ME.png` (404s every load — swap/delete the `cr-img` element in the builder); **spin-to-win works** but no active campaign uses `kind='spin_wheel'`. New local repro harness in `.preview-test/` (launch.json "Snippet repro", port 4555, stubs config + serves dist chunks). Fly health-check blip during deploy was the rolling restart — passing.
+
+---
+
+## 📅 June 11, 2026 (cont. 2) — DB-level RLS turned ON in production (Fly) + designer/dashboard fixes
+
+**This is the session that took C-1 from "built but gated off" to "live and proven in production."** Plus a transactional campaign-save fix, real visual A/B previews on Experiments, and a template-browsing dropdown.
+
+### Part 1 — What RLS is, in plain terms
+
+Every tenant's data (campaigns, leads, sites, etc.) lives in shared tables, separated by a `tenant_id` column. Until now, isolation was enforced **only in application code** (every query says `WHERE tenant_id = <you>`). That works, but it's one forgotten `WHERE` away from a leak. **Row-Level Security (RLS)** moves that guarantee **into Postgres itself**: the database refuses to return another tenant's rows, even if the app code asks for them. We now run **both** (defence in depth).
+
+How it's wired (already in the codebase — this session just switched it on):
+- **Two database connections.** A **system pool** (the superuser, used for cross-tenant admin/team/me routes) that bypasses RLS by virtue of being a superuser, and a **tenant pool** that logs in as a dedicated, *non-superuser* role called **`scrollpop_tenant`**. Only the tenant pool is subject to RLS.
+- **Per-request tenant stamp.** On each authenticated request the app sets a Postgres session variable `app.current_tenant = <your tenant id>`. The RLS policies say "you may only see rows where `tenant_id` equals that variable." No variable set → you see **nothing** (fail-closed).
+- **Fail-safe.** If anything about the tenant connection breaks, the app automatically falls back to app-layer-only filtering. It can **never** crash a boot or a request because RLS had a problem.
+- **`events` is special.** It's a compressed TimescaleDB hypertable, and Postgres refuses RLS on those. So `events` keeps app-layer filtering only (the tenant role is granted access but there's no row policy). This is intentional, not a gap.
+
+### Part 2 — The exact steps we ran to enable it (repeatable)
+
+> Full copy-paste version with verification queries + rollback: [`infra/db/RLS-ENABLEMENT-RUNBOOK.md`](infra/db/RLS-ENABLEMENT-RUNBOOK.md).
+
+1. **Couldn't use `fly postgres connect`** — it errors `fork/exec /usr/local/bin/connect: no such file or directory` because our **custom TimescaleDB image** is missing that helper. **Workaround: `fly proxy`.**
+   ```
+   fly proxy 15432:5432 -a scrollpop-db          # tunnel: localhost:15432 → DB:5432 (leave running)
+   ```
+2. **Connect with a local psql 17** (host is now `localhost:15432`, NOT `.flycast`):
+   ```
+   psql "postgres://scrollpop_api:<pw>@localhost:15432/scrollpop_api?sslmode=disable"
+   ```
+3. **Create the dedicated role** (the prompt showing `=#` means you're a superuser, so this is allowed):
+   ```sql
+   ALTER ROLE scrollpop_tenant PASSWORD '<password-with-NO-$-sign>';   -- or CREATE ROLE … LOGIN … NOBYPASSRLS the first time
+   ```
+   `rolbypassrls` MUST be `f` (false) — a BYPASSRLS/superuser role would silently enforce nothing.
+4. **Set the Fly secrets** (this redeploys, and the app applies all grants + policies on boot):
+   ```
+   fly secrets set -a scrollpop-api DB_TENANT_URL='postgres://scrollpop_tenant:<same-password>@scrollpop-db.flycast:5432/scrollpop_api?sslmode=disable' DB_RLS_ENFORCED=true
+   ```
+   - Host here is `scrollpop-db.flycast:5432` (the **internal** address the app uses), port **5432** = session-mode (RLS needs this; the pooler port 6432 would break it).
+   - **Gotcha we hit:** in PowerShell, **double-quoted strings expand `$variables`**, so a password containing `$` (or a leftover `$np`) gets silently eaten → empty password → auth fails. Fix: use a password with **no `$`**, and prefer **single quotes** for literal values in PowerShell.
+5. **Verify it actually isolates** (as the tenant role, via `SET ROLE scrollpop_tenant`):
+   ```sql
+   SELECT set_config('app.current_tenant','',false);  SELECT count(*) FROM campaigns;   -- 0 (fail-closed)
+   SELECT set_config('app.current_tenant','<tenant>',false);  SELECT count(*) FROM campaigns;   -- only that tenant
+   SELECT count(*) FROM campaigns WHERE tenant_id <> '<tenant>';   -- 0 (can't escape)
+   ```
+
+**Result, verified on live data:** 15 `*_all_tenant_isolation` policies installed, every tenant table `ENABLE`+`FORCE` RLS, tenant role granted DML (incl. `events`). The tenant role saw **14 of 22** campaigns for the busiest tenant, **0** for the other tenants, and **0** with no tenant set. A local `psql` login as `scrollpop_tenant` succeeded, proving the role password matches the secret so the app's tenant pool authenticates.
+
+**Rollback (instant, safe):** `fly secrets unset -a scrollpop-api DB_RLS_ENFORCED` → redeploys to app-layer-only (still tenant-isolated). The leftover policies are harmless (the superuser system pool bypasses them).
+
+**Follow-up:** the role password used during setup was typed into a chat session — **rotate it** with the same `ALTER ROLE` + `fly secrets set` flow when convenient.
+
+### Part 3 — Designer / dashboard fixes (same session, code-complete + locally verified; not yet committed)
+
+| Fix | Where | What |
+|---|---|---|
+| **Transactional campaign save (#4)** | `apps/api/src/routes/campaigns.ts` (new `PUT /campaigns/:id/canvas`), `apps/dashboard/src/pages/CampaignDesign.tsx` | Save was 4 independent PUTs (design → triggers → frequency → targeting); the last 3 ran in a `try/catch` that only `console.error`'d, then still showed "Published!" and navigated away — a partial save reported as success. Now: **one `db.transaction` (all-or-nothing)**, success only on real commit, on failure it surfaces the error and stays put, and the canvas **re-fetches** the saved state (no manual refresh). 4 new API tests; suite 82→86 pass. |
+| **Experiments visual A/B previews (#3)** | `apps/dashboard/src/components/DesignThumbnail.tsx` (new, extracted from `Campaigns.tsx`), `pages/Experiments.tsx`, `routes/variants.ts` | The page was already honestly wired to the **real variants** system with real telemetry; it just showed weights, not designs. Now it renders **real preview cards of variant A vs B** (the actual saved design, winner-highlighted). `/variants` list now returns each variant's `config`. `CampaignThumbnail` de-duplicated into a shared `DesignThumbnail`. |
+| **Template category dropdown (#6)** | `components/campaign-designer/SidebarLeft.tsx` | The cramped horizontal chip row for template categories is now a proper **dropdown** — readable, no horizontal-scroll dependence. |
+| **RLS runbook (#1)** | `infra/db/RLS-ENABLEMENT-RUNBOOK.md` (new) | The step-by-step guide above, plus the `REPLACE-ME.png` data-fix SQL (the leak is in stored design config, not code — grep of source is clean). |
+
+Verified locally: `pnpm --filter @scrollpop/api exec vitest run` → 86 pass; API + dashboard `typecheck` clean; changed dashboard files lint clean (0 warnings); `pnpm --filter @scrollpop/dashboard build` succeeds. **No snippet changes** → 10 KB budget + `p.txt` untouched; no history/popstate introduced. **These code changes are on the working tree, not yet committed.**
 
 ---
 

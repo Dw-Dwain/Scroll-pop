@@ -34,7 +34,10 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
     const rows = await db
-      .select({ id: variants.id, name: variants.name, weight: variants.weight, createdAt: variants.createdAt })
+      // `config` is included so the Experiments page can render a real visual preview of each
+      // A/B variant (not just its weight). Campaigns have only a handful of variants, so the
+      // extra payload is negligible.
+      .select({ id: variants.id, name: variants.name, weight: variants.weight, config: variants.config, createdAt: variants.createdAt })
       .from(variants)
       .where(and(eq(variants.tenantId, request.tenantId), eq(variants.campaignId, campaignId)))
       .orderBy(asc(variants.createdAt));

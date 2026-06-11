@@ -68,13 +68,14 @@ jobs:
       - run: pnpm --filter snippet build
       - name: Check per-chunk gzipped budgets
         run: |
-          # Per-module budgets (gzipped bytes). Core (p.js) ≤10300B hard cap (8KB target);
-          # 10300 keeps it in the "~10KB" class (well under 10500) while leaving headroom for the
-          # image-preload path. Each lazy chunk has its own cap. A new/unknown chunk defaults to 3KB
-          # so a module can never silently bloat the payload. Bump a budget here intentionally if needed.
+          # Per-module budgets (gzipped bytes). Core (p.js) ≤10400B hard cap (8KB target);
+          # 10400 keeps it in the "~10KB" class (still under 10500) while leaving headroom for the
+          # image-preload path + the white-circle close button. Each lazy chunk has its own cap. A
+          # new/unknown chunk defaults to 3KB so a module can never silently bloat the payload. Bump a
+          # budget here intentionally if needed.
           BUNDLE="packages/snippet/dist/p.js"
           if [ ! -f "$BUNDLE" ]; then echo "❌ Core bundle not found at $BUNDLE"; exit 1; fi
-          declare -A BUDGETS=( ["p.js"]=10300 ["spin.js"]=3072 ["journey.js"]=3072 ["targeting.js"]=2048 )
+          declare -A BUDGETS=( ["p.js"]=10400 ["spin.js"]=3072 ["journey.js"]=3072 ["targeting.js"]=2048 )
           DEFAULT=3072
           fail=0
           shopt -s nullglob
