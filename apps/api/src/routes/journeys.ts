@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
-import { db } from '../db/client.js';
+import { db, systemDb } from '../db/client.js';
 import { campaigns, designs, events, sites } from '../db/schema.js';
 import { purgeSiteConfigCache } from '../lib/cache-purge.js';
 
@@ -114,7 +114,9 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    const result = await db.transaction(async (tx) => {
+    // systemDb (normal pool) — drizzle .transaction() throws on the RLS tenant pool's reserved
+    // connection. Ownership verified above; every write is scoped to request.tenantId.
+    const result = await systemDb.transaction(async (tx) => {
       const design = await tx.query.designs.findFirst({
         where: and(eq(designs.campaignId, request.params.id), eq(designs.tenantId, request.tenantId)),
       });

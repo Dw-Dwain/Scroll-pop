@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { Readable } from 'node:stream';
-import { db } from '../db/client.js';
+import { db, systemDb } from '../db/client.js';
 import { campaigns, sites, designs, events, triggers, targetingRules, frequencyRules } from '../db/schema.js';
 import { eq, and, isNull, desc, lt, sql } from 'drizzle-orm';
 import { AffiliateSlotSchema, TriggerParamsSchema } from '@scrollpop/shared';
@@ -445,7 +445,11 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
     const tenantId = request.tenantId;
     const campaignId = request.params.id;
 
-    const result = await db.transaction(async (tx) => {
+    // Run the bundle on the SYSTEM pool: when RLS is active, `db` is a reserved single tenant
+    // connection and drizzle's .transaction() on it throws (begin can't re-reserve) → 500 on every
+    // save. systemDb is a normal pool that transacts cleanly. Safe here because ownership is verified
+    // above and every write below is hard-scoped to request.tenantId (same pattern as admin/team).
+    const result = await systemDb.transaction(async (tx) => {
       // Ownership check inside the tx — if the campaign isn't this tenant's (or is
       // soft-deleted) nothing is written.
       const campaign = await tx.query.campaigns.findFirst({

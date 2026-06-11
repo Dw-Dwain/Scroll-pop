@@ -34,14 +34,24 @@ describe('safeHref', () => {
 });
 
 describe('safeCssColor', () => {
-  it('allows hex colors', () => {
+  it('allows hex colors (incl. 8-digit alpha)', () => {
     expect(safeCssColor('#fff', 'X')).toBe('#fff');
     expect(safeCssColor('#6366f1', 'X')).toBe('#6366f1');
+    expect(safeCssColor('#00000000', 'X')).toBe('#00000000'); // fully transparent
+  });
+  it('allows the transparent keyword and numeric rgb()/rgba()', () => {
+    expect(safeCssColor('transparent', 'X')).toBe('transparent');
+    expect(safeCssColor('rgba(0,0,0,0)', 'X')).toBe('rgba(0,0,0,0)');
+    expect(safeCssColor('rgb(255, 255, 255)', 'X')).toBe('rgb(255, 255, 255)');
+    expect(safeCssColor('rgba(15, 15, 15, 0.85)', 'X')).toBe('rgba(15, 15, 15, 0.85)');
   });
   it('rejects injection attempts', () => {
     expect(safeCssColor('red;}</style><script>alert(1)</script>', '#000')).toBe('#000');
     expect(safeCssColor('#fff;background:url(//evil)', '#000')).toBe('#000');
     expect(safeCssColor('expression(alert(1))', '#000')).toBe('#000');
+    expect(safeCssColor('red', '#000')).toBe('#000'); // arbitrary named colors still rejected
+    expect(safeCssColor('rgba(0,0,0,0);}</style>', '#000')).toBe('#000'); // no breakout via rgba
+    expect(safeCssColor('rgb(1,2,url(x))', '#000')).toBe('#000');
   });
 });
 

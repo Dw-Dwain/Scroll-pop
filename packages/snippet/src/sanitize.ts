@@ -32,7 +32,14 @@ export function safeHref(url: string | undefined | null): string {
 
 /** Validate a hex color, else return the fallback. */
 export function safeCssColor(val: unknown, fallback: string): string {
-  return typeof val === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(val) ? val : fallback;
+  if (typeof val !== 'string') return fallback;
+  // Hex (incl. 8-digit #RRGGBBAA for transparency), the `transparent` keyword, or rgb()/rgba()
+  // with ONLY numeric components. The rgb(a) form permits only digits, dots, commas, spaces and %
+  // inside the parens — no quotes, semicolons or braces — so it can't break out of a style attribute.
+  if (/^#[0-9A-Fa-f]{3,8}$/.test(val)) return val;
+  if (val === 'transparent') return val;
+  if (/^rgba?\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?\s*(?:,\s*[\d.]+%?\s*)?\)$/.test(val)) return val;
+  return fallback;
 }
 
 /** Validate a URL for use inside CSS url(...) — http(s) only, no CSS-breaking chars. */
