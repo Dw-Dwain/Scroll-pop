@@ -219,6 +219,7 @@ async function buildTestApp() {
   const { outboundWebhookRoutes } = await import('./routes/outbound-webhook.js');
   const { billingRoutes } = await import('./routes/billing.js');
   const { webhookRoutes } = await import('./routes/webhooks.js');
+  const { journeyRoutes } = await import('./routes/journeys.js');
 
   app.register(campaignRoutes, { prefix: '/api/v1' });
   app.register(couponRoutes, { prefix: '/api/v1' });
@@ -226,6 +227,7 @@ async function buildTestApp() {
   app.register(outboundWebhookRoutes, { prefix: '/api/v1' });
   app.register(billingRoutes, { prefix: '/api/v1' });
   app.register(webhookRoutes, { prefix: '/api/v1/webhooks' });
+  app.register(journeyRoutes, { prefix: '/api/v1' });
 
   await app.ready();
   return app;
@@ -601,6 +603,86 @@ describe('Transactional canvas save (PUT /campaigns/:id/canvas)', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({ error: { code: 'INVALID_REGEX' } });
+    await app.close();
+  });
+});
+
+describe('Journeys chaining link (PUT /journeys/:id/link)', () => {
+  const found = (over: Record<string, unknown>) =>
+    ({ id: UUID_A, tenantId: UUID_B, siteId: UUID_C, deletedAt: null, ...over }) as never;
+
+  it('rejects a self-link with 400', async () => {
+    const { db } = await import('./db/client.js');
+    vi.mocked(db.query.campaigns.findFirst).mockResolvedValueOnce(found({ id: UUID_A }));
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: { nextCampaignId: UUID_A },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { code: 'INVALID_LINK' } });
+    await app.close();
+  });
+
+  it('rejects chaining to a campaign on a different site with 400', async () => {
+    const { db } = await import('./db/client.js');
+    vi.mocked(db.query.campaigns.findFirst)
+      .mockResolvedValueOnce(found({ id: UUID_A, siteId: UUID_C }))           // source
+      .mockResolvedValueOnce(found({ id: UUID_B, siteId: '99999999-9999-9999-9999-999999999999' })); // next, other site
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: { nextCampaignId: UUID_B },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { code: 'CROSS_SITE_LINK' } });
+    await app.close();
+  });
+
+  it('persists a same-site link in one transaction (200)', async () => {
+    const { db } = await import('./db/client.js');
+    vi.mocked(db.transaction).mockClear();
+    vi.mocked(db.query.campaigns.findFirst)
+      .mockResolvedValueOnce(found({ id: UUID_A, siteId: UUID_C }))   // source
+      .mockResolvedValueOnce(found({ id: UUID_B, siteId: UUID_C }));  // next, same site
+    vi.mocked(db.query.designs.findFirst).mockResolvedValueOnce({ id: 'design-1', config: {} } as never);
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: { nextCampaignId: UUID_B, advanceOn: 'both', delaySeconds: 12 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ data: { sequence: { nextCampaignId: UUID_B, advanceOn: 'both', delaySeconds: 12 } } });
+    expect(vi.mocked(db.transaction)).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('clears a link when nextCampaignId is null (200)', async () => {
+    const { db } = await import('./db/client.js');
+    vi.mocked(db.query.campaigns.findFirst).mockResolvedValueOnce(found({ id: UUID_A, siteId: UUID_C }));
+    vi.mocked(db.query.designs.findFirst).mockResolvedValueOnce({ id: 'design-1', config: { uiTriggers: { sequenceNextCampaignId: UUID_B } } } as never);
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: { nextCampaignId: null },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ data: { sequence: null } });
+    await app.close();
+  });
+
+  it('returns 404 for another tenant’s campaign', async () => {
+    const app = await buildTestApp(); // default mock: campaigns.findFirst → null
+    const res = await app.inject({
+      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
+      headers: { 'x-test-tenant-id': UUID_B },
+      payload: { nextCampaignId: UUID_B },
+    });
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

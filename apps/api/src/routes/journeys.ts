@@ -1,13 +1,35 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { campaigns, designs, events } from '../db/schema.js';
+import { campaigns, designs, events, sites } from '../db/schema.js';
+import { purgeSiteConfigCache } from '../lib/cache-purge.js';
 
 const since30d = () => {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d;
 };
+
+// Runtime guardrails enforced by the snippet's journey.js chunk — surfaced to the UI so the
+// builder reflects the actual limits (it can never trap a visitor).
+const JOURNEY_MAX_CHAIN = 2;   // hard cap on sequenced popups per page load
+const JOURNEY_MIN_DELAY = 5;   // seconds floor between popups
+
+// design.config can occasionally be stored as a double-encoded JSON scalar (string) — unwrap it.
+function readConfig(raw: unknown): Record<string, any> {
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw) as Record<string, any>; } catch { return {}; }
+  }
+  return (raw ?? {}) as Record<string, any>;
+}
+
+const LinkBody = z.object({
+  // null clears the link (removes the campaign from the chain).
+  nextCampaignId: z.string().uuid().nullable(),
+  advanceOn: z.enum(['dismiss', 'convert', 'both']).default('dismiss'),
+  delaySeconds: z.number().int().min(JOURNEY_MIN_DELAY).max(300).default(JOURNEY_MIN_DELAY),
+});
 
 export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { clientId?: string } }>('/journeys', async (request, reply) => {
@@ -30,10 +52,18 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
     const designByCampaign = new Map<string, (typeof allDesigns)[number]>();
     for (const design of allDesigns) designByCampaign.set(design.campaignId, design);
 
+    // Site names so the UI can group campaigns into per-site journeys (chaining is same-site only).
+    const siteRows = await db
+      .select({ id: sites.id, name: sites.name })
+      .from(sites)
+      .where(eq(sites.tenantId, request.tenantId));
+    const siteName = new Map(siteRows.map((s) => [s.id, s.name]));
+
     return reply.send({
       data: rows.map((campaign) => {
         const design = designByCampaign.get(campaign.id);
-        const config = (design?.config ?? {}) as Record<string, any>;
+        const config = readConfig(design?.config);
+        const ui = (config.uiTriggers ?? {}) as Record<string, any>;
         return {
           id: campaign.id,
           campaignId: campaign.id,
@@ -42,9 +72,92 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
           objective: config?.journeyMeta?.objective ?? 'lead_capture',
           format: design?.kind ?? 'modal',
           siteId: campaign.siteId,
+          siteName: campaign.siteId ? siteName.get(campaign.siteId) ?? null : null,
           createdAt: campaign.createdAt,
+          // The chain edge out of this node (what plays next, and when).
+          sequence: ui.sequenceNextCampaignId
+            ? {
+                nextCampaignId: ui.sequenceNextCampaignId as string,
+                advanceOn: (ui.sequenceAdvanceOn as string) ?? 'dismiss',
+                delaySeconds: Number(ui.sequenceDelaySeconds) || JOURNEY_MIN_DELAY,
+              }
+            : null,
         };
       }),
+      meta: { maxChain: JOURNEY_MAX_CHAIN, minDelaySeconds: JOURNEY_MIN_DELAY },
+    });
+  });
+
+  // PUT /journeys/:id/link — set or clear this campaign's "advance to next" edge. Writes the
+  // sequence fields into design.config.uiTriggers, which is exactly what the snippet's journey.js
+  // chunk consumes — so the chain runs live with no snippet change. Chaining is constrained to the
+  // SAME site (the runtime is same-page/same-domain) and can't point at itself.
+  fastify.put<{ Params: { id: string } }>('/journeys/:id/link', async (request, reply) => {
+    const body = LinkBody.parse(request.body);
+
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, request.params.id), eq(campaigns.tenantId, request.tenantId), isNull(campaigns.deletedAt)),
+    });
+    if (!campaign) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+
+    if (body.nextCampaignId) {
+      if (body.nextCampaignId === request.params.id) {
+        return reply.code(400).send({ error: { code: 'INVALID_LINK', message: 'A campaign cannot chain to itself' } });
+      }
+      const next = await db.query.campaigns.findFirst({
+        where: and(eq(campaigns.id, body.nextCampaignId), eq(campaigns.tenantId, request.tenantId), isNull(campaigns.deletedAt)),
+        columns: { id: true, siteId: true },
+      });
+      if (!next) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Next campaign not found' } });
+      if (next.siteId !== campaign.siteId) {
+        return reply.code(400).send({ error: { code: 'CROSS_SITE_LINK', message: 'Journeys can only chain campaigns on the same site' } });
+      }
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const design = await tx.query.designs.findFirst({
+        where: and(eq(designs.campaignId, request.params.id), eq(designs.tenantId, request.tenantId)),
+      });
+      if (!design) return { notFound: true as const };
+
+      const config = readConfig(design.config);
+      const ui = { ...((config.uiTriggers ?? {}) as Record<string, unknown>) };
+
+      if (body.nextCampaignId) {
+        ui['sequenceNextCampaignId'] = body.nextCampaignId;
+        ui['sequenceAdvanceOn'] = body.advanceOn;
+        ui['sequenceDelaySeconds'] = body.delaySeconds;
+      } else {
+        delete ui['sequenceNextCampaignId'];
+        delete ui['sequenceAdvanceOn'];
+        delete ui['sequenceDelaySeconds'];
+      }
+
+      await tx.update(designs)
+        .set({ config: { ...config, uiTriggers: ui }, updatedAt: new Date() })
+        .where(eq(designs.id, design.id));
+      return { notFound: false as const, siteId: campaign.siteId };
+    });
+
+    if (result.notFound) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Design not found — open the campaign in the designer once to create it' } });
+    }
+
+    // Bust the edge config cache so the new chain serves immediately.
+    if (result.siteId) {
+      try {
+        const site = await db.query.sites.findFirst({ where: eq(sites.id, result.siteId), columns: { publicKey: true } });
+        if (site?.publicKey) await purgeSiteConfigCache(site.publicKey);
+      } catch { /* best-effort — 60s TTL is the fallback */ }
+    }
+
+    return reply.send({
+      data: {
+        campaignId: request.params.id,
+        sequence: body.nextCampaignId
+          ? { nextCampaignId: body.nextCampaignId, advanceOn: body.advanceOn, delaySeconds: body.delaySeconds }
+          : null,
+      },
     });
   });
 
