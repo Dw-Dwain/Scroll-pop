@@ -2,62 +2,65 @@ import type { FastifyBaseLogger } from 'fastify';
 import { sqlClient } from './client.js';
 
 /**
- * Apply real, enforcing row-level-security policies (C-1). Idempotent — safe to run on every boot.
- * Only runs when DB_RLS_ENFORCED=true (the caller gates it), because FORCE RLS without the
- * per-request `app.current_tenant` GUC wiring would filter every row and take the app down.
+ * Apply enforcing row-level security (C-1), idempotently, as the superuser/system role.
  *
- * Each policy permits a row when EITHER:
- *   - the connection is a system/bypass connection (`app.bypass_rls = 'on'`, set at connect time on
- *     the system pool), OR
- *   - the row's tenant matches the request's `app.current_tenant` GUC (set per request on the
- *     tenant pool).
+ * Policies are TENANT-PREDICATE ONLY (no GUC bypass clause) so the NOBYPASSRLS tenant role can't
+ * escape by setting a GUC. System paths bypass via the superuser role attribute, not a policy
+ * clause. The dedicated tenant role (DB_TENANT_ROLE, default `scrollpop_tenant`) is granted DML on
+ * every tenant table so it can read/write its own rows under RLS.
  *
- * `current_setting(name, true)` returns NULL when unset (missing_ok), so an unscoped connection
- * with neither GUC matches nothing — fail closed.
+ * Returns true on success, false on any failure (caller then disables enforcement and the app runs
+ * app-layer-only — never crashes). The tenant ROLE itself must be created out-of-band with a
+ * password (see MASTER §RLS); this only grants to it + installs policies.
  */
 
-// Tables with a `tenant_id` column → predicate on tenant_id.
 const TENANT_ID_TABLES = [
   'sites', 'campaigns', 'designs', 'triggers', 'targeting_rules', 'frequency_rules',
   'events', 'leads', 'variants', 'clients', 'coupons', 'team_invites',
   'notifications', 'shopify_installations', 'tenant_members',
 ];
 
-const PREDICATE = (col: string) =>
-  `(coalesce(current_setting('app.bypass_rls', true), '') = 'on' ` +
-  `OR ${col} = nullif(current_setting('app.current_tenant', true), '')::uuid)`;
+const TENANT_ROLE = process.env['DB_TENANT_ROLE'] ?? 'scrollpop_tenant';
 
-export async function ensureRlsSchema(log: FastifyBaseLogger): Promise<void> {
+const pred = (col: string) => `(${col} = nullif(current_setting('app.current_tenant', true), '')::uuid)`;
+
+export async function ensureRlsSchema(log: FastifyBaseLogger): Promise<boolean> {
   const sql = sqlClient;
   try {
+    // Confirm the dedicated tenant role exists before doing anything else.
+    const role = await sql.unsafe(
+      `SELECT 1 FROM pg_roles WHERE rolname = '${TENANT_ROLE.replace(/'/g, "''")}'`,
+    );
+    if (role.length === 0) {
+      log.error(`[rls] role "${TENANT_ROLE}" does not exist — create it first (see MASTER §RLS). Skipping RLS.`);
+      return false;
+    }
+
+    await sql.unsafe(`GRANT USAGE ON SCHEMA public TO ${TENANT_ROLE}`);
+
     for (const table of TENANT_ID_TABLES) {
       const policy = `${table}_all_tenant_isolation`;
+      await sql.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO ${TENANT_ROLE}`);
       await sql.unsafe(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
       await sql.unsafe(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
       await sql.unsafe(`DROP POLICY IF EXISTS ${policy} ON ${table}`);
-      await sql.unsafe(
-        `CREATE POLICY ${policy} ON ${table} USING ${PREDICATE('tenant_id')} WITH CHECK ${PREDICATE('tenant_id')}`,
-      );
+      await sql.unsafe(`CREATE POLICY ${policy} ON ${table} USING ${pred('tenant_id')} WITH CHECK ${pred('tenant_id')}`);
     }
 
-    // `tenants` keys on its own id, not tenant_id.
+    // tenants keys on its own id.
+    await sql.unsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON tenants TO ${TENANT_ROLE}`);
     await sql.unsafe(`ALTER TABLE tenants ENABLE ROW LEVEL SECURITY`);
     await sql.unsafe(`ALTER TABLE tenants FORCE ROW LEVEL SECURITY`);
     await sql.unsafe(`DROP POLICY IF EXISTS tenants_self_isolation ON tenants`);
-    await sql.unsafe(
-      `CREATE POLICY tenants_self_isolation ON tenants USING ${PREDICATE('id')} WITH CHECK ${PREDICATE('id')}`,
-    );
+    await sql.unsafe(`CREATE POLICY tenants_self_isolation ON tenants USING ${pred('id')} WITH CHECK ${pred('id')}`);
 
-    // `users` and `admin_audit_log` are intentionally NOT force-scoped: users is a global identity
-    // table looked up by clerk id during the pre-tenant bootstrap, and admin_audit_log is
-    // super-admin-only (accessed via the system/bypass pool). Leaving RLS off them keeps those
-    // flows working; they carry no per-tenant business data a tenant could enumerate.
+    // `users` and `admin_audit_log` are intentionally NOT force-scoped (global identity table /
+    // super-admin-only, both accessed via the system pool).
 
-    log.info('[schema] RLS policies applied (FORCE enabled) — DB_RLS_ENFORCED=true');
+    log.info(`[rls] policies applied (FORCE) + DML granted to "${TENANT_ROLE}" — enforcement active`);
+    return true;
   } catch (err) {
-    // A failure here means the DB would be left half-forced. Surface loudly and rethrow so boot
-    // fails visibly rather than silently serving with broken isolation.
-    log.error({ err }, '[schema] FAILED to apply RLS policies — refusing to continue');
-    throw err;
+    log.error({ err }, '[rls] FAILED to apply RLS policies — disabling enforcement, continuing app-layer-only');
+    return false;
   }
 }

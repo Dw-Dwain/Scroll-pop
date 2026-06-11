@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { db, beginTenantScope, rlsEnforced } from '../db/client.js';
+import { db, acquireTenantConnection, rlsActive, tenantScopeStorage } from '../db/client.js';
 import { tenants, users, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAuth, clerkClient } from '@clerk/fastify';
@@ -382,20 +382,32 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
   });
 
   // ─── RLS tenant scope (C-1) ────────────────────────────────────────────────────
-  // After the tenant is resolved, reserve a connection with `app.current_tenant` set so every
-  // query in the handler is DB-enforced to this tenant. No-op unless DB_RLS_ENFORCED=true. Runs
-  // as a SECOND preHandler so it only fires when the first one resolved a tenant (and didn't 401).
-  if (rlsEnforced) {
-    fastify.addHook('preHandler', async (request: FastifyRequest) => {
-      if (request.tenantId) {
-        request.rlsRelease = await beginTenantScope(request.tenantId);
+  // Wrap the WHOLE request in an AsyncLocalStorage scope via a callback-style onRequest hook:
+  // `run(store, done)` runs the rest of the request inside the scope (enterWith does NOT propagate
+  // across Fastify hooks — verified — but run() wrapping the continuation does). The store starts
+  // empty (→ `db` proxy falls back to the system pool); the preHandler below fills in the tenant
+  // connection once the tenant is resolved. Only engaged when enforcement is active.
+  fastify.addHook('onRequest', (request: FastifyRequest, _reply, done) => {
+    if (rlsActive()) tenantScopeStorage.run({}, done);
+    else done();
+  });
+  // After the tenant is resolved (the main preHandler above ran first), reserve a tenant-pool
+  // connection stamped with `app.current_tenant` and put it in the request's scope store so every
+  // query in the handler is DB-enforced to this tenant. Fails open (null → stays on system pool).
+  fastify.addHook('preHandler', async (request: FastifyRequest) => {
+    if (rlsActive() && request.tenantId) {
+      const conn = await acquireTenantConnection(request.tenantId);
+      if (conn) {
+        const store = tenantScopeStorage.getStore();
+        if (store) { store.db = conn.db; request.rlsRelease = conn.release; }
+        else { conn.release(); } // no active scope (shouldn't happen) — don't leak the connection
       }
-    });
-    // Release the reserved connection on every terminal outcome (idempotent).
-    fastify.addHook('onResponse', async (request: FastifyRequest) => { request.rlsRelease?.(); });
-    fastify.addHook('onError', async (request: FastifyRequest) => { request.rlsRelease?.(); });
-    fastify.addHook('onTimeout', async (request: FastifyRequest) => { request.rlsRelease?.(); });
-  }
+    }
+  });
+  // Release the reserved connection on every terminal outcome (idempotent).
+  fastify.addHook('onResponse', async (request: FastifyRequest) => { request.rlsRelease?.(); });
+  fastify.addHook('onError', async (request: FastifyRequest) => { request.rlsRelease?.(); });
+  fastify.addHook('onTimeout', async (request: FastifyRequest) => { request.rlsRelease?.(); });
 };
 
 export const tenantContextPlugin = fp(tenantContextPluginImpl);

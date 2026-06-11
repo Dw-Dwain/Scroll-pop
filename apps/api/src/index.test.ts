@@ -111,8 +111,10 @@ vi.mock('./db/client.js', () => {
     sqlClient: { unsafe: vi.fn().mockResolvedValue(null) },
     // RLS plumbing (C-1) — mocked so bootstrap doesn't try to reserve real connections.
     systemDb: dbMock,
-    rlsEnforced: false,
-    beginTenantScope: vi.fn().mockResolvedValue(() => {}),
+    rlsActive: () => false,
+    disableRls: vi.fn(),
+    acquireTenantConnection: vi.fn().mockResolvedValue(null),
+    tenantScopeStorage: { run: (_s: unknown, done: () => void) => done(), getStore: () => undefined },
   };
 });
 

@@ -1,5 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { db } from '../db/client.js';
+// Uses the system pool (RLS-bypass): /me operates on the global `users` table and, for account
+// deletion, must see the user's memberships ACROSS all tenants (the sole-owner check) — both of
+// which a tenant-scoped RLS connection would hide. Queries are self-scoped by request.userId /
+// request.tenantId at the app layer. (C-1)
+import { systemDb as db } from '../db/client.js';
 import { users, tenants, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull, not, like, sql as drizzleSql } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';

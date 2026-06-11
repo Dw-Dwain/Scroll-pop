@@ -1,4 +1,6 @@
--- Revert 0014_real_rls — restore the permissive policies and drop FORCE RLS.
+-- Revert 0014_real_rls — drop FORCE RLS + tenant policies (back to permissive/no enforcement).
+-- Leaves the scrollpop_tenant role and its grants in place (harmless; drop manually if desired:
+--   REVOKE ALL ON ALL TABLES IN SCHEMA public FROM scrollpop_tenant; DROP ROLE scrollpop_tenant;).
 
 DO $$
 DECLARE
@@ -10,11 +12,11 @@ BEGIN
     'notifications','shopify_installations','tenant_members'
   ] LOOP
     EXECUTE format('ALTER TABLE %I NO FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE %I DISABLE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t || '_all_tenant_isolation', t);
-    EXECUTE format('CREATE POLICY %I ON %I USING (true) WITH CHECK (true)',
-      t || '_all_tenant_isolation', t);
   END LOOP;
-END $$;
 
-ALTER TABLE tenants NO FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenants_self_isolation ON tenants;
+  EXECUTE 'ALTER TABLE tenants NO FORCE ROW LEVEL SECURITY';
+  EXECUTE 'ALTER TABLE tenants DISABLE ROW LEVEL SECURITY';
+  EXECUTE 'DROP POLICY IF EXISTS tenants_self_isolation ON tenants';
+END $$;

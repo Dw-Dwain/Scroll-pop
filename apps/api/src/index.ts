@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import sanitizeHtml from 'sanitize-html';
-import { db, rlsEnforced } from './db/client.js';
+import { db, rlsActive, disableRls } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { ensureRlsSchema } from './db/ensure-rls.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
@@ -997,10 +997,17 @@ async function bootstrap() {
   // cheap no-op when the partitions already exist. Safe no-op locally.
   await ensureEventPartitions(app.log);
 
-  // Row-level security (C-1). Runs on EVERY boot when enabled (not gated behind the schema-skip
-  // flag) so policy changes always converge; the DDL is idempotent. When disabled this is a no-op.
-  if (rlsEnforced) {
-    await ensureRlsSchema(app.log);
+  // Row-level security (C-1). Runs on EVERY boot when active (not gated behind the schema-skip
+  // flag) so policy changes always converge; the DDL is idempotent. FAIL-SAFE: if setup fails for
+  // any reason, disable enforcement and continue app-layer-only — never crash the boot.
+  if (rlsActive()) {
+    try {
+      const okRls = await ensureRlsSchema(app.log);
+      if (!okRls) disableRls('ensureRlsSchema returned false');
+    } catch (err) {
+      app.log.error({ err }, '[rls] ensureRlsSchema threw — continuing app-layer-only');
+      disableRls('ensureRlsSchema threw');
+    }
   }
 
   if (schemaAlreadyRan) {
