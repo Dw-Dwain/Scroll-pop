@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSignIn } from '@clerk/clerk-react';
+import { readAuthParams } from './SignUp';
 
 export const SignIn: React.FC = () => {
   const STATS = [
@@ -96,7 +97,8 @@ export const SignIn: React.FC = () => {
 
 function ClerkSignInForm() {
   const { signIn, isLoaded } = useSignIn();
-  const [email, setEmail] = React.useState('');
+  const params = React.useMemo(readAuthParams, []);
+  const [email, setEmail] = React.useState(params.email);
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -109,7 +111,7 @@ function ClerkSignInForm() {
     try {
       const result = await signIn.create({ identifier: email, password });
       if (result.status === 'complete') {
-        window.location.href = '/dashboard';
+        window.location.href = params.redirect;
       }
     } catch (err: unknown) {
       const clerkErr = err as { errors?: Array<{ message?: string }> };
@@ -129,7 +131,7 @@ function ClerkSignInForm() {
       await signIn.authenticateWithRedirect({
         strategy,
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectUrlComplete: `${window.location.origin}/dashboard`,
+        redirectUrlComplete: `${window.location.origin}${params.redirect}`,
       });
     } catch (err: unknown) {
       const clerkOauthErr = err as { errors?: Array<{ message?: string }> };
@@ -171,7 +173,7 @@ function ClerkSignInForm() {
       </button>
       <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
         No account?{' '}
-        <a href="/sign-up" style={{ color: 'var(--accent-300)', textDecoration: 'none' }}>Sign up</a>
+        <a href={`/sign-up${typeof window !== 'undefined' ? window.location.search : ''}`} style={{ color: 'var(--accent-300)', textDecoration: 'none' }}>Sign up</a>
       </div>
     </form>
   );

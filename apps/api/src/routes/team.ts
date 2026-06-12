@@ -77,6 +77,27 @@ export const teamRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  // GET /public/invite-info/:id — PUBLIC (no auth): minimal context for the accept-invite deep
+  // link so the page can say "you've been invited to X as Y; sign in with <email> to accept".
+  // The invite id is an unguessable UUID emailed only to the invitee, so this is a capability-style
+  // link — returning the target email + tenant name to whoever holds the id is acceptable, and the
+  // accept endpoint still re-verifies the signed-in user's verified email matches. 404s for
+  // unknown / non-pending invites (and for invites whose tenant was deleted).
+  // NOTE: relies on `/api/v1/public/` being in tenant-context PUBLIC_ROUTES (skips auth).
+  fastify.get<{ Params: { id: string } }>('/public/invite-info/:id', async (request, reply) => {
+    const row = await db
+      .select({ id: teamInvites.id, role: teamInvites.role, email: teamInvites.email, status: teamInvites.status, tenantName: tenants.name })
+      .from(teamInvites)
+      .innerJoin(tenants, eq(tenants.id, teamInvites.tenantId))
+      .where(and(eq(teamInvites.id, request.params.id), isNull(tenants.deletedAt)))
+      .limit(1);
+    const inv = row[0];
+    if (!inv || inv.status !== 'pending') {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Invite not found or no longer pending.' } });
+    }
+    return reply.send({ data: { id: inv.id, role: inv.role, email: inv.email, tenantName: inv.tenantName } });
+  });
+
   // POST /team/invites — owner invites an employee by email.
   fastify.post('/team/invites', async (request, reply) => {
     if (!(await requireOwner(request, reply))) return;
@@ -102,26 +123,37 @@ export const teamRoutes: FastifyPluginAsync = async (fastify) => {
         set: { role, status: 'pending', invitedByUserId: request.userId, acceptedUserId: null, acceptedAt: null, updatedAt: new Date() },
       })
       .returning();
+    if (!invite) {
+      return reply.code(500).send({ error: { code: 'INVITE_FAILED', message: 'Could not create the invite.' } });
+    }
 
     // Notify the invitee by email (best-effort; dormant until Resend is configured, never blocks
-    // the invite). The accept flow is email-match based — they sign in with this exact address and
-    // accept from the PendingInvites banner, so no token link is needed.
+    // the invite). The email deep-links to /accept-invite?invite=<id>; the accept itself is still
+    // email-match based (the accepting user's verified email must equal the invited address).
     try {
       const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, request.tenantId), columns: { name: true } });
       const agencyName = escapeHtml(tenant?.name || 'a ScrollPop workspace');
       const roleEsc = escapeHtml(role);
       const toEsc = escapeHtml(normalized);
+      // Deep-link straight to the accept page, carrying the invite id. The page tells them which
+      // email to use, lets them sign up / sign in with it (prefilled), and accepts on the way in —
+      // so acceptance no longer depends on them landing on the dashboard already signed in as the
+      // exact invited address (which silently showed no banner before).
+      const acceptUrl = `${DASHBOARD_URL}/accept-invite?invite=${invite.id}`;
       await sendEmail({
         to: normalized,
         subject: `You're invited to join ${tenant?.name || 'a ScrollPop workspace'} on ScrollPop`,
         html: `<div style="font-family:system-ui,sans-serif;max-width:480px">
           <h2 style="margin:0 0 12px">You've been invited to ScrollPop</h2>
           <p>You're invited to join <strong>${agencyName}</strong> as a <strong>${roleEsc}</strong>.</p>
-          <p>Sign in (or create your account) with <strong>${toEsc}</strong> at
-             <a href="${DASHBOARD_URL}">${DASHBOARD_URL}</a> and accept the invite from the banner at the top of the dashboard.</p>
-          <p style="color:#888;font-size:12px;margin-top:20px">If you weren't expecting this, you can safely ignore this email.</p>
+          <p style="margin:0 0 16px"><a href="${acceptUrl}"
+             style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600">
+             Accept invitation</a></p>
+          <p>This invite is tied to <strong>${toEsc}</strong> — accept it while signed in (or after creating an account) with that exact address.</p>
+          <p style="color:#888;font-size:12px;margin-top:20px">If you weren't expecting this, you can safely ignore this email.<br>
+             Button not working? Open <a href="${acceptUrl}">${acceptUrl}</a></p>
         </div>`,
-        text: `You're invited to join ${tenant?.name || 'a ScrollPop workspace'} as a ${role} on ScrollPop.\n\nSign in with ${normalized} at ${DASHBOARD_URL} and accept the pending invite from the banner at the top.`,
+        text: `You're invited to join ${tenant?.name || 'a ScrollPop workspace'} as a ${role} on ScrollPop.\n\nAccept here (sign in or sign up with ${normalized}): ${acceptUrl}`,
       });
     } catch { /* email is best-effort — the in-app PendingInvites banner is the source of truth */ }
 

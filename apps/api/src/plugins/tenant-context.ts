@@ -4,6 +4,7 @@ import { db, acquireTenantConnection, rlsActive, tenantScopeStorage } from '../d
 import { tenants, users, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAuth, clerkClient } from '@clerk/fastify';
+import { viewerMayWrite } from '../lib/role-guard.js';
 
 // ─── Access tiers ─────────────────────────────────────────────────────────────
 // ADMIN_EMAIL   = platform super-admin (dwain3991@gmail.com). One account only.
@@ -82,6 +83,7 @@ const PUBLIC_ROUTES = [
   '/api/v1/webhooks/stripe',
   '/api/v1/webhooks/shopify',
   '/api/v1/shopify/callback',   // Shopify OAuth redirect — verified by HMAC + nonce
+  '/api/v1/public/',            // unauthenticated read-only endpoints (e.g. invite-info deep link)
   '/api/v1/internal',
   '/v1/',
   '/c/',
@@ -379,6 +381,25 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
     request.tenantId = tenant.id;
     request.userId = user.id;
     request.memberRole = membership?.role ?? 'owner';
+  });
+
+  // ─── Viewer write-guard (role enforcement) ─────────────────────────────────────
+  // Runs right after the member role is resolved above. `viewer` members are read-only: any
+  // mutating request is rejected 403 except a tight allowlist of personal/self-service actions
+  // (see lib/role-guard.ts). Public/unauthenticated routes never set `memberRole`, so they fall
+  // through untouched. Rejecting here (before the RLS preHandler below) also avoids reserving a
+  // tenant DB connection for a request we're about to refuse.
+  fastify.addHook('preHandler', async (request: FastifyRequest, reply) => {
+    if (request.memberRole !== 'viewer') return;
+    const routePattern = request.routeOptions?.url ?? request.url;
+    if (!viewerMayWrite(request.method, routePattern)) {
+      return reply.code(403).send({
+        error: {
+          code: 'READ_ONLY_ROLE',
+          message: 'Your role is view-only. Ask an owner or admin to make this change.',
+        },
+      });
+    }
   });
 
   // ─── RLS tenant scope (C-1) ────────────────────────────────────────────────────
