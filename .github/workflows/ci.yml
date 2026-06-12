@@ -257,7 +257,15 @@ jobs:
             exit 0
           fi
           node -e "require('fs').copyFileSync('../../packages/snippet/dist/p.js', 'src/p.txt')"
-          npx wrangler deploy --env=""
+          # Retry: wrangler deploy can 5xx (524 on GET /zones) even after the worker uploads.
+          # Re-deploy is idempotent, so a momentary Cloudflare blip shouldn't fail the job.
+          ok=0
+          for attempt in 1 2 3 4; do
+            if npx wrangler deploy --env=""; then ok=1; break; fi
+            echo "⚠️  wrangler deploy attempt $attempt failed (transient Cloudflare 5xx?) — retrying in $((attempt * 6))s…"
+            sleep $((attempt * 6))
+          done
+          [ "$ok" -eq 1 ] || { echo "❌ worker deploy failed after 4 attempts"; exit 1; }
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -323,10 +331,17 @@ jobs:
             echo "⏭️  CLOUDFLARE_API_TOKEN not set — skipping dashboard deploy."
             exit 0
           fi
-          npx wrangler pages deploy dist \
-            --project-name=scrollpop-dashboard \
-            --branch=main \
-            --commit-dirty=true
+          # Retry: Cloudflare Pages deploy can also hit transient 5xx. Re-deploy is idempotent.
+          ok=0
+          for attempt in 1 2 3 4; do
+            if npx wrangler pages deploy dist \
+                 --project-name=scrollpop-dashboard \
+                 --branch=main \
+                 --commit-dirty=true; then ok=1; break; fi
+            echo "⚠️  pages deploy attempt $attempt failed (transient Cloudflare 5xx?) — retrying in $((attempt * 6))s…"
+            sleep $((attempt * 6))
+          done
+          [ "$ok" -eq 1 ] || { echo "❌ dashboard deploy failed after 4 attempts"; exit 1; }
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
