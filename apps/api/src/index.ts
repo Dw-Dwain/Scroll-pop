@@ -294,7 +294,8 @@ async function bootstrap() {
 
           return {
             id: campaign.id,
-            design: design.config,
+            // Match the edge serve path: merge the top-level `kind` column into the design object.
+            design: { ...(design.config as Record<string, unknown>), kind: design.kind },
             triggers: campaignTriggers.map((t) => ({
               id: t.id,
               type: t.type,
