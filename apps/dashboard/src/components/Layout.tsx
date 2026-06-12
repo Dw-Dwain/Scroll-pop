@@ -67,7 +67,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
   const [userProfile, setUserProfile] = React.useState(loadProfileFromStorage);
-  const { plan, isAdmin, isUnlimited } = usePlan();
+  const { plan, isAdmin, isUnlimited, usage: liveUsage, monthlyViewLimit: liveLimit, loaded: planLoaded } = usePlan();
   const isAgency = plan === 'agency' || isUnlimited;
 
   // ── Global theme ────────────────────────────────────────────
@@ -107,14 +107,9 @@ export const Layout: React.FC<LayoutProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const viewsUsed = React.useMemo(() => {
-    try {
-      const raw = localStorage.getItem('_sp_views_used');
-      return raw ? parseInt(raw, 10) : 0;
-    } catch { return 0; }
-  }, []);
-
-  const maxViews = isAdmin ? Infinity : PLAN_VIEWS[plan] ?? 1000;
+  // Live usage from /me (popup impressions this month). Falls back to 0 until /me resolves.
+  const viewsUsed = liveUsage ?? 0;
+  const maxViews = (isAdmin || isUnlimited) ? Infinity : (liveLimit ?? PLAN_VIEWS[plan] ?? 1000);
   const usagePct = maxViews === Infinity ? 0 : Math.min(100, Math.round((viewsUsed / maxViews) * 100));
   const usageColor = usagePct >= 95 ? 'var(--status-error)' : usagePct >= 80 ? 'var(--status-warning)' : 'var(--accent-500)';
 
@@ -349,13 +344,15 @@ export const Layout: React.FC<LayoutProps> = ({
                     <div style={{ marginTop: 6 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{plan} plan</span>
-                        <span style={{ fontSize: 10, color: usagePct >= 80 ? usageColor : 'var(--text-muted)' }}>{usagePct}%</span>
+                        <span style={{ fontSize: 10, color: usagePct >= 80 ? usageColor : 'var(--text-muted)' }}>{planLoaded ? `${usagePct}%` : '…'}</span>
                       </div>
                       <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-overlay)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${usagePct}%`, background: usageColor, borderRadius: 2 }} />
+                        <div style={{ height: '100%', width: planLoaded ? `${usagePct}%` : '0%', background: usageColor, borderRadius: 2, transition: 'width .3s' }} />
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                        {viewsUsed.toLocaleString()} / {maxViews === Infinity ? '∞' : maxViews.toLocaleString()} views
+                        {planLoaded
+                          ? `${viewsUsed.toLocaleString()} / ${maxViews === Infinity ? '∞' : maxViews.toLocaleString()} views this month`
+                          : 'Loading usage…'}
                       </div>
                     </div>
                   )}

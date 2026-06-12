@@ -4,8 +4,8 @@ import type { FastifyPluginAsync } from 'fastify';
 // which a tenant-scoped RLS connection would hide. Queries are self-scoped by request.userId /
 // request.tenantId at the app layer. (C-1)
 import { systemDb as db } from '../db/client.js';
-import { users, tenants, tenantMembers } from '../db/schema.js';
-import { eq, and, isNull, not, like, sql as drizzleSql } from 'drizzle-orm';
+import { users, tenants, tenantMembers, events } from '../db/schema.js';
+import { eq, and, isNull, not, like, gte, sql as drizzleSql } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
 import { revokeAllUserSessions } from '../lib/auth.js';
 
@@ -33,6 +33,26 @@ export const meRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // Live usage: popup impressions this calendar month for the tenant. Best-effort — an analytics
+    // hiccup must never break /me (the profile/billing UI degrades to "—" rather than failing).
+    let usage = 0;
+    try {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      monthStart.setUTCHours(0, 0, 0, 0);
+      const rows = await db
+        .select({ n: drizzleSql<number>`count(*)::int` })
+        .from(events)
+        .where(and(
+          eq(events.tenantId, request.tenantId),
+          eq(events.eventType, 'impression'),
+          gte(events.ts, monthStart),
+        ));
+      usage = rows[0]?.n ?? 0;
+    } catch (err) {
+      request.log.warn({ err }, '[me] usage count failed — returning 0');
+    }
+
     return reply.send({
       data: {
         user: {
@@ -45,6 +65,7 @@ export const meRoutes: FastifyPluginAsync = async (fastify) => {
           name: tenant.name,
           plan: tenant.plan,
           monthlyViewLimit: tenant.monthlyViewLimit,
+          usage,
         },
         role: membership.role,
       },

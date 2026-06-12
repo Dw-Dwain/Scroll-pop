@@ -175,9 +175,11 @@ export function usePlan() {
     queryOptions: { staleTime: 60_000, retry: false },
   });
 
-  const mePayload = meData?.data as { tenant?: { plan?: string }; user?: { email?: string } } | undefined;
+  const mePayload = meData?.data as { tenant?: { plan?: string; usage?: number; monthlyViewLimit?: number }; user?: { email?: string } } | undefined;
   const apiPlan  = mePayload?.tenant?.plan;
   const apiEmail = mePayload?.user?.email;
+  const apiUsage = mePayload?.tenant?.usage;        // live popup impressions this month (or undefined while loading)
+  const apiViewLimit = mePayload?.tenant?.monthlyViewLimit;
 
   // isAdmin = platform super-admin ONLY (exact ADMIN_EMAIL match from API).
   // NO localStorage fallback — admin panel access must be confirmed by the API.
@@ -219,5 +221,5 @@ export function usePlan() {
   const planRank = (p: PlanId) => PLAN_ORDER.indexOf(p);
   const meetsMinPlan = (required: PlanId): boolean => isUnlimited || planRank(plan) >= planRank(required);
 
-  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan, planOverride };
+  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan, planOverride, usage: apiUsage, monthlyViewLimit: apiViewLimit, loaded: !!mePayload };
 }
