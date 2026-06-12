@@ -272,10 +272,22 @@ jobs:
           # is exactly what made spin.js 404 and the wheel never render.
           # --remote is REQUIRED: without it wrangler writes to the local miniflare store, not the
           # production bucket, so the chunks silently never reach R2 (the real cause of spin.js 404).
+          # Retry each upload: Cloudflare's R2 API throws transient 504 Gateway Timeouts that would
+          # otherwise fail the whole deploy even though the core p.js already shipped. Up to 4 tries
+          # with backoff so a momentary 5xx doesn't go red.
           for f in packages/snippet/dist/*.js; do
-            echo "Uploading $(basename "$f") to R2…"
-            npx wrangler r2 object put "scrollpop-assets/$(basename "$f")" \
-              --file "$f" --content-type application/javascript --remote
+            name=$(basename "$f")
+            echo "Uploading $name to R2…"
+            ok=0
+            for attempt in 1 2 3 4; do
+              if npx wrangler r2 object put "scrollpop-assets/$name" \
+                   --file "$f" --content-type application/javascript --remote; then
+                ok=1; break
+              fi
+              echo "⚠️  $name upload attempt $attempt failed (likely a transient Cloudflare 5xx) — retrying in $((attempt * 6))s…"
+              sleep $((attempt * 6))
+            done
+            [ "$ok" -eq 1 ] || { echo "❌ $name failed after 4 attempts"; exit 1; }
           done
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
