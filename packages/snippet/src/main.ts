@@ -631,11 +631,22 @@ function getShadowCSS(shadow: string | undefined): string {
 }
 
 // ─── Dynamic Affiliate & Macros ───────────────────────────────────────────────────
+// Memoized browsing-context product (JSON-LD / OpenGraph) so {{product}} adapts the popup to
+// whatever the visitor is viewing — without re-parsing the page for every macro.
+let _spMacroProduct: ReturnType<typeof detectSmartProduct> | undefined;
 function injectMacros(text: string): string {
   if (!text || typeof text !== 'string') return text;
   return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
     key = key.trim().toLowerCase();
     if (key === 'page_title') return document.title;
+    // Context macros: the product/page the visitor is browsing (tie surveys/offers to it).
+    if (key === 'product' || key === 'product_image') {
+      if (_spMacroProduct === undefined) _spMacroProduct = detectSmartProduct();
+      const og = (p: string) => document.querySelector(`meta[property="og:${p}"]`)?.getAttribute('content') || '';
+      return key === 'product'
+        ? (_spMacroProduct?.title || og('title') || document.title || match)
+        : (_spMacroProduct?.image || og('image') || match);
+    }
     if (key.startsWith('meta:')) {
       const el = document.querySelector(`meta[name="${key.substring(5)}"]`);
       return el ? (el.getAttribute('content') || match) : match;

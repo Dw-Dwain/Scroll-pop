@@ -623,11 +623,12 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
     popupType: 'modal',
     position: 'center',
     layout: 'choice',
-    // Each answer routes to a page on the operator's site — edit these URLs to your real collections.
+    // Each answer routes to a page on the operator's OWN site (first-party, same-site paths).
+    // Edit these to your real collection URLs.
     choices: [
-      { label: '👗  Shop Women', href: 'https://your-site.com/collections/women' },
-      { label: '👔  Shop Men',   href: 'https://your-site.com/collections/men' },
-      { label: '🎁  Find a Gift', href: 'https://your-site.com/collections/gifts' },
+      { label: '👗  Shop Women', href: '/collections/women' },
+      { label: '👔  Shop Men',   href: '/collections/men' },
+      { label: '🎁  Find a Gift', href: '/collections/gifts' },
     ],
     palette: { bg: '#FFFFFF', primary: '#6D28D9', text: '#111827', border: '#EDE9FE', tint: '#F5F3FF', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
   },
@@ -635,8 +636,10 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
     id: 'choice-exit-reason',
     name: 'Exit Survey — What Stopped You?',
     category: 'Collect insights',
-    title: 'Before you go — what stopped you?',
-    subtitle: 'Tell us and we\'ll point you in the right direction.',
+    // {{product}} resolves to whatever the visitor is viewing (JSON-LD / OpenGraph), falling back
+    // to the page title — so the survey is tied to what they were actually browsing.
+    title: 'Still weighing up {{product}}?',
+    subtitle: 'Tell us what\'s holding you back and we\'ll point you the right way.',
     image: '',
     btnText: '',
     coupon: '',
@@ -644,9 +647,9 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
     position: 'center',
     layout: 'choice',
     choices: [
-      { label: 'Prices were too high → see today\'s deals', href: 'https://your-site.com/sale' },
-      { label: 'Couldn\'t find what I wanted → browse all', href: 'https://your-site.com/collections/all' },
-      { label: 'Just looking → read our guides', href: 'https://your-site.com/blog' },
+      { label: 'Price — show me today\'s deals', href: '/sale' },
+      { label: 'Couldn\'t decide — browse all', href: '/collections/all' },
+      { label: 'Just researching — read the guides', href: '/blog' },
     ],
     palette: { bg: '#0F172A', primary: '#F59E0B', text: '#FFFFFF', border: '#1E293B', tint: '#1E293B', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
   },

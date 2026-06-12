@@ -38,8 +38,12 @@ describe('safeHref', () => {
     expect(safeHref('shop.com/aff/123')).toBe('https://shop.com/aff/123');
     expect(safeHref('//cdn.example.com/x')).toBe('https://cdn.example.com/x'); // protocol-relative
   });
-  it('still rejects bare relative paths / single tokens (no dotted host)', () => {
-    expect(safeHref('/blog')).toBe('#');
+  it('allows same-site absolute paths (first-party survey routing) but blocks // and /\\ cross-origin tricks', () => {
+    expect(safeHref('/blog')).toBe('/blog');
+    expect(safeHref('/collections/women?sort=new')).toBe('/collections/women?sort=new');
+    expect(safeHref('/\\evil.com')).toBe('#');     // backslash → browsers may treat as //evil.com
+  });
+  it('still rejects bare tokens (no leading slash, no scheme, no dotted host)', () => {
     expect(safeHref('deal')).toBe('#');
   });
   it('does not let scheme normalization smuggle a dangerous scheme back in', () => {
