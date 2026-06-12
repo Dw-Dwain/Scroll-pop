@@ -110,6 +110,47 @@
   to   { opacity: 1; transform: translateY(0);   }
 }
 
+/* Slow drifting/breathing background mesh — purely atmospheric, behind all content. */
+@keyframes sp-mesh-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(-2.2%, 1.6%, 0) scale(1.07); }
+}
+.sp-mesh-bg {
+  animation: sp-mesh-drift 22s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Metric cards: a soft sheen that sweeps once on mount, plus a gentle hover lift. */
+@keyframes sp-metric-sheen {
+  0%   { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(240%); }
+}
+.sp-metric {
+  position: relative;
+  overflow: hidden;
+  transition: transform 180ms var(--ease-out, ease), box-shadow 180ms var(--ease-out, ease);
+}
+.sp-metric::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 40%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.06), transparent);
+  transform: translateX(-120%);
+  animation: sp-metric-sheen 2.6s var(--ease-out, ease) 0.3s 1;
+}
+.sp-metric:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-mesh-bg { animation: none; }
+  .sp-metric::after { animation: none; display: none; }
+  .sp-metric:hover { transform: none; }
+}
+
 .page-enter {
   animation: page-enter 300ms var(--ease-out) 80ms both;
 }

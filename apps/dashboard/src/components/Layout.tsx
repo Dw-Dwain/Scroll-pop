@@ -136,12 +136,17 @@ export const Layout: React.FC<LayoutProps> = ({
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
-      // Premium mesh backdrop on the (non-scrolling) root: three soft accent glows in the corners.
-      // Content surfaces (cards) stay solid and readable; the glow lives in the page margins/gaps,
-      // so it reads as a tasteful atmosphere without ever competing with content. The base
-      // var(--bg-root) is the final layer, so theming + contrast are unaffected.
-      background: 'radial-gradient(820px 460px at 12% -6%, rgba(99,102,241,0.13), transparent 60%), radial-gradient(720px 520px at 98% 4%, rgba(139,92,246,0.10), transparent 56%), radial-gradient(680px 480px at 60% 110%, rgba(56,189,248,0.06), transparent 55%), var(--bg-root)',
+      position: 'relative',
+      // Base layer only — the soft accent-glow mesh lives in the animated overlay below so it can
+      // breathe/drift slowly without ever touching layout or content contrast.
+      background: 'var(--bg-root)',
     }}>
+      {/* Animated mesh backdrop — three soft corner glows that drift slowly (z-index:-1 keeps it
+          behind all content; pointer-events:none so it's purely atmospheric). Honors reduced-motion. */}
+      <div aria-hidden className="sp-mesh-bg" style={{
+        position: 'absolute', inset: '-12%', zIndex: -1, pointerEvents: 'none',
+        background: 'radial-gradient(820px 460px at 12% -6%, rgba(99,102,241,0.13), transparent 60%), radial-gradient(720px 520px at 98% 4%, rgba(139,92,246,0.10), transparent 56%), radial-gradient(680px 480px at 60% 110%, rgba(56,189,248,0.06), transparent 55%)',
+      }} />
 
       {/* ── Top Navigation Bar ─────────────────────────────────── */}
       <header style={{
