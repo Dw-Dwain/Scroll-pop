@@ -221,7 +221,12 @@ jobs:
             echo "⏭️  FLY_API_TOKEN not set — skipping Fly deploy."
             exit 0
           fi
-          flyctl deploy --remote-only -a scrollpop-api
+          # The release_command runs drizzle-kit migrate. During a rolling deploy the old machines
+          # still hold connections (RLS keeps tenant connections open longer), so the migration can
+          # wait on locks and exceed the default ~5min release-command timeout → "machine never
+          # reached state destroyed" → deploy aborts (manual `fly deploy` works because locks are
+          # clear then). Give the release command more room (15min).
+          flyctl deploy --remote-only -a scrollpop-api --release-command-timeout 900
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
