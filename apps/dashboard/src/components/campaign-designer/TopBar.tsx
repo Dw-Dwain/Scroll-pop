@@ -25,6 +25,8 @@ interface TopBarProps {
   canUndo: boolean;
   canRedo: boolean;
   onBack?: () => void;
+  /** When false (view-only member), the Publish/Save button is disabled. */
+  canSave?: boolean;
 }
 
 export default function TopBar({
@@ -40,6 +42,7 @@ export default function TopBar({
   canUndo,
   canRedo,
   onBack,
+  canSave = true,
 }: TopBarProps) {
   return (
     <div className="ds-chrome h-16 w-full shrink-0 border-b border-zinc-200 bg-white px-5 flex items-center justify-between select-none">
@@ -167,10 +170,12 @@ export default function TopBar({
           Simulation
         </button>
 
-        {/* Publish / Save button — indigo to match wizard */}
+        {/* Publish / Save button — indigo to match wizard. Disabled for view-only members. */}
         <button
           onClick={onSave}
-          className="py-1.5 px-4 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+          disabled={!canSave}
+          title={canSave ? undefined : 'View-only access — changes are disabled'}
+          className={`py-1.5 px-4 rounded-lg text-xs font-bold text-white transition-all flex items-center gap-1.5 shadow-sm ${canSave ? 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer' : 'bg-indigo-600/40 cursor-not-allowed'}`}
         >
           <Save className="h-3 w-3 text-indigo-100" />
           Publish Live
