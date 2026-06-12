@@ -759,7 +759,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
 
       {/* ── Full Conversion Funnel (moved below the breakdown sections) ─────────── */}
       {!funnelLoading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 32, marginBottom: 24 }}>
           {/* Funnel steps */}
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 16 }}>
