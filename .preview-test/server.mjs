@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -14,7 +14,9 @@ createServer((req, res) => {
       res.end(body);
       return;
     }
-    const file = path === '/local.html' ? 'local.html' : 'index.html';
+    // Serve any named .html in this folder (local.html, abclose.html, …); default to index.html.
+    const named = /^\/([a-z0-9-]+\.html)$/.exec(path)?.[1];
+    const file = named && existsSync(join(dir, named)) ? named : 'index.html';
     const html = readFileSync(join(dir, file));
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(html);

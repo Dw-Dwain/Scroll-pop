@@ -31,6 +31,26 @@ describe('safeHref', () => {
     expect(safeHref(null)).toBe('#');
     expect(safeHref('not a url')).toBe('#');
   });
+  it('normalizes scheme-less affiliate links to https (so they do not resolve relative to the host page)', () => {
+    // Operators paste links without a scheme; these must become absolute https URLs, not '#'
+    // (which navigates to the host page) and not a bogus relative resolution.
+    expect(safeHref('www.shop.com/deal?id=5')).toBe('https://www.shop.com/deal?id=5');
+    expect(safeHref('shop.com/aff/123')).toBe('https://shop.com/aff/123');
+    expect(safeHref('//cdn.example.com/x')).toBe('https://cdn.example.com/x'); // protocol-relative
+  });
+  it('allows same-site absolute paths (first-party survey routing) but blocks // and /\\ cross-origin tricks', () => {
+    expect(safeHref('/blog')).toBe('/blog');
+    expect(safeHref('/collections/women?sort=new')).toBe('/collections/women?sort=new');
+    expect(safeHref('/\\evil.com')).toBe('#');     // backslash → browsers may treat as //evil.com
+  });
+  it('still rejects bare tokens (no leading slash, no scheme, no dotted host)', () => {
+    expect(safeHref('deal')).toBe('#');
+  });
+  it('does not let scheme normalization smuggle a dangerous scheme back in', () => {
+    // A real scheme is honored (and blocked); we never prepend https:// to it.
+    expect(safeHref('javascript:alert(1)')).toBe('#');
+    expect(safeHref('  JAVASCRIPT:alert(1)  ')).toBe('#');
+  });
 });
 
 describe('safeCssColor', () => {

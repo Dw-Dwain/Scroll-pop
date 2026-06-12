@@ -21,12 +21,36 @@ export function escapeHtml(str: string | undefined | null): string {
     .replace(/'/g, '&#039;');
 }
 
-/** Ensure href/src only use http(s) — blocks javascript:, data:, vbscript:, etc. */
+/**
+ * Ensure href/src only use http(s) — blocks javascript:, data:, vbscript:, etc.
+ *
+ * Operators routinely paste affiliate links without a scheme ("www.shop.com/x", "shop.com/x").
+ * `new URL()` throws on those, so the old code returned '#': an `<a href="#">` then navigates to
+ * the HOST page (looked like "the link goes to my blog"), and the X-close ad-trigger got no URL
+ * (→ instant close instead of the two-step ad-then-close). So a scheme-less, domain-looking value
+ * is normalized to https:// (mirrors the url_exact normalization). A genuinely relative path
+ * ("/blog", "deal") is NOT turned into a bogus host — it still returns '#'.
+ */
 export function safeHref(url: string | undefined | null): string {
   if (!url) return '#';
+  const raw = String(url).trim();
+  if (!raw) return '#';
+  // No legitimate URL contains a backslash; browsers normalize "\" → "/", so "/\evil.com" or
+  // "https:\\evil.com" can smuggle a cross-origin host. Reject outright.
+  if (raw.includes('\\')) return '#';
+  // Same-site absolute path (first-party routing, e.g. a survey answer → "/collections/women"):
+  // a single leading slash NOT followed by another slash. Reject "//host" (protocol-relative cross-origin).
+  if (/^\/(?!\/)/.test(raw)) return raw;
+  // A real scheme is letters then ':' (RFC 3986); protocol-relative "//host" has none.
+  const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw);
+  const candidate = hasScheme ? raw : raw.startsWith('//') ? `https:${raw}` : `https://${raw}`;
   try {
-    const p = new URL(url);
-    return (p.protocol === 'https:' || p.protocol === 'http:') ? url : '#';
+    const p = new URL(candidate);
+    if (p.protocol !== 'https:' && p.protocol !== 'http:') return '#';
+    // We synthesized the scheme for a bare value — only accept it if it resolved to a real,
+    // dotted hostname (or localhost), so "/blog" / "deal" don't become https://blog.
+    if (!hasScheme && !raw.startsWith('//') && !p.hostname.includes('.') && p.hostname !== 'localhost') return '#';
+    return candidate;
   } catch { return '#'; }
 }
 

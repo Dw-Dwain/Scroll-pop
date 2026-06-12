@@ -48,7 +48,10 @@ interface DynamicTemplateMeta {
   popupType: PopupType;
   position: CanvasPosition;
   /** Layout variant — controls element arrangement inside the popup */
-  layout?: 'split-left' | 'split-right' | 'centered' | 'minimal' | 'product-card' | 'testimonial' | 'bold-type';
+  layout?: 'split-left' | 'split-right' | 'centered' | 'minimal' | 'product-card' | 'testimonial' | 'bold-type' | 'choice';
+  /** For the `choice` (survey) layout: each answer button routes the visitor to its `href`
+   *  (a full URL, e.g. the operator's own site page or an affiliate link). No email field. */
+  choices?: { label: string; href?: string }[];
   palette: {
     bg: string;
     primary: string;
@@ -608,13 +611,55 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
     layout: 'bold-type',
     palette: { bg: '#FAFAFA', primary: '#111827', text: '#111827', border: '#E5E7EB', tint: '#F9FAFB', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
   },
+  {
+    id: 'choice-shopper-segment',
+    name: 'Shopper Segmentation Survey',
+    category: 'Guide visitors',
+    title: 'What are you shopping for?',
+    subtitle: 'Pick one and we\'ll take you straight there.',
+    image: '',
+    btnText: '',
+    coupon: '',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'choice',
+    // Each answer routes to a page on the operator's OWN site (first-party, same-site paths).
+    // Edit these to your real collection URLs.
+    choices: [
+      { label: '👗  Shop Women', href: '/collections/women' },
+      { label: '👔  Shop Men',   href: '/collections/men' },
+      { label: '🎁  Find a Gift', href: '/collections/gifts' },
+    ],
+    palette: { bg: '#FFFFFF', primary: '#6D28D9', text: '#111827', border: '#EDE9FE', tint: '#F5F3FF', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
+  {
+    id: 'choice-exit-reason',
+    name: 'Exit Survey — What Stopped You?',
+    category: 'Collect insights',
+    // {{product}} resolves to whatever the visitor is viewing (JSON-LD / OpenGraph), falling back
+    // to the page title — so the survey is tied to what they were actually browsing.
+    title: 'Still weighing up {{product}}?',
+    subtitle: 'Tell us what\'s holding you back and we\'ll point you the right way.',
+    image: '',
+    btnText: '',
+    coupon: '',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'choice',
+    choices: [
+      { label: 'Price — show me today\'s deals', href: '/sale' },
+      { label: 'Couldn\'t decide — browse all', href: '/collections/all' },
+      { label: 'Just researching — read the guides', href: '/blog' },
+    ],
+    palette: { bg: '#0F172A', primary: '#F59E0B', text: '#FFFFFF', border: '#1E293B', tint: '#1E293B', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
 ];
 
 // ─── ScrollPop Creative templates — one per creative JPG (fixed 330×560 portrait card) ──────────
 // Replaces the old single generic "vertical" template. Each is a full-bleed creative image with an
 // invisible full-card CTA overlay (set your affiliate href) and a white-circle X close. Lightweight:
 // one image + two overlay primitives, triggers + design primitives included out of the box.
-const CREATIVE_W = 330;   // fixed width
+const CREATIVE_W = 380;   // fixed width  (Wisepops-style vertical affiliate card)
 const CREATIVE_H = 560;   // fixed height
 const creativeUrl = (file: string) => `https://cdn.scrollpop.online/creatives/${encodeURIComponent(file)}.jpg`;
 
@@ -645,8 +690,12 @@ const creativeTemplate = (id: string, name: string, file: string): Campaign => (
       elements: [
         // The creative image IS the click target (href → tracked + opens the affiliate link). No
         // separate full-card button overlaying it. White-circle X on top to dismiss.
-        { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: creativeUrl(file), href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', borderRadius: 16, zIndex: 1 },
-        { id: 'close-btn', type: 'close', x: 88, y: 2.5, w: 9, h: 5.4, content: '✕', color: '#18181b', fontSize: 15, fontWeight: '700', align: 'center', backgroundColor: '#ffffff', borderRadius: 99, zIndex: 100, extraProps: { adClose: false } },
+        // objectFit:'contain' shows the WHOLE creative (no edge cropping) on the dark card.
+        { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: creativeUrl(file), href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', objectFit: 'contain', borderRadius: 16, zIndex: 1 },
+        // adClose:true → the X is a two-step ad-then-close (1st click opens the affiliate link in a
+        // new tab + keeps the popup, 2nd click closes). The snippet falls back to the image href when
+        // the close element has none, so this works out of the box for affiliate creatives.
+        { id: 'close-btn', type: 'close', x: 88, y: 2.5, w: 9, h: 5.4, content: '✕', color: '#18181b', fontSize: 15, fontWeight: '700', align: 'center', backgroundColor: '#ffffff', borderRadius: 99, zIndex: 100, extraProps: { adClose: true } },
       ],
     },
     success: {
@@ -2044,6 +2093,34 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-desc`, type: 'text', x: 43, y: 56, w: 54, h: 12, content: meta.subtitle, color: isDark ? '#9CA3AF' : '#4B5563', fontSize: 11, fontFamily: meta.palette.fontBody, align: 'left', zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-btn`, type: 'button', x: 43, y: 72, w: 48, h: 14, content: meta.btnText, color: meta.palette.bg, backgroundColor: meta.palette.primary, borderRadius: 4, fontSize: 14, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'center', href: '', zIndex: 4 } as CampaignElement,
         );
+
+      } else if (layout === 'choice') {
+        // CHOICE / SURVEY — a question + a stack of answer buttons. Each answer routes the visitor
+        // to its own destination (the choice's `href`: a page on the operator's site, or an
+        // affiliate link). No email field — this segments/guides traffic instead of capturing it.
+        const choices = (meta.choices && meta.choices.length ? meta.choices : [
+          { label: 'Yes, show me the deals' }, { label: 'No, maybe later' },
+        ]).slice(0, 4);
+        mainElementsList.push(
+          { id: `${meta.id}-tag`,  type: 'text',    x: 10, y: 13, w: 80, h: 6,  content: `★ ${meta.category.toUpperCase()}`, color: meta.palette.primary, fontSize: 10, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: 'center', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-head`, type: 'heading', x: 8,  y: 21, w: 84, h: 18, content: meta.title,    color: textThemeColor, fontSize: 23, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'center', zIndex: 3, animationType: 'fade-in', animationDuration: 0.5 } as CampaignElement,
+          { id: `${meta.id}-desc`, type: 'text',    x: 10, y: 40, w: 80, h: 9,  content: meta.subtitle, color: bodyThemeColor, fontSize: 12, fontFamily: meta.palette.fontBody, align: 'center', zIndex: 3 } as CampaignElement,
+        );
+        // Answer buttons stacked in the lower half: the first is the primary (filled), the rest are outline.
+        const n = choices.length;
+        const bw = 66, bx = (100 - bw) / 2, bh = Math.min(12, Math.floor(42 / n) - 2), gap = 3, startY = 52;
+        choices.forEach((c, i) => {
+          const alt = i > 0;
+          mainElementsList.push({
+            id: `${meta.id}-choice-${i}`, type: 'button',
+            x: bx, y: startY + i * (bh + gap), w: bw, h: bh, content: c.label,
+            color: alt ? meta.palette.primary : '#FFFFFF',
+            backgroundColor: alt ? meta.palette.bg : meta.palette.primary,
+            borderWidth: alt ? 1 : 0, borderColor: alt ? meta.palette.primary : 'transparent',
+            borderRadius: 8, fontSize: 12, fontWeight: '700', fontFamily: meta.palette.fontHeading, align: 'center',
+            href: c.href ?? '', zIndex: 4,
+          } as CampaignElement);
+        });
 
       } else {
         // CENTERED — centred layout with optional small feature image at top, works with or without image
