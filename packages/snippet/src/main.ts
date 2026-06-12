@@ -581,6 +581,9 @@ function freqState(campaignId: string): FreqState {
 // Recurrence-aware frequency gate. The legacy `frequency` enum still drives the defaults; the
 // optional recurrence fields layer on top, so existing campaigns behave exactly as before.
 function checkFrequencyCap(campaignId: string, f: FrequencyRule): boolean {
+  // Rage-close protection: if the visitor X-closed this popup within 3s earlier in the session,
+  // don't show it again for the rest of the session (set by dismiss()).
+  try { if (sessionStorage.getItem('_sp_rg' + campaignId)) return false; } catch { /* private mode */ }
   // When recurrence is configured (max displays or a cooldown), it takes precedence over the
   // legacy per-session gate — otherwise "once per session" would block every re-display.
   const recurring = (f.maxDisplayCount ?? 0) > 0 || (f.cooldownSeconds ?? 0) > 0;
@@ -1138,11 +1141,17 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   const dismiss = (isClose = false) => {
     if (dismissed) return;
     dismissed = true;
-    beaconEvent(campaign, isClose ? 'popup_close' : 'dismiss', slot?.id, { displayDuration: getDisplayDuration() });
+    const dur = getDisplayDuration();
+    beaconEvent(campaign, isClose ? 'popup_close' : 'dismiss', slot?.id, { displayDuration: dur });
+    // Rage-close protection: an X-close within 3s means the visitor was annoyed. Flag it for the
+    // rest of the session so checkFrequencyCap suppresses re-shows, and skip auto-reopen — don't
+    // badger someone who clearly didn't want the popup.
+    const rage = isClose && dur < 3000;
+    if (rage) { try { sessionStorage.setItem('_sp_rg' + campaign.id, '1'); } catch { /* private mode */ } }
     if (popupCard) popupCard.style.display = 'none';
     if (overlay)   overlay.style.display = 'none';
     if (teaser)    teaser.style.display = 'flex';
-    if (reopenAfter > 0 && reopens < reopenMax) {
+    if (!rage && reopenAfter > 0 && reopens < reopenMax) {
       reopens++;
       setTimeout(() => {
         dismissed = false; // allow it to be closed again

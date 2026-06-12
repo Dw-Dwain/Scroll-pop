@@ -357,6 +357,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         checkouts:    sql<number>`count(*) filter (where ${events.eventType}::text = 'checkout_started')::int`,
         purchases:    sql<number>`count(*) filter (where ${events.eventType}::text = 'purchase_completed')::int`,
         closes:       sql<number>`count(*) filter (where ${events.eventType}::text = 'popup_close')::int`,
+        // Genuine "rage" closes: the X was hit within 3s of the popup showing (displayDuration is
+        // ms-since-impression, beaconed by the snippet on every popup_close). A close after the
+        // visitor actually read the offer is NOT rage, so it must not inflate this number.
+        fastCloses:   sql<number>`count(*) filter (where ${events.eventType}::text = 'popup_close' and (${events.metadata} ->> 'displayDuration')::numeric < 3000)::int`,
         dismissals:   sql<number>`count(*) filter (where ${events.eventType}::text = 'dismiss')::int`,
         revenueCents: sql<number>`coalesce(sum(${events.revenueCents}) filter (where ${events.eventType}::text = 'purchase_completed'), 0)::int`,
       })
@@ -381,8 +385,11 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         ],
         exitStats: {
           closes:    row?.closes    ?? 0,
+          fastCloses: row?.fastCloses ?? 0,
           dismissals: row?.dismissals ?? 0,
-          rageCloseRate: top > 0 ? +((row?.closes ?? 0) / top * 100).toFixed(1) : 0,
+          // Rage = fast closes (<3s) as a share of popups shown — the true "I'm annoyed" signal,
+          // not just "people eventually closed the popup" (which is normal and near-universal).
+          rageCloseRate: top > 0 ? +((row?.fastCloses ?? 0) / top * 100).toFixed(1) : 0,
         },
         revenueCents: row?.revenueCents ?? 0,
         revenueDollars: +((row?.revenueCents ?? 0) / 100).toFixed(2),

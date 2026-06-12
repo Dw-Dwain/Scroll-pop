@@ -235,7 +235,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   type RevenueApiData = { totals?: { revenueDollars: number; purchases: number; emailCaptures: number; revenuePerVisitor?: number }; campaigns?: RevCampaign[] };
   type FunnelApiData = {
     steps?: Array<{ label: string; count: number; dropOffPct: number }>;
-    exitStats?: { closes: number; dismissals: number; rageCloseRate: number };
+    exitStats?: { closes: number; fastCloses?: number; dismissals: number; rageCloseRate: number };
   };
   type TrafficSource = { source: string; impressions: number; ctr: number };
   type IntelApiData = {
@@ -533,68 +533,6 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* ── Full Conversion Funnel ─────────────────────────────────────────────── */}
-      {!funnelLoading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
-          {/* Funnel steps */}
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 16 }}>
-              Conversion Funnel
-            </div>
-            {funnelSteps.length > 0 && funnelTop > 0 ? (
-              <FunnelBar steps={funnelSteps} topCount={funnelTop} />
-            ) : (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
-                No funnel data yet. Events will appear once your snippet is live.
-              </div>
-            )}
-          </div>
-
-          {/* Exit stats + rage-close */}
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 16 }}>
-              Popup Exit Analysis
-            </div>
-            {funnel?.exitStats ? (
-              <>
-                {[
-                  { label: 'Intentional Close (✕ button)', value: funnel.exitStats.closes, color: 'var(--status-error)' },
-                  { label: 'Passive Dismiss (overlay/link)', value: funnel.exitStats.dismissals, color: 'var(--data-3)' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{value.toLocaleString()}</span>
-                    </div>
-                    <div className="usage-bar-track" style={{ height: 5 }}>
-                      <div className="usage-bar-fill" style={{ width: `${funnelTop > 0 ? Math.min((value / funnelTop) * 100, 100) : 0}%`, background: color, height: '100%' }} />
-                    </div>
-                  </div>
-                ))}
-                <div style={{
-                  marginTop: 16, padding: '12px 14px',
-                  background: funnel.exitStats.rageCloseRate > 40 ? 'rgba(239,68,68,0.06)' : 'rgba(99,102,241,0.04)',
-                  border: `1px solid ${funnel.exitStats.rageCloseRate > 40 ? 'rgba(239,68,68,0.2)' : 'var(--border-subtle)'}`,
-                  borderRadius: 6,
-                }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
-                    Rage-Close Rate
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 500, color: funnel.exitStats.rageCloseRate > 40 ? 'var(--status-error)' : 'var(--text-primary)' }}>
-                    {funnel.exitStats.rageCloseRate}%
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    {funnel.exitStats.rageCloseRate > 40 ? 'High — consider reducing popup frequency or adjusting timing.' : 'Healthy — users are engaging before closing.'}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No exit data yet.</div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ── Standard KPI Funnel Row ────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, marginBottom: 24, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
         {funnelCards.map((card, i) => (
@@ -818,6 +756,73 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
           })()}
         </div>
       </div>
+
+      {/* ── Full Conversion Funnel (moved below the breakdown sections) ─────────── */}
+      {!funnelLoading && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+          {/* Funnel steps */}
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 16 }}>
+              Conversion Funnel
+            </div>
+            {funnelSteps.length > 0 && funnelTop > 0 ? (
+              <FunnelBar steps={funnelSteps} topCount={funnelTop} />
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
+                No funnel data yet. Events will appear once your snippet is live.
+              </div>
+            )}
+          </div>
+
+          {/* Exit stats + rage-close */}
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 16 }}>
+              Popup Exit Analysis
+            </div>
+            {funnel?.exitStats ? (
+              <>
+                {[
+                  { label: 'Intentional Close (✕ button)', value: funnel.exitStats.closes, color: 'var(--status-error)' },
+                  { label: 'Passive Dismiss (overlay/link)', value: funnel.exitStats.dismissals, color: 'var(--data-3)' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{value.toLocaleString()}</span>
+                    </div>
+                    <div className="usage-bar-track" style={{ height: 5 }}>
+                      <div className="usage-bar-fill" style={{ width: `${funnelTop > 0 ? Math.min((value / funnelTop) * 100, 100) : 0}%`, background: color, height: '100%' }} />
+                    </div>
+                  </div>
+                ))}
+                <div style={{
+                  marginTop: 16, padding: '12px 14px',
+                  background: funnel.exitStats.rageCloseRate > 20 ? 'rgba(239,68,68,0.06)' : 'rgba(99,102,241,0.04)',
+                  border: `1px solid ${funnel.exitStats.rageCloseRate > 20 ? 'rgba(239,68,68,0.2)' : 'var(--border-subtle)'}`,
+                  borderRadius: 6,
+                }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+                    Rage-Close Rate <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>· closed in under 3s</span>
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 500, color: funnel.exitStats.rageCloseRate > 20 ? 'var(--status-error)' : 'var(--text-primary)' }}>
+                    {funnel.exitStats.rageCloseRate}%
+                    {funnel.exitStats.fastCloses !== undefined && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>
+                        ({funnel.exitStats.fastCloses.toLocaleString()} of {funnel.exitStats.closes.toLocaleString()} closes)
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {funnel.exitStats.rageCloseRate > 20 ? 'High — visitors are bailing on sight. Delay the popup (scroll/dwell/exit-intent), cap frequency, or soften the format.' : 'Healthy — most visitors read the offer before closing.'}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No exit data yet.</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
