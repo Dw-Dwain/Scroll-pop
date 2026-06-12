@@ -975,6 +975,7 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
 ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,${cssOverlayOp});animation:sp-fade-in .2s ease;}` : ''}
 .popup{position:fixed;z-index:2147483647;background:${cssBackground};${cssBgImage ? `background-image:url("${cssBgImage}");background-size:cover;background-position:center;` : ''}color:${cssText};border-radius:${cssBorderR}px;box-shadow:${getShadowCSS(design.boxShadow)};${design.boxShadow === 'glass' ? 'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' : ''}margin:${cssMargin};width:${width};max-width:calc(100vw - 32px);${positionStyles}animation:${getAnimation(design.animation)};overflow:hidden;}
 .popup-inner{padding:${cssPadding};display:flex;flex-direction:column;gap:${cssGap};}
+@media (max-width:560px){.popup{width:min(${width},94vw)!important;max-width:94vw!important;max-height:90dvh!important;}.popup-inner{width:100%!important;height:auto!important;max-height:90dvh!important;aspect-ratio:var(--sp-ar,auto)!important;}}
 .close-btn{position:absolute;${design.closeButtonPosition === 'top-right' ? 'top:12px;right:12px;' : 'top:12px;left:12px;'}background:none;border:none;cursor:pointer;font-size:18px;color:${cssText};opacity:.6;padding:4px 8px;border-radius:4px;z-index:50;}
 .close-btn:hover{opacity:1;background:rgba(0,0,0,.1);}
 .headline{font-size:20px;font-weight:700;margin:0;line-height:1.3;}
@@ -1017,7 +1018,9 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   }
 
   // Popup Container
-  htmlChunks.push('<div class="popup" role="dialog" id="popup-card">');
+  // --sp-ar lets the mobile media query scale the popup to the viewport while keeping the design's
+  // aspect ratio (so a fixed-size creative shrinks to fit instead of overflowing/zooming the page).
+  htmlChunks.push(`<div class="popup" role="dialog" id="popup-card" style="--sp-ar:${cssNum(mainStep?.width, 360)}/${cssNum(mainStep?.height, 520)};">`);
   // Default close button — skipped in element mode when the design includes its own close element.
   if (design.showCloseButton && !hasCloseEl) {
     htmlChunks.push('<button class="close-btn" id="close-btn" aria-label="Close">✕</button>');
