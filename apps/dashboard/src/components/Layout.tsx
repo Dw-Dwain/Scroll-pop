@@ -134,7 +134,14 @@ export const Layout: React.FC<LayoutProps> = ({
   const isSplitPage = currentPath === '/profile' || currentPath === '/settings' || currentPath === '/journeys';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-root)' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
+      // Premium mesh backdrop on the (non-scrolling) root: three soft accent glows in the corners.
+      // Content surfaces (cards) stay solid and readable; the glow lives in the page margins/gaps,
+      // so it reads as a tasteful atmosphere without ever competing with content. The base
+      // var(--bg-root) is the final layer, so theming + contrast are unaffected.
+      background: 'radial-gradient(820px 460px at 12% -6%, rgba(99,102,241,0.13), transparent 60%), radial-gradient(720px 520px at 98% 4%, rgba(139,92,246,0.10), transparent 56%), radial-gradient(680px 480px at 60% 110%, rgba(56,189,248,0.06), transparent 55%), var(--bg-root)',
+    }}>
 
       {/* ── Top Navigation Bar ─────────────────────────────────── */}
       <header style={{
@@ -406,12 +413,7 @@ export const Layout: React.FC<LayoutProps> = ({
         style={{
           flex: 1,
           overflowY: (isFullScreenEditor || isSplitPage) ? 'hidden' : 'auto',
-          // Premium, restrained backdrop: two faint accent glows (top-right + bottom-left) add depth
-          // and guide the eye toward content without competing with it. Editors/canvases stay clean.
-          background: (isFullScreenEditor || isSplitPage)
-            ? 'var(--bg-root)'
-            : 'radial-gradient(1000px 560px at 100% -5%, rgba(99,102,241,0.07), transparent 55%), radial-gradient(760px 520px at -5% 105%, rgba(99,102,241,0.045), transparent 50%), var(--bg-root)',
-          backgroundAttachment: 'fixed',
+          background: 'transparent', // let the root mesh backdrop show through behind content
           display: 'flex',
           flexDirection: 'column',
         }}
