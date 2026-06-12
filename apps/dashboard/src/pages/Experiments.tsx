@@ -1,6 +1,5 @@
 import React from 'react';
 import { FlaskConical, ChevronDown, ChevronRight, Trophy, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { useCustom, useApiUrl } from '@refinedev/core';
 import { useActiveClient } from '../hooks/useClients';
 import { usePlan } from '../hooks/usePlan';
 import { authedFetch } from '../providers/dataProvider';
@@ -24,19 +23,30 @@ const statusBadge = (s: string) =>
   s === 'active' ? 'badge-success' : s === 'paused' ? 'badge-warning' : 'badge-neutral';
 
 export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
-  const apiUrl = useApiUrl();
   const plan = usePlan();
   const canAccess = plan.meetsMinPlan('scale'); // Experiments: Scale + Agency (and unlimited admins)
   const { activeClientId } = useActiveClient();
   const cq = activeClientId ? `&clientId=${activeClientId}` : '';
 
-  // Campaign list comes from /campaigns (NOT /journeys — that's the node-flow entity now).
-  const { data: campRes, isLoading } = useCustom<{ data: Campaign[] }>({
-    url: `${apiUrl}/campaigns?limit=100${cq}`,
-    method: 'get',
-    queryOptions: { queryKey: ['experiments-campaigns', activeClientId], enabled: canAccess },
-  });
-  const campaigns: Campaign[] = campRes?.data?.data ?? [];
+  // Campaigns load via authedFetch (the proven path). The Refine useCustom version returned empty
+  // in production, so the page showed only the "View campaigns" empty state with no experiments.
+  const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  React.useEffect(() => {
+    if (!canAccess) { setIsLoading(false); return; }
+    let alive = true;
+    setIsLoading(true);
+    (async () => {
+      try {
+        const res = await authedFetch(`/campaigns?limit=100${cq}`);
+        if (!res.ok || !alive) return;
+        const body = await res.json() as { data: Campaign[] };
+        if (alive) setCampaigns(body.data ?? []);
+      } catch { /* leave empty */ }
+      finally { if (alive) setIsLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, [canAccess, cq]);
 
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [data, setData] = React.useState<Record<string, ExpData | 'loading'>>({});
