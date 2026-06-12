@@ -67,31 +67,32 @@ export const AcceptInvite: React.FC = () => {
   const emailMatches = !!myEmail && myEmail === inviteEmail;
 
   // 2) When signed in with the matching email, accept automatically.
+  // Guarded by a ref (not by `status`) so it fires exactly once: setting status inside the effect
+  // must NOT re-trigger it — depending on `status` here previously cancelled the in-flight accept
+  // the instant it flipped to 'accepting', leaving the page stuck on "Joining…".
+  const acceptStartedRef = React.useRef(false);
   React.useEffect(() => {
-    if (status !== 'ready' || !userLoaded || !isSignedIn || !info || !emailMatches) return;
-    let cancelled = false;
+    if (acceptStartedRef.current) return;
+    if (!userLoaded || !isSignedIn || !info || !emailMatches) return;
+    acceptStartedRef.current = true;
+    setStatus('accepting');
     void (async () => {
-      setStatus('accepting');
       try {
         const token = await getToken();
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch(apiUrl(`/team/invites/${info.id}/accept`), { method: 'POST', headers, body: '{}' });
         if (!res.ok) throw new Error(String(res.status));
-        if (!cancelled) {
-          setStatus('accepted');
-          // Full reload into the dashboard so tenant-context re-routes them to the shared workspace.
-          window.setTimeout(() => { window.location.href = '/dashboard'; }, 1200);
-        }
+        setStatus('accepted');
+        // Full reload into the dashboard so tenant-context re-routes them to the shared workspace.
+        window.setTimeout(() => { window.location.href = '/dashboard'; }, 1000);
       } catch {
-        if (!cancelled) {
-          setStatus('error');
-          setErrorMsg('We couldn\'t accept this invite. It must be accepted from an account whose verified email matches the invited address.');
-        }
+        setStatus('error');
+        setErrorMsg('We couldn\'t accept this invite. It must be accepted from an account whose verified email matches the invited address.');
+        acceptStartedRef.current = false; // allow another attempt (e.g. after switching account)
       }
     })();
-    return () => { cancelled = true; };
-  }, [status, userLoaded, isSignedIn, info, emailMatches, getToken]);
+  }, [userLoaded, isSignedIn, info, emailMatches, getToken]);
 
   const acceptPath = info ? `/accept-invite?invite=${info.id}` : '/accept-invite';
   const signUpHref = info ? `/sign-up?email=${encodeURIComponent(info.email)}&redirect=${encodeURIComponent(acceptPath)}` : '/sign-up';

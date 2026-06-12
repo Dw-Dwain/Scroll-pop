@@ -1,6 +1,5 @@
 import React from 'react';
-import { useCustom } from '@refinedev/core';
-import { getApiBase } from '../providers/dataProvider';
+import { authedFetch } from '../providers/dataProvider';
 
 export const ADMIN_EMAIL       = 'dwain3991@gmail.com';
 export const UNLIMITED_DOMAINS = ['novatise.com'];
@@ -165,19 +164,37 @@ export function setPlanOverride(p: PlanOverride): void {
 
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
+type MePayload = {
+  tenant?: { plan?: string; usage?: number; monthlyViewLimit?: number };
+  user?: { email?: string };
+  role?: string;
+};
+
 export function usePlan() {
-  // Fetch real plan + email from GET /me.
+  // Fetch real plan + email + role from GET /me.
   // plan  → tenants.plan in DB (updated by Stripe webhook on subscription change).
   // email → users.email    (synced from Clerk on sign-up).
-  const { data: meData } = useCustom({
-    url: `${getApiBase()}/me`,
-    method: 'get',
-    queryOptions: { staleTime: 60_000, retry: false },
-  });
+  // role  → tenant_members.role for THIS user (owner | admin | editor | viewer).
+  // NOTE: this uses authedFetch, NOT Refine's useCustom — useCustom returns empty in production
+  // (systemic bug), which made plan/email silently fall back to stale localStorage from a previous
+  // account (e.g. an invited viewer inheriting a prior owner's "agency" plan + full access).
+  const [mePayload, setMePayload] = React.useState<MePayload | undefined>(undefined);
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await authedFetch('/me');
+        if (!res.ok) return;
+        const body = await res.json() as { data?: MePayload };
+        if (!cancelled) setMePayload(body.data ?? (body as MePayload));
+      } catch { /* leave undefined — callers fall back to localStorage while loading */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const mePayload = meData?.data as { tenant?: { plan?: string; usage?: number; monthlyViewLimit?: number }; user?: { email?: string } } | undefined;
   const apiPlan  = mePayload?.tenant?.plan;
   const apiEmail = mePayload?.user?.email;
+  const apiRole  = mePayload?.role;                 // membership role (undefined while loading)
   const apiUsage = mePayload?.tenant?.usage;        // live popup impressions this month (or undefined while loading)
   const apiViewLimit = mePayload?.tenant?.monthlyViewLimit;
 
@@ -221,5 +238,13 @@ export function usePlan() {
   const planRank = (p: PlanId) => PLAN_ORDER.indexOf(p);
   const meetsMinPlan = (required: PlanId): boolean => isUnlimited || planRank(plan) >= planRank(required);
 
-  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan, planOverride, usage: apiUsage, monthlyViewLimit: apiViewLimit, loaded: !!mePayload };
+  // Membership role for the active (possibly shared/agency) tenant. `viewer` is read-only — the API
+  // enforces this (403 on writes); the UI should mirror it by hiding/disabling write controls.
+  // While /me is loading, role is undefined → treat as NOT view-only so controls aren't briefly
+  // hidden for a legitimate editor on a slow request (the API stays the source of truth).
+  const role: string | undefined = apiRole;
+  const isViewer = role === 'viewer';
+  const canWrite = !isViewer;
+
+  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan, planOverride, usage: apiUsage, monthlyViewLimit: apiViewLimit, role, isViewer, canWrite, loaded: !!mePayload };
 }
