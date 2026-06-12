@@ -22,7 +22,7 @@ function useIsMobile(): boolean {
   return mobile;
 }
 
-const MOBILE_ALLOWED_PATHS = ['/sign-in', '/sign-up', '/sso-callback'];
+const MOBILE_ALLOWED_PATHS = ['/sign-in', '/sign-up', '/sso-callback', '/accept-invite'];
 
 // eslint-disable-next-line react-refresh/only-export-components
 const MobileGate: React.FC<{ currentPath: string; children: React.ReactNode }> = ({
@@ -108,6 +108,7 @@ import { Settings } from './pages/Settings';
 import { Team } from './pages/Team';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
+import { AcceptInvite } from './pages/AcceptInvite';
 import { AdminPanel } from './pages/AdminPanel';
 import { DocsPage } from './pages/DocsPage';
 import { StatusPage } from './pages/StatusPage';
@@ -220,6 +221,17 @@ const ClerkAppContent: React.FC = () => {
       </SignedIn>
     );
   };
+
+  // Team-invite accept deep link works in BOTH session states (sign up/in with the invited email,
+  // or accept directly when already signed in as it), so it's handled before the SignedIn/SignedOut
+  // split — AcceptInvite branches internally on the Clerk session.
+  if (currentPath.startsWith('/accept-invite')) {
+    return (
+      <MobileGate currentPath={currentPath}>
+        <AcceptInvite />
+      </MobileGate>
+    );
+  }
 
   return (
     <MobileGate currentPath={currentPath}>

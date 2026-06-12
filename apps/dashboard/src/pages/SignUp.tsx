@@ -48,7 +48,7 @@ export const SignUp: React.FC = () => {
 
           <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}>
             Already have an account?{' '}
-            <a href="/sign-in" style={{ color: 'var(--accent-300)', textDecoration: 'none' }}>Sign in</a>
+            <a href={`/sign-in${typeof window !== 'undefined' ? window.location.search : ''}`} style={{ color: 'var(--accent-300)', textDecoration: 'none' }}>Sign in</a>
           </div>
         </div>
       </div>
@@ -59,10 +59,24 @@ export const SignUp: React.FC = () => {
 const fieldLabel: React.CSSProperties = { fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 };
 const errorBox: React.CSSProperties = { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 13, color: 'var(--status-error)' };
 
+// Read `?email=` (prefill) and `?redirect=` (post-auth destination) from the URL. Used by the
+// team-invite deep link so a new invitee signs up with the exact invited address and is returned
+// to /accept-invite to finish. `redirect` is restricted to a same-origin path (no open redirect).
+export function readAuthParams(): { email: string; redirect: string } {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const email = p.get('email') ?? '';
+    const r = p.get('redirect') ?? '';
+    const redirect = r.startsWith('/') && !r.startsWith('//') ? r : '/dashboard';
+    return { email, redirect };
+  } catch { return { email: '', redirect: '/dashboard' }; }
+}
+
 function ClerkSignUpForm() {
   const { signUp, isLoaded, setActive } = useSignUp();
+  const params = React.useMemo(readAuthParams, []);
   const [name, setName] = React.useState('');
-  const [email, setEmail] = React.useState('');
+  const [email, setEmail] = React.useState(params.email);
   const [password, setPassword] = React.useState('');
   const [code, setCode] = React.useState('');
   const [pendingVerification, setPendingVerification] = React.useState(false);
@@ -103,7 +117,7 @@ function ClerkSignUpForm() {
       const result = await signUp.attemptEmailAddressVerification({ code });
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
-        window.location.href = '/dashboard';
+        window.location.href = params.redirect;
       } else {
         setError('Verification incomplete. Please check the code and try again.');
       }
@@ -124,7 +138,7 @@ function ClerkSignUpForm() {
       await signUp.authenticateWithRedirect({
         strategy,
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectUrlComplete: `${window.location.origin}/dashboard`,
+        redirectUrlComplete: `${window.location.origin}${params.redirect}`,
       });
     } catch (err: unknown) {
       const clerkOauthErr = err as { errors?: Array<{ message?: string }> };
