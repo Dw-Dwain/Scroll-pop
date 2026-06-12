@@ -161,11 +161,12 @@ export const AcceptInvite: React.FC = () => {
               </>
             )}
 
-            {/* Signed out → sign up / sign in with the invited email (prefilled). */}
+            {/* Signed out → sign in (most invitees already have an account) or create a new one,
+                both with the invited email prefilled. */}
             {status === 'ready' && !isSignedIn && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <a href={signUpHref} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Create account &amp; accept</a>
-                <a href={signInHref} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>I already have an account</a>
+                <a href={signInHref} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Sign in &amp; accept</a>
+                <a href={signUpHref} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Create a new account</a>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', margin: '4px 0 0' }}>
                   Use <strong>{info.email}</strong> — the invite is tied to that exact address.
                 </p>

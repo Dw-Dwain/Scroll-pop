@@ -81,6 +81,7 @@ function ClerkSignUpForm() {
   const [code, setCode] = React.useState('');
   const [pendingVerification, setPendingVerification] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [emailTaken, setEmailTaken] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,6 +90,7 @@ function ClerkSignUpForm() {
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     setLoading(true);
     setError('');
+    setEmailTaken(false);
     try {
       const [firstName, ...rest] = name.trim().split(/\s+/);
       const lastName = rest.join(' ');
@@ -101,8 +103,11 @@ function ClerkSignUpForm() {
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       setPendingVerification(true);
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: Array<{ longMessage?: string; message?: string }> };
-      setError(clerkErr?.errors?.[0]?.longMessage ?? clerkErr?.errors?.[0]?.message ?? 'Sign up failed.');
+      const clerkErr = err as { errors?: Array<{ code?: string; longMessage?: string; message?: string }> };
+      const e0 = clerkErr?.errors?.[0];
+      setError(e0?.longMessage ?? e0?.message ?? 'Sign up failed.');
+      // Already-registered email → offer to sign in instead (keeps any invite redirect in the URL).
+      setEmailTaken(e0?.code === 'form_identifier_exists');
     } finally {
       setLoading(false);
     }
@@ -170,7 +175,22 @@ function ClerkSignUpForm() {
 
   return (
     <>
-      {error && <div style={errorBox}>{error}</div>}
+      {error && (
+        <div style={errorBox}>
+          {error}
+          {emailTaken && (
+            <>
+              {' '}
+              <a
+                href={`/sign-in${typeof window !== 'undefined' ? window.location.search : ''}`}
+                style={{ color: 'var(--accent-300)', textDecoration: 'underline', fontWeight: 600 }}
+              >
+                Sign in instead
+              </a>
+            </>
+          )}
+        </div>
+      )}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <label style={fieldLabel}>Full Name</label>
