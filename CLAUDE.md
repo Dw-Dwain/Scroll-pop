@@ -80,8 +80,9 @@ scrollpop/
    IP) impression flood gate. Events are unauthenticated — never trust their contents or counts.
 
 ### Performance
-6. Snippet bundle **MUST** stay under 10 KB gzipped. This is a hard CI gate — builds fail if
-   exceeded. Inline stub must stay under 1.2 KB minified.
+6. Snippet core bundle (`p.js`) **MUST** stay under 12 KB gzipped (12288 B). This is a hard CI gate —
+   builds fail if exceeded. Lazy chunks have their own caps (spin/journey ≤3KB, targeting ≤2KB).
+   Inline stub must stay under 1.2 KB minified.
 7. Snippet must use `requestIdleCallback` (with `setTimeout` fallback) for non-critical work.
 8. Never block LCP. The snippet must defer all work until after the page is interactive.
 9. Use `navigator.sendBeacon()` for event beaconing; fall back to `fetch({keepalive:true})`.

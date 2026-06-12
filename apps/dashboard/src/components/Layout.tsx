@@ -21,7 +21,6 @@ import {
   Moon,
   Users,
 } from 'lucide-react';
-import { UserButton } from '@clerk/clerk-react';
 import { usePlan } from '../hooks/usePlan';
 import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
 import { isFeatureEnabled } from '../lib/flags';
@@ -327,7 +326,16 @@ export const Layout: React.FC<LayoutProps> = ({
                 color: 'rgba(255,255,255,0.65)',
               }}
             >
-              <UserButton afterSignOutUrl="/sign-in" />
+              {/* Plain avatar — NOT Clerk's <UserButton>, which opened its OWN dropdown on top of
+                  this custom menu (the "two dropdowns" bug). Account mgmt lives in the menu below
+                  (Profile → /profile embeds Clerk's UserProfile). */}
+              {userProfile?.avatarUrl || userProfile?.avatar ? (
+                <img src={userProfile.avatarUrl || userProfile.avatar} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent-500, #f97316)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                  {_getInitials(userProfile?.name || userProfile?.email || 'U')}
+                </span>
+              )}
               <ChevronDown size={12} style={{ color: 'rgba(255,255,255,0.4)', transition: 'transform 150ms', transform: userMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </button>
 

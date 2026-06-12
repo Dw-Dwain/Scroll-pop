@@ -332,12 +332,27 @@ export const Journeys: React.FC<JourneysProps> = () => {
   const { data: listRes, isLoading, refetch } = useCustom<{ data: JourneyListItem[]; meta: { maxPopups: number; minDelaySeconds: number } }>({
     url: `${apiUrl}/journeys${cq}`, method: 'get', queryOptions: { queryKey: ['journeys', activeClientId], enabled: canAccess },
   });
-  const { data: campRes } = useCustom<{ data: CampaignLite[] }>({
-    url: `${apiUrl}/campaigns?limit=100`, method: 'get', queryOptions: { queryKey: ['journey-campaigns'], enabled: canAccess },
-  });
   const journeys = listRes?.data?.data ?? [];
   const meta = listRes?.data?.meta ?? { maxPopups: 4, minDelaySeconds: 5 };
-  const campaigns: CampaignLite[] = campRes?.data?.data ?? NO_CAMPAIGNS;
+
+  // Campaign options for the Popup nodes. Loaded via authedFetch — the SAME proven path the editor
+  // uses for the graph — because the Refine useCustom version returned empty in production, so the
+  // dropdown never populated even though the campaigns exist. `cq` scopes to the active client like
+  // the rest of the app (empty when "All clients").
+  const [campaigns, setCampaigns] = React.useState<CampaignLite[]>(NO_CAMPAIGNS);
+  React.useEffect(() => {
+    if (!canAccess) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await authedFetch(`/campaigns?limit=100${cq}`);
+        if (!res.ok || !alive) return;
+        const body = await res.json() as { data: CampaignLite[] };
+        if (alive) setCampaigns(body.data ?? NO_CAMPAIGNS);
+      } catch { /* leave the dropdown empty rather than crash */ }
+    })();
+    return () => { alive = false; };
+  }, [canAccess, cq]);
 
   const createJourney = async () => {
     setBusy(true);
