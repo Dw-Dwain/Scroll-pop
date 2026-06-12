@@ -165,9 +165,11 @@ jobs:
           FAILED=0
           for file in $CHANGED; do
             if [ ! -f "$file" ]; then continue; fi
-            # Flag destructive DDL that must be reviewed
-            if grep -iE '^\s*(DROP\s+TABLE|TRUNCATE\s+TABLE|DROP\s+COLUMN|DROP\s+SCHEMA)' "$file"; then
-              echo "❌ DESTRUCTIVE DDL detected in $file — add a '-- REVIEWED: intentional' comment to proceed"
+            # Flag destructive DDL UNLESS the line carries an inline '-- REVIEWED' marker (the
+            # documented escape hatch — e.g. reversible down-migrations). A destructive line
+            # without REVIEWED fails the gate.
+            if grep -iE '^\s*(DROP\s+TABLE|TRUNCATE\s+TABLE|DROP\s+COLUMN|DROP\s+SCHEMA)' "$file" | grep -qvi 'REVIEWED'; then
+              echo "❌ Unreviewed destructive DDL in $file — add a '-- REVIEWED: intentional' comment on the line to proceed"
               FAILED=1
             fi
           done
