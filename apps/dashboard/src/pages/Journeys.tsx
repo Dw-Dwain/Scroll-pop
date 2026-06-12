@@ -71,7 +71,9 @@ const SpNodeView: React.FC<NodeProps<SpNode>> = ({ data, selected }) => {
 const nodeTypes = { sp: SpNodeView };
 
 // ── Editor ──────────────────────────────────────────────────────────────────────
-const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLite[]; meta: { maxPopups: number; minDelaySeconds: number }; onClose: () => void }> = ({ journeyId, campaigns, meta, onClose }) => {
+// Exported so the auth-free local harness (journeys-harness.tsx) can mount the real editor
+// without Clerk/API. Not used by the app shell directly (the list view renders it internally).
+export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLite[]; meta: { maxPopups: number; minDelaySeconds: number }; onClose: () => void }> = ({ journeyId, campaigns, meta, onClose }) => {
   const campaignName = React.useCallback((id?: string | null) => campaigns.find((c) => c.id === id)?.name ?? '', [campaigns]);
   const [nodes, setNodes, onNodesChange] = useNodesState<SpNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);

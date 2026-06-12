@@ -35,10 +35,14 @@ export function ABPanel({ campaignId, onNavigate }: ABPanelProps) {
         authedFetch(`/variants/results?campaignId=${campaignId}`),
       ]);
       const vJson = vRes.ok ? await vRes.json() : { data: [] };
-      const rJson = rRes.ok ? await rRes.json() : { data: [] };
+      const rJson = rRes.ok ? await rRes.json() : { data: { variants: [] } };
       setVariants(vJson.data ?? []);
+      // /variants/results returns an OBJECT now: { campaignId, variants:[…], decided, … }.
+      // (It used to be a bare array — keep the fallback so an old shape never crashes the panel.)
+      const rData = rJson.data;
+      const rows: VariantResult[] = Array.isArray(rData) ? rData : (rData?.variants ?? []);
       const map: Record<string, VariantResult> = {};
-      for (const r of (rJson.data ?? []) as VariantResult[]) {
+      for (const r of rows) {
         if (r.variantId) map[r.variantId] = r;
       }
       setResults(map);

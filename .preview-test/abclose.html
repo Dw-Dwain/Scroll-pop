@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><title>ad-close + scheme-less link repro</title></head>
+<body style="height:4000px;font-family:system-ui">
+<h1>X-close two-step + scheme-less affiliate link repro</h1>
+<p>Element-mode popup: image has a SCHEME-LESS affiliate href; close button has adClose:true and NO href
+(forces the step-affiliate fallback — the new creative-template case). Fires on 1s dwell.</p>
+<script>
+// ── Force the closed Shadow DOM open so the test can query #close-btn / #cta-link / #popup-card.
+const _attach = Element.prototype.attachShadow;
+Element.prototype.attachShadow = function (init) {
+  const root = _attach.call(this, { ...init, mode: 'open' });
+  window.__shadow = root;
+  return root;
+};
+// ── Capture window.open so we can assert the X click opens the affiliate URL (and NOT the host page).
+window.__opened = [];
+const _open = window.open.bind(window);
+window.open = (url, ...rest) => { window.__opened.push(String(url)); return null; };
+
+// Snippet reads its key from window.__sp.publicKey (same as the spin repro).
+window.__sp = { publicKey: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' };
+
+const realFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const u = String(input);
+  if (u.includes('/c/')) {
+    return Promise.resolve(new Response(JSON.stringify({
+      siteId: '00000000-0000-0000-0000-000000000001',
+      plan: 'agency',
+      requireConsent: false,
+      campaigns: [{
+        id: '00000000-0000-0000-0000-0000000000cc',
+        triggers: [{ id: 't1', type: 'dwell_time', params: { seconds: 3 } }],
+        targeting: [],
+        frequency: { frequency: 'always', maxDisplayCount: null, cooldownSeconds: null, showAgainIfConverts: false },
+        affiliateSlots: [],            // intentionally empty → close URL MUST come from the image href
+        design: {
+          kind: 'modal',
+          headline: 'Special offer',
+          size: 'md',
+          accentColor: '#6366f1', textColor: '#111111', backgroundColor: '#ffffff',
+          closeButtonPosition: 'top-right', showPoweredBy: false,
+          steps: { main: { elements: [
+            // SCHEME-LESS affiliate link (the #16 case): must normalize to https, not resolve to host page.
+            { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100,
+              content: 'https://dummyimage.com/380x560/6366f1/fff', href: 'www.example-affiliate.com/deal?id=42',
+              borderRadius: 16, zIndex: 1 },
+            // adClose two-step, NO href on the close element → snippet must fall back to the image href (#15).
+            { id: 'close-btn', type: 'close', x: 86, y: 2.5, w: 10, h: 6, content: '✕',
+              color: '#18181b', backgroundColor: '#ffffff', borderRadius: 99, zIndex: 100,
+              extraProps: { adClose: true } },
+          ] } },
+        },
+      }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  }
+  return realFetch(input, init);
+};
+</script>
+<script src="/p.js?v=abclose1" async></script>
+</body></html>

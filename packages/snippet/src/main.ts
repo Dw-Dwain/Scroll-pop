@@ -535,8 +535,11 @@ function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: st
       break;
     }
 
-    // ✅ SAFE: cursor leaving viewport toward top (NOT popstate/history)
+    // ✅ SAFE: cursor leaving viewport toward top (NOT popstate/history). DESKTOP ONLY — there is
+    // no reliable mobile exit signal, so exit-intent campaigns never arm on touch devices (firing
+    // on a fast scroll-up was a false positive). Mobile visitors simply don't see exit-intent popups.
     case 'exit_intent_mouse': {
+      if (isMobile()) break; // never arm exit-intent on mobile
       const sensitivity = (p['sensitivity'] as number) ?? 20;
       const onMouseMove = (e: MouseEvent) => {
         if (e.clientY <= sensitivity) {
@@ -545,28 +548,6 @@ function registerTrigger(trigger: TriggerConfig, fire: (meta?: { triggerType: st
         }
       };
       document.addEventListener('mousemove', onMouseMove);
-
-      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      if (isTouchDevice) {
-        let lastY = window.scrollY;
-        let lastT = Date.now();
-        let mobileFired = false;
-        const onMobileScroll = () => {
-          if (mobileFired) return;
-          const nowY = window.scrollY;
-          const nowT = Date.now();
-          const dy = lastY - nowY;
-          const dt = nowT - lastT;
-          lastY = nowY;
-          lastT = nowT;
-          if (dy > 120 && dt < 150) {
-            mobileFired = true;
-            window.removeEventListener('scroll', onMobileScroll);
-            fire({ triggerType: 'exit_intent_mouse' });
-          }
-        };
-        window.addEventListener('scroll', onMobileScroll, { passive: true });
-      }
       break;
     }
 
@@ -1243,7 +1224,19 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   //                        affiliate link in a new tab + keeps the popup; 2nd click closes.
   const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
   const adClose = closeEl?.extraProps?.adClose === true;
-  const rawCloseHref = adClose ? (closeEl?.href || slot?.click_tracker_url || slot?.product_url || '') : '';
+  // Ad-close target priority: explicit href on the close element → the step's primary affiliate
+  // link (the image/button href — where creative templates put it) → the affiliate slot URL.
+  // Mirrors the designer preview's getStepAffiliate so production matches the simulation: new
+  // creative-template campaigns keep the link on the image element, not the close button, so
+  // closeEl.href alone is empty and the X used to close instantly instead of opening the ad.
+  let stepAffiliateHref = '';
+  if (adClose && !closeEl?.href && elementMode && Array.isArray(mainStep?.elements)) {
+    for (const e of mainStep.elements as any[]) {
+      const l = e?.href || e?.extraProps?.href;
+      if (typeof l === 'string' && l.length > 4 && !l.includes('YOUR_') && !l.includes('REPLACE-')) { stepAffiliateHref = l; break; }
+    }
+  }
+  const rawCloseHref = adClose ? (closeEl?.href || stepAffiliateHref || slot?.click_tracker_url || slot?.product_url || '') : '';
   const safeCloseHref = rawCloseHref ? safeHref(injectMacros(rawCloseHref)) : '';
   const closeUrl = (safeCloseHref && safeCloseHref !== '#') ? safeCloseHref : null;
   let adOpened = false;

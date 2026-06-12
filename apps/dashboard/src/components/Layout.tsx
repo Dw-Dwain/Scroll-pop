@@ -420,7 +420,12 @@ export const Layout: React.FC<LayoutProps> = ({
       >
         {/* Page content — flex: 1 pushes footer to bottom */}
         <div
-          className={isFullScreenEditor ? '' : 'page-enter'}
+          // Split pages (Journeys/Profile/Settings) are full-bleed flex layouts: they must NOT get
+          // the `.page-enter > div` treatment (max-width:1500 + auto side-margins), because auto
+          // margins on a flex child override align-items:stretch → the child collapses to its content
+          // width and centers (the Journeys editor canvas shrank to a sliver). Only normal scrolling
+          // pages get the centered entrance animation.
+          className={(isFullScreenEditor || isSplitPage) ? '' : 'page-enter'}
           style={{
             flex: 1,
             padding: (isFullScreenEditor || isSplitPage) ? '0' : '32px 40px 24px',
