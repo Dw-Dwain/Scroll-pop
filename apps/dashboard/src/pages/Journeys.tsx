@@ -6,7 +6,6 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Plus, ArrowLeft, Rocket, Save, Trash2, Lock, Flag, MousePointerClick, Clock, GitBranch, Split, Target } from 'lucide-react';
-import { useCustom, useApiUrl } from '@refinedev/core';
 import { usePlan } from '../hooks/usePlan';
 import { useActiveClient } from '../hooks/useClients';
 import { authedFetch } from '../providers/dataProvider';
@@ -194,7 +193,9 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
           onPaneClick={() => { setSelNode(null); setSelEdge(null); }}
           fitView fitViewOptions={{ padding: 0.28 }} proOptions={{ hideAttribution: true }}
         >
-          <Background /><Controls /><MiniMap pannable zoomable />
+          <Background color="var(--border-subtle)" gap={18} />
+          <Controls />
+          <MiniMap pannable zoomable maskColor="rgba(10,10,10,0.6)" nodeColor="#6366f1" style={{ background: '#18181b', border: '1px solid var(--border-subtle)', borderRadius: 8 }} />
         </ReactFlow>
       </div>
 
@@ -221,7 +222,7 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
       </div>
 
       {/* Floating palette (left) */}
-      <div style={{ ...floatCard, position: 'absolute', top: 64, left: 12, width: 150, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 'calc(100% - 88px)', overflowY: 'auto', zIndex: 5 }}>
+      <div style={{ ...floatCard, position: 'absolute', top: 80, left: 12, width: 150, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 'calc(100% - 104px)', overflowY: 'auto', zIndex: 5 }}>
         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '.05em', marginBottom: 2 }}>Add node</div>
         {(Object.keys(NODE_META) as NodeType[]).map((k) => (
           <button key={k} onClick={() => addNode(k)} style={{ ...btn('ghost'), justifyContent: 'flex-start', borderColor: NODE_META[k].color + '55' }}>
@@ -234,7 +235,7 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
       </div>
 
       {/* Floating inspector (right) */}
-      <div style={{ ...floatCard, position: 'absolute', top: 64, right: 12, width: 264, maxHeight: 'calc(100% - 88px)', overflowY: 'auto', zIndex: 5 }}>
+      <div style={{ ...floatCard, position: 'absolute', top: 80, right: 12, width: 264, maxHeight: 'calc(100% - 104px)', overflowY: 'auto', zIndex: 5 }}>
         {!selectedNode && !selectedEdge && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Select a node or edge to edit it. Drag from a node's bottom dot to another node to connect them.</div>}
         {selectedNode && <NodeInspector node={selectedNode} campaigns={campaigns} minDelay={meta.minDelaySeconds} onPatch={(p) => patchNode(selectedNode.id, p)} onDelete={() => { setNodes((n) => n.filter((x) => x.id !== selectedNode.id)); setEdges((e) => e.filter((x) => x.source !== selectedNode.id && x.target !== selectedNode.id)); setSelNode(null); }} />}
         {selectedEdge && (
@@ -330,7 +331,6 @@ const NodeInspector: React.FC<{ node: SpNode; campaigns: CampaignLite[]; minDela
 
 // ── List view ─────────────────────────────────────────────────────────────────
 export const Journeys: React.FC<JourneysProps> = () => {
-  const apiUrl = useApiUrl();
   const plan = usePlan();
   const canAccess = plan.meetsMinPlan('scale'); // Journeys: Scale + Agency (and unlimited admins)
   const { activeClientId } = useActiveClient();
@@ -338,11 +338,24 @@ export const Journeys: React.FC<JourneysProps> = () => {
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
-  const { data: listRes, isLoading, refetch } = useCustom<{ data: JourneyListItem[]; meta: { maxPopups: number; minDelaySeconds: number } }>({
-    url: `${apiUrl}/journeys${cq}`, method: 'get', queryOptions: { queryKey: ['journeys', activeClientId], enabled: canAccess },
-  });
-  const journeys = listRes?.data?.data ?? [];
-  const meta = listRes?.data?.meta ?? { maxPopups: 4, minDelaySeconds: 5 };
+  // Journeys list via authedFetch. The Refine useCustom version returned empty in production, so a
+  // saved journey never showed up on the list ("it says Saved but nothing's there"). refetch() is
+  // called after create/delete and when closing the editor, so the list always reflects the latest.
+  const [journeys, setJourneys] = React.useState<JourneyListItem[]>([]);
+  const [meta, setMeta] = React.useState<{ maxPopups: number; minDelaySeconds: number }>({ maxPopups: 4, minDelaySeconds: 5 });
+  const [isLoading, setIsLoading] = React.useState(true);
+  const refetch = React.useCallback(async () => {
+    if (!canAccess) { setIsLoading(false); return; }
+    setIsLoading(true);
+    try {
+      const res = await authedFetch(`/journeys${cq}`);
+      if (!res.ok) return;
+      const body = await res.json() as { data: JourneyListItem[]; meta?: { maxPopups: number; minDelaySeconds: number } };
+      setJourneys(body.data ?? []);
+      if (body.meta) setMeta(body.meta);
+    } catch { /* show empty rather than crash */ } finally { setIsLoading(false); }
+  }, [canAccess, cq]);
+  React.useEffect(() => { void refetch(); }, [refetch]);
 
   // Campaign options for the Popup nodes. Loaded via authedFetch — the SAME proven path the editor
   // uses for the graph — because the Refine useCustom version returned empty in production, so the
