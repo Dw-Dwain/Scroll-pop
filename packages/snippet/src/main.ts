@@ -61,7 +61,7 @@ interface FrequencyRule {
 
 interface DesignConfig {
   kind: 'modal' | 'slide_in' | 'banner' | 'bar' | 'fullscreen';
-  position: 'center' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom';
+  position: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom';
   size: 'sm' | 'md' | 'lg';
   backgroundColor: string;
   backgroundImage?: string;
@@ -743,7 +743,7 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
         out.push(`<div style="${pos}display:flex;align-items:center;justify-content:${elJustify(el.align, 'center')};text-align:${cssAlign(el.align, 'center')};color:${elColor(el.color, '#111827')};font-size:${cssNum(el.fontSize, 24)}px;font-weight:${cssWeight(el.fontWeight, '700')};font-family:${ff};line-height:1.2;">${escapeHtml(content)}</div>`);
         break;
       case 'text':
-        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:${elJustify(el.align, 'left')};text-align:${cssAlign(el.align, 'left')};color:${elColor(el.color, '#4B5563')};font-size:${cssNum(el.fontSize, 13)}px;font-weight:${cssWeight(el.fontWeight, '400')};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${elBgColor(el.backgroundColor, 'transparent')};` : ''}${el.borderRadius ? `border-radius:${elBorderR(el.borderRadius, 0)}px;` : ''}${el.padding ? `padding:${cssLen(el.padding, '0')};` : ''}">${escapeHtml(content)}</div>`);
+        out.push(`<div style="${pos}display:flex;align-items:center;justify-content:${elJustify(el.align, 'left')};text-align:${cssAlign(el.align, 'left')};color:${elColor(el.color, '#4B5563')};font-size:${cssNum(el.fontSize, 13)}px;font-weight:${cssWeight(el.fontWeight, '400')};font-family:${ff};line-height:1.5;${el.backgroundColor ? `background:${elBgColor(el.backgroundColor, 'transparent')};` : ''}${el.borderWidth ? `border:${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, 'transparent')};` : ''}${el.borderRadius ? `border-radius:${elBorderR(el.borderRadius, 0)}px;` : ''}${el.padding ? `padding:${cssLen(el.padding, '0')};` : ''}">${escapeHtml(content)}</div>`);
         break;
       case 'button': {
         const isSubmit = hasInput && !usedCtaId;
@@ -1325,6 +1325,8 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 function getPositionStyles(design: DesignConfig): string {
   switch (design.position) {
     case 'center': return 'top:50%;left:50%;translate:-50% -50%;';
+    case 'top-left': return 'top: 16px; left: 16px;';
+    case 'top-right': return 'top: 16px; right: 16px;';
     case 'bottom-left': return 'bottom: 16px; left: 16px;';
     case 'bottom-right': return 'bottom: 16px; right: 16px;';
     case 'top': return 'top: 0; left: 0; right: 0; width: 100%; max-width: 100%; border-radius: 0;';

@@ -155,7 +155,10 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
               .map((v) => ({ id: v.id, weight: v.weight, design: v.config, affiliateSlots: v.affiliateSlots }));
             return {
               id: campaign.id,
-              design: design.config,
+              // Merge the top-level `kind` column into the served design object (the snippet reads
+              // `campaign.design.kind`, e.g. to launch the spin wheel). It lives on the designs row,
+              // not inside config JSONB, so without this it was always undefined at the edge.
+              design: { ...(design.config as Record<string, unknown>), kind: design.kind } as unknown,
               triggers: (triggersByCampaign.get(campaign.id) ?? []).map((t) => ({ id: t.id, type: t.type, params: t.params })),
               targeting: (targetingByCampaign.get(campaign.id) ?? []).map((r) => ({ id: r.id, kind: r.kind, operator: r.operator, value: r.value })),
               frequency: {
