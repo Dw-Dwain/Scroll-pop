@@ -162,57 +162,64 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
   })();
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-        <button onClick={onClose} style={btn('ghost')}><ArrowLeft size={14} /> Back</button>
-        <strong style={{ fontSize: 14 }}>{journey?.name ?? 'Journey'}</strong>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>v{journey?.version ?? 1} · {journey?.status}</span>
-        <div style={{ flex: 1 }} />
-        {status && <span style={{ fontSize: 12, color: status.kind === 'ok' ? '#16a34a' : '#dc2626', maxWidth: 360, textAlign: 'right' }}>{status.msg}</span>}
-        <button onClick={save} disabled={saving} style={btn('ghost')}><Save size={14} /> Save</button>
-        <button onClick={publish} disabled={saving} style={btn('primary')}><Rocket size={14} /> Publish</button>
+    // Full-bleed canvas with FLOATING overlay panels (not columns). The ReactFlow layer fills the
+    // whole editor; the toolbar/palette/inspector float on top, so zoom/pan transform only the
+    // canvas + nodes — the panels stay put.
+    <div style={{ position: 'relative', height: '100%', width: '100%', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <ReactFlow
+          nodes={nodes} edges={edges} nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
+          onNodeClick={(_, n) => { setSelNode(n.id); setSelEdge(null); }}
+          onEdgeClick={(_, e) => { setSelEdge(e.id); setSelNode(null); }}
+          onPaneClick={() => { setSelNode(null); setSelEdge(null); }}
+          fitView fitViewOptions={{ padding: 0.28 }} proOptions={{ hideAttribution: true }}
+        >
+          <Background /><Controls /><MiniMap pannable zoomable />
+        </ReactFlow>
       </div>
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* Palette */}
-        <div style={{ width: 150, borderRight: '1px solid var(--border-subtle)', padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '.05em', marginBottom: 2 }}>Add node</div>
-          {(Object.keys(NODE_META) as NodeType[]).map((k) => (
-            <button key={k} onClick={() => addNode(k)} style={{ ...btn('ghost'), justifyContent: 'flex-start', borderColor: NODE_META[k].color + '55' }}>
-              <span style={{ color: NODE_META[k].color, display: 'flex' }}>{NODE_META[k].icon}</span> {NODE_META[k].label}
-            </button>
-          ))}
-          <div style={{ marginTop: 'auto', fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-            Max {meta.maxPopups} popups/visit · {meta.minDelaySeconds}s min delay. Connect a popup's bottom handle to branch on dismiss/convert/timeout.
+
+      {/* Floating top bar: Back / title on the left, Save / Publish on the right. */}
+      <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', alignItems: 'flex-start', gap: 10, pointerEvents: 'none', zIndex: 5 }}>
+        <div style={{ ...floatCard, display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto' }}>
+          <button onClick={onClose} style={btn('ghost')}><ArrowLeft size={14} /> Back</button>
+          <strong style={{ fontSize: 14 }}>{journey?.name ?? 'Journey'}</strong>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>v{journey?.version ?? 1} · {journey?.status}</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ ...floatCard, display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto' }}>
+          {status && <span style={{ fontSize: 12, color: status.kind === 'ok' ? '#16a34a' : '#dc2626', maxWidth: 280, textAlign: 'right' }}>{status.msg}</span>}
+          <button onClick={save} disabled={saving} style={btn('ghost')}><Save size={14} /> Save</button>
+          <button onClick={publish} disabled={saving} style={btn('primary')}><Rocket size={14} /> Publish</button>
+        </div>
+      </div>
+
+      {/* Floating palette (left) */}
+      <div style={{ ...floatCard, position: 'absolute', top: 64, left: 12, width: 150, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 'calc(100% - 88px)', overflowY: 'auto', zIndex: 5 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '.05em', marginBottom: 2 }}>Add node</div>
+        {(Object.keys(NODE_META) as NodeType[]).map((k) => (
+          <button key={k} onClick={() => addNode(k)} style={{ ...btn('ghost'), justifyContent: 'flex-start', borderColor: NODE_META[k].color + '55' }}>
+            <span style={{ color: NODE_META[k].color, display: 'flex' }}>{NODE_META[k].icon}</span> {NODE_META[k].label}
+          </button>
+        ))}
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.4, marginTop: 4 }}>
+          Max {meta.maxPopups} popups/visit · {meta.minDelaySeconds}s min delay. Connect a popup's bottom handle to branch on dismiss/convert/timeout.
+        </div>
+      </div>
+
+      {/* Floating inspector (right) */}
+      <div style={{ ...floatCard, position: 'absolute', top: 64, right: 12, width: 264, maxHeight: 'calc(100% - 88px)', overflowY: 'auto', zIndex: 5 }}>
+        {!selectedNode && !selectedEdge && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Select a node or edge to edit it. Drag from a node's bottom dot to another node to connect them.</div>}
+        {selectedNode && <NodeInspector node={selectedNode} campaigns={campaigns} minDelay={meta.minDelaySeconds} onPatch={(p) => patchNode(selectedNode.id, p)} onDelete={() => { setNodes((n) => n.filter((x) => x.id !== selectedNode.id)); setEdges((e) => e.filter((x) => x.source !== selectedNode.id && x.target !== selectedNode.id)); setSelNode(null); }} />}
+        {selectedEdge && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Lbl>Branch (when to follow this edge)</Lbl>
+            <select value={(selectedEdge.data?.['branch'] as string) || 'always'} onChange={(e) => patchEdgeBranch(selectedEdge.id, e.target.value as Branch)} style={inp}>
+              {branchOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <button onClick={() => { setEdges((e) => e.filter((x) => x.id !== selectedEdge.id)); setSelEdge(null); }} style={{ ...btn('ghost'), color: '#dc2626' }}><Trash2 size={13} /> Delete edge</button>
           </div>
-        </div>
-        {/* Canvas */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <ReactFlow
-            nodes={nodes} edges={edges} nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-            onNodeClick={(_, n) => { setSelNode(n.id); setSelEdge(null); }}
-            onEdgeClick={(_, e) => { setSelEdge(e.id); setSelNode(null); }}
-            onPaneClick={() => { setSelNode(null); setSelEdge(null); }}
-            fitView proOptions={{ hideAttribution: true }}
-          >
-            <Background /><Controls /><MiniMap pannable zoomable />
-          </ReactFlow>
-        </div>
-        {/* Inspector */}
-        <div style={{ width: 264, borderLeft: '1px solid var(--border-subtle)', padding: 14, overflowY: 'auto' }}>
-          {!selectedNode && !selectedEdge && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Select a node or edge to edit it. Drag from a node's bottom dot to another node to connect them.</div>}
-          {selectedNode && <NodeInspector node={selectedNode} campaigns={campaigns} minDelay={meta.minDelaySeconds} onPatch={(p) => patchNode(selectedNode.id, p)} onDelete={() => { setNodes((n) => n.filter((x) => x.id !== selectedNode.id)); setEdges((e) => e.filter((x) => x.source !== selectedNode.id && x.target !== selectedNode.id)); setSelNode(null); }} />}
-          {selectedEdge && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Lbl>Branch (when to follow this edge)</Lbl>
-              <select value={(selectedEdge.data?.['branch'] as string) || 'always'} onChange={(e) => patchEdgeBranch(selectedEdge.id, e.target.value as Branch)} style={inp}>
-                {branchOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
-              <button onClick={() => { setEdges((e) => e.filter((x) => x.id !== selectedEdge.id)); setSelEdge(null); }} style={{ ...btn('ghost'), color: '#dc2626' }}><Trash2 size={13} /> Delete edge</button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -383,6 +390,8 @@ export const Journeys: React.FC<JourneysProps> = () => {
 };
 
 // ── small UI helpers ─────────────────────────────────────────────────────────────
+// Floating overlay panel surface (toolbar / palette / inspector) layered over the full-bleed canvas.
+const floatCard: React.CSSProperties = { background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 12, boxShadow: '0 4px 16px rgba(0,0,0,.18)' };
 const inp: React.CSSProperties = { width: '100%', fontSize: 12, padding: '7px 9px', border: '1px solid var(--border-subtle)', borderRadius: 8, background: 'var(--bg-surface)', color: 'var(--text-primary)' };
 const Lbl: React.FC<{ children: React.ReactNode }> = ({ children }) => <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-muted)' }}>{children}</label>;
 const NumRow: React.FC<{ label: string; value: number; onChange: (v: number) => void }> = ({ label, value, onChange }) => (
