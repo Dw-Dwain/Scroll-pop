@@ -102,12 +102,25 @@ interface CampaignConfig {
   variants?: { id: string; weight: number; design: DesignConfig; affiliateSlots: AffiliateSlot[] }[];
 }
 
+// A published journey's compiled graph (served by internal/config). Executed by the lazy
+// journey.js engine — see src/journey.ts.
+interface JourneyConfig {
+  id: string;
+  entryNodeId: string;
+  trigger?: { type: string; params?: Record<string, unknown> } | null;
+  schedule?: { startsAt?: string | null; endsAt?: string | null };
+  maxPopups?: number;
+  minDelay?: number;
+  nodes: Array<{ id: string; type: string; campaignId?: string; config?: Record<string, unknown>; next: Record<string, string> }>;
+}
+
 interface SiteConfig {
   siteId: string;
   plan: string;
   requireConsent?: boolean;
   geo?: { country?: string }; // injected per-request by the edge Worker (CF-IPCountry)
   campaigns: CampaignConfig[];
+  journeys?: JourneyConfig[];
   version: string;
 }
 
@@ -282,6 +295,29 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
       } else {
         console.log('[ScrollPop] Campaign targeting rules not met for:', campaign.id);
       }
+    }
+
+    // Published journeys (node-based flows). Load the engine chunk only when the site has any,
+    // so it never touches the core budget. Hand it the compiled graphs + the two core seams it
+    // needs: show a campaign by id, and arm a trigger using the core's own trigger primitives.
+    if (config.journeys && config.journeys.length) {
+      const journeys = config.journeys;
+      void loadChunk('journey.js').then(() => {
+        (window as unknown as {
+          __sp_journey?: {
+            run: (j: JourneyConfig[], ctx: {
+              show: (id: string) => boolean;
+              arm: (t: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
+            }) => void;
+          };
+        }).__sp_journey?.run(journeys, {
+          show: (id: string) => { const c = campaignById.get(id); return c ? presentCampaign(c) : false; },
+          arm: (t, cb) => registerTrigger(
+            { id: 'journey', type: t.type as TriggerConfig['type'], params: t.params ?? {} },
+            () => cb(),
+          ),
+        });
+      });
     }
   } catch (e) {
     console.error('[ScrollPop] Error booting snippet:', e);
@@ -752,14 +788,21 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
       case 'image': {
         const imgSrc = safeHref((smartProduct && smartProduct.image) ? smartProduct.image : content);
         const r = elBorderR(el.borderRadius, 8);
+        // Honor a per-element object-fit; default 'cover' to match the designer canvas (object-cover).
+        const fitRaw = String(el.objectFit ?? '');
+        const fit = (fitRaw === 'contain' || fitRaw === 'fill' || fitRaw === 'none' || fitRaw === 'scale-down') ? fitRaw : 'cover';
         // When the image has an href it becomes the click target itself (id=cta-link → tracked +
         // opens the affiliate link) — no separate full-card button overlaying/hiding it.
         const imgHref = el.href ? safeHref(injectMacros(String(el.href))) : '';
         if (imgHref && !usedCtaId) {
           usedCtaId = true;
-          out.push(`<a id="cta-link" href="${escapeHtml(imgHref)}" target="_blank" rel="noopener" style="${pos}display:block;"><img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="position:absolute;inset:0;object-fit:cover;border-radius:${r}px;"></a>`);
+          // width/height:100% are REQUIRED here: an absolutely-positioned <img> (a replaced element)
+          // with only inset:0 and auto width/height renders at its INTRINSIC size (NOT stretched to
+          // the insets), so object-fit never applies and a large creative overflows/clips to its
+          // top-left corner. Explicit 100% makes it fill the box so object-fit governs the scale.
+          out.push(`<a id="cta-link" href="${escapeHtml(imgHref)}" target="_blank" rel="noopener" style="${pos}display:block;"><img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:${fit};border-radius:${r}px;"></a>`);
         } else {
-          out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}object-fit:cover;border-radius:${r}px;">`);
+          out.push(`<img src="${escapeHtml(imgSrc)}" alt="" referrerpolicy="no-referrer" style="${pos}display:block;object-fit:${fit};border-radius:${r}px;">`);
         }
         break;
       }
@@ -837,6 +880,14 @@ function maybeAdvanceSequence(campaign: CampaignConfig, design: DesignConfig, on
     (window as unknown as { __sp_journey?: { advance: (selfId: string, ui: Record<string, unknown>, on: string) => void } })
       .__sp_journey?.advance(campaign.id, ui, on);
   });
+}
+
+// Notify the journey engine (if loaded) that a popup was dismissed/converted, so a running
+// node-based journey can follow the matching branch. No-op when no journeys are active (the
+// chunk isn't loaded), so it's safe to call on every outcome.
+function notifyJourney(campaignId: string, on: 'dismiss' | 'convert'): void {
+  (window as unknown as { __sp_journey?: { notify?: (id: string, on: 'dismiss' | 'convert') => void } })
+    .__sp_journey?.notify?.(campaignId, on);
 }
 
 // ─── Popup Rendering (Shadow DOM) ─────────────────────────────────────────────
@@ -1110,6 +1161,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       // Sequence chaining only when auto-reopen isn't re-engaging this same popup (never stack
       // both — that's the popup-trap pattern). Advance to the configured next campaign.
       maybeAdvanceSequence(campaign, design, 'dismiss');
+      notifyJourney(campaign.id, 'dismiss'); // node-based journey: follow the 'dismiss' branch
     }
   };
 
@@ -1136,6 +1188,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     beaconEvent(campaign, 'conversion', slot?.id, { email, ...consentMeta });
     markConverted(campaign.id); // recurrence: stops re-showing unless showAgainIfConverts
     maybeAdvanceSequence(campaign, design, 'convert'); // chain to next popup if advanceOn=convert/both
+    notifyJourney(campaign.id, 'convert'); // node-based journey: follow the 'convert' branch
 
     const successStep = getStep('success');
     if (successStep?.enabled === false) {

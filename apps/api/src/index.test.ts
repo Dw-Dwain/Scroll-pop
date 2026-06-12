@@ -95,6 +95,7 @@ vi.mock('./db/client.js', () => {
       frequencyRules: q(), notifications: q(), leads: q(), variants: q(),
       coupons: q(), targetingRules: q(), designs: q(), triggers: q(),
       shopifyInstallations: q(), adminAuditLog: q(),
+      journeys: q(), journeyNodes: q(), journeyEdges: q(),
     },
     select: vi.fn().mockImplementation(() => chain()),
     insert: vi.fn().mockImplementation(() => ins()),
@@ -147,14 +148,21 @@ vi.mock('@clerk/fastify', () => ({
 }));
 
 // Minimal stub so tenantContextPlugin can read from a test header
-vi.mock('./plugins/tenant-context.js', () => ({
-  tenantContextPlugin: async (app: any) => {
-    app.addHook('preHandler', async (req: any) => {
-      req.tenantId = req.headers['x-test-tenant-id'] ?? 'tenant-test-000';
-      req.userId = req.headers['x-test-user-id'] ?? 'user-test-000';
-    });
-  },
-}));
+// fp-wrapped so the preHandler is GLOBAL (the real plugin is fastify-plugin-wrapped). Without this
+// the hook is encapsulated and req.tenantId/isUnlimited never reach the sibling route plugins,
+// so the Scale+Agency plan-gate on journeys/variants would 403 in tests.
+vi.mock('./plugins/tenant-context.js', async () => {
+  const fp = (await import('fastify-plugin')).default;
+  return {
+    tenantContextPlugin: fp(async (app: any) => {
+      app.addHook('preHandler', async (req: any) => {
+        req.tenantId = req.headers['x-test-tenant-id'] ?? 'tenant-test-000';
+        req.userId = req.headers['x-test-user-id'] ?? 'user-test-000';
+        req.isUnlimited = true; // bypass plan-gates in unit tests (gating is exercised separately)
+      });
+    }),
+  };
+});
 
 vi.mock('./lib/sentry.js', () => ({
   captureException: vi.fn(),
@@ -607,81 +615,123 @@ describe('Transactional canvas save (PUT /campaigns/:id/canvas)', () => {
   });
 });
 
-describe('Journeys chaining link (PUT /journeys/:id/link)', () => {
-  const found = (over: Record<string, unknown>) =>
-    ({ id: UUID_A, tenantId: UUID_B, siteId: UUID_C, deletedAt: null, ...over }) as never;
+describe('Journey compile + validation (compileJourney)', () => {
+  // Pure graph validator/compiler — no DB. Node/edge literals are cast (`as never`) to the route's
+  // internal input types, matching this file's mock-fixture style.
+  const entry = (over: Record<string, unknown> = {}) =>
+    ({ id: 'e', type: 'entry', config: { trigger: { type: 'scroll_pct', value: 50 } }, posX: 0, posY: 0, ...over });
+  const goal = (id = 'g') => ({ id, type: 'goal', config: { kind: 'conversion' }, posX: 0, posY: 0 });
 
-  it('rejects a self-link with 400', async () => {
-    const { db } = await import('./db/client.js');
-    vi.mocked(db.query.campaigns.findFirst).mockResolvedValueOnce(found({ id: UUID_A }));
+  it('rejects a graph with no entry node', async () => {
+    const { compileJourney } = await import('./routes/journeys.js');
+    const r = compileJourney([goal()] as never, [] as never);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/entry/i);
+  });
+
+  it('rejects a popup node with no campaign', async () => {
+    const { compileJourney } = await import('./routes/journeys.js');
+    const r = compileJourney(
+      [entry(), { id: 'p', type: 'popup', config: {}, posX: 0, posY: 0 }, goal()] as never,
+      [
+        { id: 'x1', sourceNodeId: 'e', targetNodeId: 'p', branch: 'always', config: {} },
+        { id: 'x2', sourceNodeId: 'p', targetNodeId: 'g', branch: 'convert', config: {} },
+      ] as never,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/campaign/i);
+  });
+
+  it('rejects an unreachable goal', async () => {
+    const { compileJourney } = await import('./routes/journeys.js');
+    const r = compileJourney(
+      [entry(), goal()] as never,
+      [] as never, // entry not connected to the goal
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/reachable/i);
+  });
+
+  it('rejects a delay below the floor', async () => {
+    const { compileJourney } = await import('./routes/journeys.js');
+    const r = compileJourney(
+      [entry(), { id: 'd', type: 'delay', config: { seconds: 2 }, posX: 0, posY: 0 }, goal()] as never,
+      [
+        { id: 'x1', sourceNodeId: 'e', targetNodeId: 'd', branch: 'always', config: {} },
+        { id: 'x2', sourceNodeId: 'd', targetNodeId: 'g', branch: 'always', config: {} },
+      ] as never,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/at least/i);
+  });
+
+  it('rejects a self-loop edge', async () => {
+    const { compileJourney } = await import('./routes/journeys.js');
+    const r = compileJourney(
+      [entry(), goal()] as never,
+      [
+        { id: 'x1', sourceNodeId: 'e', targetNodeId: 'g', branch: 'always', config: {} },
+        { id: 'x2', sourceNodeId: 'e', targetNodeId: 'e', branch: 'always', config: {} },
+      ] as never,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/itself/i);
+  });
+
+  it('compiles a valid journey with branch adjacency + reports popup campaigns', async () => {
+    const { compileJourney } = await import('./routes/journeys.js');
+    const r = compileJourney(
+      [entry({ config: { trigger: { type: 'dwell_time', value: 10 } } }),
+       { id: 'p', type: 'popup', campaignId: UUID_A, config: {}, posX: 0, posY: 0 }, goal()] as never,
+      [
+        { id: 'x1', sourceNodeId: 'e', targetNodeId: 'p', branch: 'always', config: {} },
+        { id: 'x2', sourceNodeId: 'p', targetNodeId: 'g', branch: 'convert', config: {} },
+      ] as never,
+    );
+    expect(r.ok).toBe(true);
+    expect(r.popupCampaignIds).toContain(UUID_A);
+    expect((r.compiled as Record<string, unknown>)['entryNodeId']).toBe('e');
+    const nodes = (r.compiled as { nodes: Array<{ id: string; next: Record<string, string> }> }).nodes;
+    expect(nodes.find((n) => n.id === 'p')!.next['convert']).toBe('g');
+  });
+
+  it('compiles split-node weights from the outgoing edges', async () => {
+    const { compileJourney } = await import('./routes/journeys.js');
+    const r = compileJourney(
+      [entry(), { id: 's', type: 'split', config: {}, posX: 0, posY: 0 }, goal('g1'), goal('g2')] as never,
+      [
+        { id: 'x0', sourceNodeId: 'e', targetNodeId: 's', branch: 'always', config: {} },
+        { id: 'x1', sourceNodeId: 's', targetNodeId: 'g1', branch: 'split', config: { weight: 70 } },
+        { id: 'x2', sourceNodeId: 's', targetNodeId: 'g2', branch: 'split', config: { weight: 30 } },
+      ] as never,
+    );
+    expect(r.ok).toBe(true);
+    const split = (r.compiled as { nodes: Array<{ id: string; next: Record<string, string>; config?: { weights?: number[] } }> })
+      .nodes.find((n) => n.id === 's')!;
+    expect(split.next['0']).toBe('g1');
+    expect(split.next['1']).toBe('g2');
+    expect(split.config!.weights).toEqual([70, 30]);
+  });
+});
+
+describe('Journeys API routes', () => {
+  it('GET /journeys/:id returns 404 when not found', async () => {
+    const app = await buildTestApp(); // default mock: journeys.findFirst → null
+    const res = await app.inject({ method: 'GET', url: `/api/v1/journeys/${UUID_A}`, headers: { 'x-test-tenant-id': UUID_B } });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('POST /journeys rejects an empty name (400)', async () => {
     const app = await buildTestApp();
-    const res = await app.inject({
-      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
-      headers: { 'x-test-tenant-id': UUID_B },
-      payload: { nextCampaignId: UUID_A },
-    });
+    const res = await app.inject({ method: 'POST', url: '/api/v1/journeys', headers: { 'x-test-tenant-id': UUID_B }, payload: { name: '' } });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: { code: 'INVALID_LINK' } });
     await app.close();
   });
 
-  it('rejects chaining to a campaign on a different site with 400', async () => {
-    const { db } = await import('./db/client.js');
-    vi.mocked(db.query.campaigns.findFirst)
-      .mockResolvedValueOnce(found({ id: UUID_A, siteId: UUID_C }))           // source
-      .mockResolvedValueOnce(found({ id: UUID_B, siteId: '99999999-9999-9999-9999-999999999999' })); // next, other site
+  it('POST /journeys/:id/publish returns 404 when the journey is not found', async () => {
     const app = await buildTestApp();
-    const res = await app.inject({
-      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
-      headers: { 'x-test-tenant-id': UUID_B },
-      payload: { nextCampaignId: UUID_B },
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: { code: 'CROSS_SITE_LINK' } });
-    await app.close();
-  });
-
-  it('persists a same-site link in one transaction (200)', async () => {
-    const { db } = await import('./db/client.js');
-    vi.mocked(db.transaction).mockClear();
-    vi.mocked(db.query.campaigns.findFirst)
-      .mockResolvedValueOnce(found({ id: UUID_A, siteId: UUID_C }))   // source
-      .mockResolvedValueOnce(found({ id: UUID_B, siteId: UUID_C }));  // next, same site
-    vi.mocked(db.query.designs.findFirst).mockResolvedValueOnce({ id: 'design-1', config: {} } as never);
-    const app = await buildTestApp();
-    const res = await app.inject({
-      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
-      headers: { 'x-test-tenant-id': UUID_B },
-      payload: { nextCampaignId: UUID_B, advanceOn: 'both', delaySeconds: 12 },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ data: { sequence: { nextCampaignId: UUID_B, advanceOn: 'both', delaySeconds: 12 } } });
-    expect(vi.mocked(db.transaction)).toHaveBeenCalledTimes(1);
-    await app.close();
-  });
-
-  it('clears a link when nextCampaignId is null (200)', async () => {
-    const { db } = await import('./db/client.js');
-    vi.mocked(db.query.campaigns.findFirst).mockResolvedValueOnce(found({ id: UUID_A, siteId: UUID_C }));
-    vi.mocked(db.query.designs.findFirst).mockResolvedValueOnce({ id: 'design-1', config: { uiTriggers: { sequenceNextCampaignId: UUID_B } } } as never);
-    const app = await buildTestApp();
-    const res = await app.inject({
-      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
-      headers: { 'x-test-tenant-id': UUID_B },
-      payload: { nextCampaignId: null },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ data: { sequence: null } });
-    await app.close();
-  });
-
-  it('returns 404 for another tenant’s campaign', async () => {
-    const app = await buildTestApp(); // default mock: campaigns.findFirst → null
-    const res = await app.inject({
-      method: 'PUT', url: `/api/v1/journeys/${UUID_A}/link`,
-      headers: { 'x-test-tenant-id': UUID_B },
-      payload: { nextCampaignId: UUID_B },
-    });
+    const res = await app.inject({ method: 'POST', url: `/api/v1/journeys/${UUID_A}/publish`, headers: { 'x-test-tenant-id': UUID_B } });
     expect(res.statusCode).toBe(404);
     await app.close();
   });

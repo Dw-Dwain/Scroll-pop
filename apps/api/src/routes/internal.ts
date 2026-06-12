@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db/client.js';
-import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, variants } from '../db/schema.js';
+import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, variants, journeys } from '../db/schema.js';
 import { eq, and, isNull, sql, gte, inArray } from 'drizzle-orm';
 import type { SiteConfigPayload } from '@scrollpop/shared';
 import crypto from 'node:crypto';
@@ -171,10 +171,33 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
           .filter(Boolean) as SiteConfigPayload['campaigns'];
       }
 
-      // Generate a version hash for cache-busting
+      // Published journeys for this site. Their compiled graph is served verbatim to the snippet's
+      // journey engine; popup nodes reference campaigns that publish already guaranteed are active
+      // + same-site, so they're present in `validCampaigns` above and core.show(id) resolves.
+      const journeyRows = await db.query.journeys.findMany({
+        where: and(eq(journeys.siteId, site.id), eq(journeys.status, 'active'), isNull(journeys.deletedAt)),
+        columns: { compiled: true, startsAt: true, endsAt: true },
+      });
+      // Overlay the journey-level schedule LIVE (from the row, not the baked compile) so window
+      // edits take effect on the next cache purge without forcing a re-publish.
+      const compiledJourneys = journeyRows
+        .map((j) => {
+          const c = j.compiled as Record<string, unknown>;
+          if (!c || typeof c !== 'object' || !Array.isArray((c as { nodes?: unknown }).nodes)) return null;
+          return {
+            ...c,
+            schedule: {
+              startsAt: j.startsAt ? j.startsAt.toISOString() : null,
+              endsAt: j.endsAt ? j.endsAt.toISOString() : null,
+            },
+          };
+        })
+        .filter((c) => c !== null) as Record<string, unknown>[];
+
+      // Generate a version hash for cache-busting (covers campaigns AND journeys).
       const version = crypto
         .createHash('sha256')
-        .update(JSON.stringify(validCampaigns))
+        .update(JSON.stringify(validCampaigns) + JSON.stringify(compiledJourneys))
         .digest('hex')
         .slice(0, 8);
 
@@ -182,6 +205,7 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
         siteId: site.id,
         plan: (tenant?.plan ?? 'free') as SiteConfigPayload['plan'],
         requireConsent,
+        ...(compiledJourneys.length ? { journeys: compiledJourneys as NonNullable<SiteConfigPayload['journeys']> } : {}),
         // Internal (edge-only) — the Worker enforces the cap on every request in real time
         // then strips these before responding to the browser. This closes the up-to-60s
         // overage window where a KV-cached config keeps serving after a tenant crosses the

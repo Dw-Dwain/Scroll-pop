@@ -122,6 +122,106 @@ export const ApiErrorSchema = z.object({
   }),
 });
 
+// ─── Journeys (node-based multi-step flows) ─────────────────────────────────────
+
+export const JourneyStatus = z.enum(['draft', 'active', 'paused', 'archived']);
+export const JourneyNodeType = z.enum(['entry', 'popup', 'delay', 'condition', 'split', 'goal']);
+// Which outcome of a node a given edge follows.
+export const JourneyBranch = z.enum(['always', 'dismiss', 'convert', 'timeout', 'true', 'false', 'split']);
+
+export const JourneyNodeSchema = z.object({
+  id: z.string().uuid(),
+  type: JourneyNodeType,
+  // 'popup' nodes reference the campaign whose design/variant is shown.
+  campaignId: z.string().uuid().nullable().optional(),
+  config: z.record(z.unknown()).default({}),
+  posX: z.number().int().default(0),
+  posY: z.number().int().default(0),
+});
+
+export const JourneyEdgeSchema = z.object({
+  id: z.string().uuid(),
+  sourceNodeId: z.string().uuid(),
+  targetNodeId: z.string().uuid(),
+  branch: JourneyBranch.default('always'),
+  config: z.record(z.unknown()).default({}),
+});
+
+export const JourneySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(120),
+  description: z.string().max(2000).nullable().optional(),
+  siteId: z.string().uuid().nullable().optional(),
+  status: JourneyStatus,
+  // Journey-level active window (ISO 8601). The whole flow only arms between these.
+  startsAt: z.string().datetime().nullable().optional(),
+  endsAt: z.string().datetime().nullable().optional(),
+  version: z.number().int(),
+  nodes: z.array(JourneyNodeSchema),
+  edges: z.array(JourneyEdgeSchema),
+});
+
+// Compact compiled graph served to the snippet's journey engine. `next` is an adjacency map of
+// branch → target node id, so the runtime walks the graph without re-deriving edges.
+export const CompiledJourneyNodeSchema = z.object({
+  id: z.string(),
+  type: JourneyNodeType,
+  campaignId: z.string().optional(),
+  config: z.record(z.unknown()).optional(),
+  next: z.record(z.string()).default({}),
+});
+
+export const CompiledJourneySchema = z.object({
+  id: z.string(),
+  entryNodeId: z.string(),
+  // Entry trigger hoisted for the engine to arm without walking the graph.
+  trigger: z.record(z.unknown()).nullable().optional(),
+  // Journey-level active window (ISO 8601), enforced by the snippet in visitor-local time.
+  schedule: z.object({
+    startsAt: z.string().nullable().optional(),
+    endsAt: z.string().nullable().optional(),
+  }).optional(),
+  // Runtime guardrails the engine enforces.
+  maxPopups: z.number().optional(),
+  minDelay: z.number().optional(),
+  nodes: z.array(CompiledJourneyNodeSchema),
+});
+
+// ─── Experiments (A/B variants) ─────────────────────────────────────────────────
+
+export const VariantSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  name: z.string().min(1).max(80),
+  weight: z.number().int().min(0).max(100),
+  config: z.record(z.unknown()).default({}),
+  affiliateSlots: z.array(AffiliateSlotSchema).default([]),
+});
+
+export const VariantResultSchema = z.object({
+  variantId: z.string(),
+  name: z.string().optional(),
+  weight: z.number().optional(),
+  impressions: z.number().int(),
+  clicks: z.number().int(),
+  conversions: z.number().int(),
+  conversionRate: z.number(),
+  // Significance vs. the baseline (control) variant.
+  confidence: z.number().min(0).max(1).optional(), // P(beats baseline)
+  isSignificant: z.boolean().optional(),
+  isWinner: z.boolean().optional(),
+  upliftPct: z.number().optional(),
+});
+
+export const ExperimentResultsSchema = z.object({
+  campaignId: z.string(),
+  variants: z.array(VariantResultSchema),
+  decided: z.boolean(),
+  winnerVariantId: z.string().nullable(),
+  minImpressions: z.number().int(),
+  totalImpressions: z.number().int(),
+});
+
 // ─── Plan Limits ──────────────────────────────────────────────────────────────
 
 export const PLAN_LIMITS: Record<z.infer<typeof Plan>, {
@@ -154,6 +254,17 @@ export type DesignConfig = z.infer<typeof DesignConfigSchema>;
 export type AffiliateSlot = z.infer<typeof AffiliateSlotSchema>;
 export type TriggerType = z.infer<typeof TriggerType>;
 export type TargetingKind = z.infer<typeof TargetingKind>;
+export type JourneyStatus = z.infer<typeof JourneyStatus>;
+export type JourneyNodeType = z.infer<typeof JourneyNodeType>;
+export type JourneyBranch = z.infer<typeof JourneyBranch>;
+export type JourneyNode = z.infer<typeof JourneyNodeSchema>;
+export type JourneyEdge = z.infer<typeof JourneyEdgeSchema>;
+export type Journey = z.infer<typeof JourneySchema>;
+export type CompiledJourney = z.infer<typeof CompiledJourneySchema>;
+export type CompiledJourneyNode = z.infer<typeof CompiledJourneyNodeSchema>;
+export type Variant = z.infer<typeof VariantSchema>;
+export type VariantResult = z.infer<typeof VariantResultSchema>;
+export type ExperimentResults = z.infer<typeof ExperimentResultsSchema>;
 
 // Site config payload sent by the edge Worker to the snippet
 export interface SiteConfigPayload {
@@ -178,5 +289,9 @@ export interface SiteConfigPayload {
     frequency: { frequency: z.infer<typeof FrequencyType> };
     affiliateSlots: AffiliateSlot[];
   }>;
+  /** Published journeys for this site — the snippet's journey engine arms each entry trigger and
+   *  walks the compiled graph. Popup nodes reference a campaign id that is also present in
+   *  `campaigns` above (publish enforces that the referenced campaigns are active + same-site). */
+  journeys?: CompiledJourney[];
   version: string;
 }

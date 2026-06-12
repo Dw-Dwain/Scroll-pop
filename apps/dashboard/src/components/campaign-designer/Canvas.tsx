@@ -910,8 +910,8 @@ export default function Canvas({
                       <img
                         src={el.content || 'https://images.unsplash.com/photo-1542435503-956c469947f6?auto=format&fit=crop&w=400&q=80'}
                         alt="Promo illustration"
-                        className="w-full h-full object-cover border border-zinc-200"
-                        style={{ borderRadius: `${el.borderRadius ?? 8}px` }}
+                        className="w-full h-full border border-zinc-200"
+                        style={{ borderRadius: `${el.borderRadius ?? 8}px`, objectFit: el.objectFit ?? 'cover' }}
                         referrerPolicy="no-referrer"
                       />
                     )}

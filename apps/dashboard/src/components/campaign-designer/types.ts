@@ -68,8 +68,11 @@ export interface CampaignElement {
   animationType?: 'none' | 'fade-in' | 'slide-in' | 'bounce' | 'zoom-in' | 'spin' | 'flip';
   animationDuration?: number; // in seconds, default is 0.5
   animationDelay?: number; // in seconds, default is 0
-  /** Affiliate / destination URL for button and close elements. Opens in new tab. */
+  /** Affiliate / destination URL for button, image, and close elements. Opens in new tab. */
   href?: string;
+  /** Image elements: how the creative fills its box. 'cover' (default) crops to fill;
+   *  'contain' shows the whole creative (use for full ad creatives). Read by the snippet. */
+  objectFit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down';
   extraProps?: Record<string, unknown>;
 }
 

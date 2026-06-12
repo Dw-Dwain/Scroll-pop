@@ -58,6 +58,14 @@ export const eventTypeEnum = pgEnum('event_type', [
   'checkout_started', 'purchase_completed', 'trigger_fired', 'trigger_blocked',
 ]);
 
+export const journeyStatusEnum = pgEnum('journey_status', [
+  'draft', 'active', 'paused', 'archived',
+]);
+
+export const journeyNodeTypeEnum = pgEnum('journey_node_type', [
+  'entry', 'popup', 'delay', 'condition', 'split', 'goal',
+]);
+
 // ─── Tenants ──────────────────────────────────────────────────────────────────
 
 export const tenants = pgTable('tenants', {
@@ -131,6 +139,57 @@ export const variants = pgTable('variants', {
   affiliateSlots: jsonb('affiliate_slots').notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+});
+
+// ─── Journeys (node-based multi-step flows) ─────────────────────────────────────
+// A Journey is a directed graph: entry → popup → delay → condition → split → goal, connected by
+// edges that carry branch semantics. Compiled to `journeys.compiled` on publish and served to the
+// snippet's journey.js engine. Tenant-scoped (RLS via ensure-journeys.ts). See migration 0015.
+
+export const journeys = pgTable('journeys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  siteId: uuid('site_id'),
+  name: text('name').notNull(),
+  description: text('description'),
+  status: journeyStatusEnum('status').notNull().default('draft'),
+  // Journey-level active window (whole flow only arms between these). Visitor-local time.
+  startsAt: timestamp('starts_at', { withTimezone: true }),
+  endsAt: timestamp('ends_at', { withTimezone: true }),
+  // Compiled graph snapshot served to the snippet, written on publish.
+  compiled: jsonb('compiled').notNull().default({}),
+  version: integer('version').notNull().default(1),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const journeyNodes = pgTable('journey_nodes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  journeyId: uuid('journey_id').notNull(),
+  type: journeyNodeTypeEnum('type').notNull(),
+  // For 'popup' nodes: which campaign supplies the design/variant to show.
+  campaignId: uuid('campaign_id'),
+  config: jsonb('config').notNull().default({}),
+  // Canvas position persisted in the DB (not localStorage).
+  posX: integer('pos_x').notNull().default(0),
+  posY: integer('pos_y').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`NOW()`),
+});
+
+export const journeyEdges = pgTable('journey_edges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  journeyId: uuid('journey_id').notNull(),
+  sourceNodeId: uuid('source_node_id').notNull(),
+  targetNodeId: uuid('target_node_id').notNull(),
+  // Branch semantics: 'always' | 'dismiss' | 'convert' | 'timeout' | 'true' | 'false' | 'split'.
+  branch: text('branch').notNull().default('always'),
+  config: jsonb('config').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
 });
 
 // ─── Leads ──────────────────────────────────────────────────────────────────────

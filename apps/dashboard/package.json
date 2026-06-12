@@ -18,6 +18,7 @@
     "@refinedev/core": "^4.53.0",
     "@scrollpop/shared": "workspace:*",
     "@tanstack/react-virtual": "^3.13.25",
+    "@xyflow/react": "^12.11.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.3.0",
     "lucide-react": "^0.395.0",

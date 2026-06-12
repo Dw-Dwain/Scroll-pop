@@ -115,6 +115,45 @@ export default function SidebarRight({
             />
           )}
 
+          {/* Link URL + fit — image elements. An image with a link is rendered by the snippet as
+              the tracked click target itself (the whole creative is clickable) — no separate overlay
+              button needed. Leave the link blank for a non-clickable image. */}
+          {activeElement.type === 'image' && (
+            <div className="space-y-3 pt-3 border-t border-zinc-200">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  🔗 Affiliate / Link URL
+                </label>
+                <input
+                  type="url"
+                  className="w-full text-xs p-2 border border-zinc-200 rounded bg-zinc-50/50 focus:bg-white focus:outline-none font-mono"
+                  placeholder="https://affiliate-link.com/product?tag=..."
+                  value={activeElement.href ?? (activeElement.extraProps?.href as string) ?? ''}
+                  onChange={(e) => onUpdateElement(activeElement.id, 'href', e.target.value)}
+                />
+                <div className="text-[9px] text-zinc-400 leading-relaxed">
+                  Makes the whole image clickable — opens in a new tab and is tracked as a click.
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider font-mono">
+                  Image fit
+                </label>
+                <select
+                  className="w-full text-xs p-2 border border-zinc-200 rounded bg-zinc-50/50 focus:bg-white focus:outline-none font-sans"
+                  value={activeElement.objectFit ?? 'cover'}
+                  onChange={(e) => onUpdateElement(activeElement.id, 'objectFit', e.target.value)}
+                >
+                  <option value="cover">Cover — fill the box, crop overflow</option>
+                  <option value="contain">Contain — show the whole image (no crop)</option>
+                </select>
+                <div className="text-[9px] text-zinc-400 leading-relaxed">
+                  Use “Contain” for full ad creatives so nothing gets cropped.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Link URL — button (CTA) elements. Close-button destination lives in the
               "Close behaviour" panel below and only applies when ad-then-close is enabled. */}
           {activeElement.type === 'button' && (

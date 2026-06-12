@@ -1,9 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { sites, campaigns, events } from '../db/schema.js';
+import { sites, campaigns, events, tenants } from '../db/schema.js';
 import { eq, and, isNull, sql, gte } from 'drizzle-orm';
 import { isPublicUrl } from '../lib/url-guard.js';
+import { PLAN_LIMITS } from '@scrollpop/shared';
 
 const CreateSiteBody = z.object({
   name: z.string().min(1).max(100),
@@ -98,6 +99,25 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
         // Domain is active
         return reply.code(409).send({
           error: { code: 'DUPLICATE_DOMAIN', message: 'This domain is already registered.' },
+        });
+      }
+    }
+
+    // Plan site-count limit (free 1 / starter 3 / growth 10 / scale+agency 999). Enforced
+    // server-side, not just in the UI. Unlimited users (admin/Novatise) bypass.
+    if (!request.isUnlimited) {
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, request.tenantId),
+        columns: { plan: true },
+      });
+      const maxSites = PLAN_LIMITS[tenant?.plan ?? 'free'].sites;
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sites)
+        .where(and(eq(sites.tenantId, request.tenantId), isNull(sites.deletedAt)));
+      if ((countRow?.count ?? 0) >= maxSites) {
+        return reply.code(403).send({
+          error: { code: 'SITE_LIMIT', message: `Your plan includes ${maxSites} site${maxSites === 1 ? '' : 's'}. Upgrade to add more.` },
         });
       }
     }

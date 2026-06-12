@@ -1,5 +1,5 @@
 import React from 'react';
-import { FlaskConical, ChevronDown, ChevronRight, Trophy, Lock, ArrowRight } from 'lucide-react';
+import { FlaskConical, ChevronDown, ChevronRight, Trophy, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useCustom, useApiUrl } from '@refinedev/core';
 import { useActiveClient } from '../hooks/useClients';
 import { usePlan } from '../hooks/usePlan';
@@ -10,12 +10,15 @@ interface ExperimentsProps {
   onNavigate: (path: string) => void;
 }
 
-interface Journey { id: string; campaignId: string; name: string; status: string; }
+interface Campaign { id: string; name: string; status: string }
 interface Variant { id: string; name: string; weight: number; config?: Record<string, unknown> }
-interface VariantResult { variantId: string; impressions: number; clicks: number; conversions: number; }
-interface ExpData { variants: Variant[]; results: Record<string, VariantResult>; }
-
-const MIN_SAMPLE = 20; // matches ABPanel — below this a "winner" isn't meaningful
+interface VariantResultRow {
+  variantId: string; name?: string; weight?: number;
+  impressions: number; clicks: number; conversions: number; conversionRate: number;
+  confidence?: number; isSignificant?: boolean; upliftPct?: number; isWinner?: boolean;
+}
+interface ExperimentResults { variants: VariantResultRow[]; decided: boolean; winnerVariantId: string | null }
+interface ExpData { variants: Variant[]; results: ExperimentResults }
 
 const statusBadge = (s: string) =>
   s === 'active' ? 'badge-success' : s === 'paused' ? 'badge-warning' : 'badge-neutral';
@@ -23,29 +26,41 @@ const statusBadge = (s: string) =>
 export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
   const apiUrl = useApiUrl();
   const plan = usePlan();
-  const isAgency = plan.plan === 'agency' || plan.isUnlimited;
+  const canAccess = plan.meetsMinPlan('scale'); // Experiments: Scale + Agency (and unlimited admins)
   const { activeClientId } = useActiveClient();
-  const cq = activeClientId ? `?clientId=${activeClientId}` : '';
+  const cq = activeClientId ? `&clientId=${activeClientId}` : '';
 
-  const { data: journeysResult, isLoading } = useCustom({
-    url: `${apiUrl}/journeys${cq}`,
+  // Campaign list comes from /campaigns (NOT /journeys — that's the node-flow entity now).
+  const { data: campRes, isLoading } = useCustom<{ data: Campaign[] }>({
+    url: `${apiUrl}/campaigns?limit=100${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['experiments-campaigns', activeClientId], enabled: isAgency },
+    queryOptions: { queryKey: ['experiments-campaigns', activeClientId], enabled: canAccess },
   });
-  const campaigns = ((journeysResult as { data?: Journey[] } | undefined)?.data ?? []);
+  const campaigns: Campaign[] = campRes?.data?.data ?? [];
 
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [data, setData] = React.useState<Record<string, ExpData | 'loading'>>({});
   const [creating, setCreating] = React.useState<string | null>(null);
 
-  // Create a variant B (seeded from the base design) and open it in the designer to differentiate.
+  const loadCampaign = React.useCallback(async (id: string) => {
+    setData((d) => ({ ...d, [id]: 'loading' }));
+    try {
+      const [vRes, rRes] = await Promise.all([
+        authedFetch(`/variants?campaignId=${id}`),
+        authedFetch(`/variants/results?campaignId=${id}`),
+      ]);
+      const vBody = await vRes.json() as { data: Variant[] };
+      const rBody = await rRes.json() as { data: ExperimentResults };
+      setData((d) => ({ ...d, [id]: { variants: vBody.data ?? [], results: rBody.data ?? { variants: [], decided: false, winnerVariantId: null } } }));
+    } catch {
+      setData((d) => { const n = { ...d }; delete n[id]; return n; });
+    }
+  }, []);
+
   const createVariant = async (campaignId: string) => {
     setCreating(campaignId);
     try {
-      const res = await authedFetch(`/variants`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId }),
-      });
+      const res = await authedFetch(`/variants`, { method: 'POST', body: JSON.stringify({ campaignId }) });
       if (!res.ok) { alert('Could not create the variant.'); return; }
       const body = await res.json() as { data: { id: string } };
       onNavigate(`/campaigns/${campaignId}/design?variant=${body.data.id}`);
@@ -53,36 +68,28 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
     finally { setCreating(null); }
   };
 
+  const promote = async (campaignId: string, variantId: string) => {
+    if (!confirm('Promote this variant to 100% of traffic? The other variants stop showing.')) return;
+    const res = await authedFetch(`/variants/promote`, { method: 'POST', body: JSON.stringify({ campaignId, variantId }) });
+    if (res.ok) await loadCampaign(campaignId);
+    else alert('Could not promote the winner.');
+  };
+
   const toggle = async (id: string) => {
     if (expanded === id) { setExpanded(null); return; }
     setExpanded(id);
-    if (!data[id]) {
-      setData((d) => ({ ...d, [id]: 'loading' }));
-      try {
-        const [vRes, rRes] = await Promise.all([
-          authedFetch(`/variants?campaignId=${id}`),
-          authedFetch(`/variants/results?campaignId=${id}`),
-        ]);
-        const vBody = await vRes.json() as { data: Variant[] };
-        const rBody = await rRes.json() as { data: VariantResult[] };
-        const results: Record<string, VariantResult> = {};
-        for (const r of rBody.data) if (r.variantId) results[r.variantId] = r;
-        setData((d) => ({ ...d, [id]: { variants: vBody.data ?? [], results } }));
-      } catch {
-        setData((d) => { const n = { ...d }; delete n[id]; return n; });
-      }
-    }
+    if (!data[id]) await loadCampaign(id);
   };
 
-  if (!isAgency) {
+  if (!canAccess) {
     return (
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <Header />
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '40px', textAlign: 'center' }}>
           <Lock size={28} style={{ color: 'var(--text-muted)', marginBottom: 14 }} />
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Experiments is an Agency feature</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Experiments is on Scale and Agency</div>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 420, margin: '0 auto' }}>
-            Upgrade to the Agency plan to run and compare A/B experiments across every client.
+            Upgrade to the Scale or Agency plan to run and compare A/B experiments.
           </p>
         </div>
       </div>
@@ -119,7 +126,13 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
                     {d === 'loading' || !d ? (
                       <div className="skeleton" style={{ height: 60 }} />
                     ) : (
-                      <ExpResults data={d} creating={creating === c.campaignId} onCreate={() => void createVariant(c.campaignId)} onManage={() => onNavigate(`/campaigns/detail/${c.campaignId}`)} />
+                      <ExpResults
+                        data={d}
+                        creating={creating === c.id}
+                        onCreate={() => void createVariant(c.id)}
+                        onManage={() => onNavigate(`/campaigns/detail/${c.id}`)}
+                        onPromote={(variantId) => void promote(c.id, variantId)}
+                      />
                     )}
                   </div>
                 )}
@@ -136,16 +149,20 @@ const Header: React.FC = () => (
   <div style={{ marginBottom: 28, paddingBottom: 18, borderBottom: '1px solid var(--border-subtle)' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
       <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Experiments</h1>
-      <span className="badge badge-accent" style={{ fontSize: 9 }}>Agency</span>
+      <span className="badge badge-accent" style={{ fontSize: 9 }}>Scale · Agency</span>
     </div>
     <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-      Live A/B experiments and their real per-variant results, across every client campaign.
+      Live A/B experiments with statistical significance — promote the winner when the data is conclusive.
     </p>
   </div>
 );
 
-const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => void; onManage: () => void }> = ({ data, creating, onCreate, onManage }) => {
+const pct = (n: number | undefined, d = 1) => n === undefined ? '—' : (n * 100).toFixed(d) + '%';
+
+const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => void; onManage: () => void; onPromote: (variantId: string) => void }> = ({ data, creating, onCreate, onManage, onPromote }) => {
   const { variants, results } = data;
+  const byId = new Map(results.variants.map((r) => [r.variantId, r]));
+
   if (variants.length < 2) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -159,22 +176,10 @@ const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => v
     );
   }
 
-  // A/B variants seed identical from the base design — flag when none has been differentiated yet.
   const allIdentical = variants.length >= 2 &&
     variants.every((v) => JSON.stringify(v.config ?? {}) === JSON.stringify(variants[0]?.config ?? {}));
-
-  // Winner = highest conversion rate among variants with a meaningful sample.
-  let winnerId: string | null = null;
-  let bestRate = -1;
-  for (const v of variants) {
-    const r = results[v.id];
-    if (r && r.impressions >= MIN_SAMPLE) {
-      const rate = r.conversions / r.impressions;
-      if (rate > bestRate) { bestRate = rate; winnerId = v.id; }
-    }
-  }
-
-  const letter = (i: number) => String.fromCharCode(65 + i); // A, B, C…
+  const winnerId = results.winnerVariantId;
+  const letter = (i: number) => String.fromCharCode(65 + i);
 
   return (
     <div>
@@ -184,7 +189,7 @@ const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => v
           <button className="btn btn-secondary btn-sm" onClick={onManage} style={{ marginLeft: 'auto', flexShrink: 0 }}>Edit variants</button>
         </div>
       )}
-      {/* Real visual copies of each A/B variant — the actual saved design, not just a weight. */}
+
       <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, marginBottom: 8 }}>
         Variant designs (live)
       </div>
@@ -205,32 +210,40 @@ const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => v
         })}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(4, 1fr)', gap: 8, fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, paddingBottom: 6, borderBottom: '1px solid var(--border-subtle)' }}>
-        <span>Variant</span><span style={{ textAlign: 'right' }}>Weight</span><span style={{ textAlign: 'right' }}>Impr.</span><span style={{ textAlign: 'right' }}>CTR</span><span style={{ textAlign: 'right' }}>CVR</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(5, 1fr)', gap: 8, fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, paddingBottom: 6, borderBottom: '1px solid var(--border-subtle)' }}>
+        <span>Variant</span><span style={{ textAlign: 'right' }}>Impr.</span><span style={{ textAlign: 'right' }}>CVR</span><span style={{ textAlign: 'right' }}>Uplift</span><span style={{ textAlign: 'right' }}>Confidence</span><span style={{ textAlign: 'right' }}>Sig.</span>
       </div>
       {variants.map((v) => {
-        const r = results[v.id];
-        const ctr = r && r.impressions > 0 ? ((r.clicks / r.impressions) * 100).toFixed(1) + '%' : '—';
-        const cvr = r && r.impressions > 0 ? ((r.conversions / r.impressions) * 100).toFixed(1) + '%' : '—';
+        const r = byId.get(v.id);
         const isWinner = v.id === winnerId;
         return (
-          <div key={v.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(4, 1fr)', gap: 8, fontSize: 12, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center' }}>
+          <div key={v.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(5, 1fr)', gap: 8, fontSize: 12, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-primary)', fontWeight: isWinner ? 600 : 400 }}>
               {isWinner && <Trophy size={12} style={{ color: 'var(--status-warning)', flexShrink: 0 }} />}
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.name}</span>
             </span>
-            <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{v.weight}%</span>
             <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{r ? r.impressions.toLocaleString() : '0'}</span>
-            <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--data-3)' }}>{ctr}</span>
-            <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: isWinner ? 'var(--status-success)' : 'var(--text-primary)' }}>{cvr}</span>
+            <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: isWinner ? 'var(--status-success)' : 'var(--text-primary)' }}>{pct(r?.conversionRate)}</span>
+            <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: (r?.upliftPct ?? 0) > 0 ? 'var(--status-success)' : (r?.upliftPct ?? 0) < 0 ? 'var(--status-error, #dc2626)' : 'var(--text-muted)' }}>{r?.upliftPct === undefined ? '—' : (r.upliftPct > 0 ? '+' : '') + r.upliftPct.toFixed(1) + '%'}</span>
+            <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{r?.confidence === undefined ? 'control' : pct(r.confidence, 0)}</span>
+            <span style={{ textAlign: 'right' }}>{r?.isSignificant ? <CheckCircle2 size={13} style={{ color: 'var(--status-success)' }} /> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</span>
           </div>
         );
       })}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 12 }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          {winnerId ? 'Winner = best conversion rate (≥20 impressions).' : 'Not enough data for a winner yet.'}
+          {results.decided
+            ? 'A winner is statistically significant (≥95% confidence, sufficient sample).'
+            : 'No statistically conclusive winner yet — keep the test running.'}
         </span>
-        <button className="btn btn-secondary btn-sm" onClick={onManage}>Manage A/B <ArrowRight size={12} style={{ marginLeft: 4 }} /></button>
+        {results.decided && winnerId ? (
+          <button className="btn btn-primary btn-sm" onClick={() => onPromote(winnerId)} style={{ flexShrink: 0 }}>
+            <Trophy size={12} style={{ marginRight: 4 }} /> Promote winner
+          </button>
+        ) : (
+          <button className="btn btn-secondary btn-sm" onClick={onManage}>Manage A/B <ArrowRight size={12} style={{ marginLeft: 4 }} /></button>
+        )}
       </div>
     </div>
   );
