@@ -9,9 +9,20 @@ type UpdateP    = Parameters<DataProvider['update']>[0];
 type DeleteP    = Parameters<DataProvider['deleteOne']>[0];
 type CustomP    = Parameters<NonNullable<DataProvider['custom']>>[0];
 
+// The live API. Hard-coded as a safety net because a stale Cloudflare Pages env var can bake the
+// decommissioned Render URL into the build (which the CSP also blocks → dashboard shows nothing).
+const PROD_API = 'https://scrollpop-api.fly.dev';
+
 export function getApiBase(): string {
-  // VITE_API_URL is set at build time for the web dashboard (e.g. https://api.scrollpop.online)
-  const configured = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
+  // VITE_API_URL is set at build time for the web dashboard.
+  let configured = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
+  // Never call the dead Render origin: if a stale build still points at onrender.com, override it.
+  if (configured && /onrender\.com/i.test(configured)) configured = PROD_API;
+  // If VITE_API_URL is missing on a deployed scrollpop.online host, fall back to the live API
+  // (not a relative path, which would 404 against the static Pages host).
+  else if (!configured && typeof window !== 'undefined' && /(^|\.)scrollpop\.online$/i.test(window.location.hostname)) {
+    configured = PROD_API;
+  }
   return configured ? `${configured}/api/v1` : '/api/v1';
 }
 
