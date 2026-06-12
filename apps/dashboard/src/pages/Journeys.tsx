@@ -43,6 +43,9 @@ const NODE_META: Record<NodeType, { label: string; icon: React.ReactNode; color:
 };
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'x' + Math.random().toString(16).slice(2) + Date.now().toString(16));
+// Stable empty fallback so `campaigns` keeps the SAME reference while the query is empty/loading —
+// otherwise a fresh [] every render makes campaignName unstable and churns the editor's effects.
+const NO_CAMPAIGNS: CampaignLite[] = [];
 
 // ── Custom node renderer ────────────────────────────────────────────────────────
 const SpNodeView: React.FC<NodeProps<SpNode>> = ({ data, selected }) => {
@@ -101,7 +104,21 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
       })));
     })();
     return () => { alive = false; };
-  }, [journeyId, setNodes, setEdges, campaignName]);
+    // ONLY re-load when the journey changes. campaignName is intentionally excluded: it changes
+    // whenever the campaigns list re-renders (a fresh [] while the query is empty), and re-running
+    // this effect would re-fetch the graph and OVERWRITE unsaved local nodes — the "I add a popup
+    // and it disappears" bug. Labels are refreshed in place by the effect below instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeyId, setNodes, setEdges]);
+
+  // Refresh popup-node labels when the campaigns list loads/changes — in place, never re-fetching
+  // the graph, so it can't wipe unsaved nodes.
+  React.useEffect(() => {
+    setNodes((nds) => nds.map((n) =>
+      n.data.kind === 'popup' && n.data.campaignId
+        ? { ...n, data: { ...n.data, campaignName: campaignName(n.data.campaignId) } }
+        : n));
+  }, [campaigns, campaignName, setNodes]);
 
   const onConnect = React.useCallback((c: Connection) => {
     const src = nodes.find((n) => n.id === c.source);
@@ -320,7 +337,7 @@ export const Journeys: React.FC<JourneysProps> = () => {
   });
   const journeys = listRes?.data?.data ?? [];
   const meta = listRes?.data?.meta ?? { maxPopups: 4, minDelaySeconds: 5 };
-  const campaigns: CampaignLite[] = campRes?.data?.data ?? [];
+  const campaigns: CampaignLite[] = campRes?.data?.data ?? NO_CAMPAIGNS;
 
   const createJourney = async () => {
     setBusy(true);
