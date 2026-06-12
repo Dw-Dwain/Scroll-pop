@@ -48,7 +48,10 @@ interface DynamicTemplateMeta {
   popupType: PopupType;
   position: CanvasPosition;
   /** Layout variant — controls element arrangement inside the popup */
-  layout?: 'split-left' | 'split-right' | 'centered' | 'minimal' | 'product-card' | 'testimonial' | 'bold-type';
+  layout?: 'split-left' | 'split-right' | 'centered' | 'minimal' | 'product-card' | 'testimonial' | 'bold-type' | 'choice';
+  /** For the `choice` (survey) layout: each answer button routes the visitor to its `href`
+   *  (a full URL, e.g. the operator's own site page or an affiliate link). No email field. */
+  choices?: { label: string; href?: string }[];
   palette: {
     bg: string;
     primary: string;
@@ -607,6 +610,45 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
     position: 'center',
     layout: 'bold-type',
     palette: { bg: '#FAFAFA', primary: '#111827', text: '#111827', border: '#E5E7EB', tint: '#F9FAFB', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
+  {
+    id: 'choice-shopper-segment',
+    name: 'Shopper Segmentation Survey',
+    category: 'Guide visitors',
+    title: 'What are you shopping for?',
+    subtitle: 'Pick one and we\'ll take you straight there.',
+    image: '',
+    btnText: '',
+    coupon: '',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'choice',
+    // Each answer routes to a page on the operator's site — edit these URLs to your real collections.
+    choices: [
+      { label: '👗  Shop Women', href: 'https://your-site.com/collections/women' },
+      { label: '👔  Shop Men',   href: 'https://your-site.com/collections/men' },
+      { label: '🎁  Find a Gift', href: 'https://your-site.com/collections/gifts' },
+    ],
+    palette: { bg: '#FFFFFF', primary: '#6D28D9', text: '#111827', border: '#EDE9FE', tint: '#F5F3FF', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
+  },
+  {
+    id: 'choice-exit-reason',
+    name: 'Exit Survey — What Stopped You?',
+    category: 'Collect insights',
+    title: 'Before you go — what stopped you?',
+    subtitle: 'Tell us and we\'ll point you in the right direction.',
+    image: '',
+    btnText: '',
+    coupon: '',
+    popupType: 'modal',
+    position: 'center',
+    layout: 'choice',
+    choices: [
+      { label: 'Prices were too high → see today\'s deals', href: 'https://your-site.com/sale' },
+      { label: 'Couldn\'t find what I wanted → browse all', href: 'https://your-site.com/collections/all' },
+      { label: 'Just looking → read our guides', href: 'https://your-site.com/blog' },
+    ],
+    palette: { bg: '#0F172A', primary: '#F59E0B', text: '#FFFFFF', border: '#1E293B', tint: '#1E293B', fontHeading: 'sans-serif', fontBody: 'sans-serif' }
   },
 ];
 
@@ -2048,6 +2090,34 @@ export const compileDynamicCampaignPresets = (): Campaign[] => {
           { id: `${meta.id}-desc`, type: 'text', x: 43, y: 56, w: 54, h: 12, content: meta.subtitle, color: isDark ? '#9CA3AF' : '#4B5563', fontSize: 11, fontFamily: meta.palette.fontBody, align: 'left', zIndex: 3 } as CampaignElement,
           { id: `${meta.id}-btn`, type: 'button', x: 43, y: 72, w: 48, h: 14, content: meta.btnText, color: meta.palette.bg, backgroundColor: meta.palette.primary, borderRadius: 4, fontSize: 14, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'center', href: '', zIndex: 4 } as CampaignElement,
         );
+
+      } else if (layout === 'choice') {
+        // CHOICE / SURVEY — a question + a stack of answer buttons. Each answer routes the visitor
+        // to its own destination (the choice's `href`: a page on the operator's site, or an
+        // affiliate link). No email field — this segments/guides traffic instead of capturing it.
+        const choices = (meta.choices && meta.choices.length ? meta.choices : [
+          { label: 'Yes, show me the deals' }, { label: 'No, maybe later' },
+        ]).slice(0, 4);
+        mainElementsList.push(
+          { id: `${meta.id}-tag`,  type: 'text',    x: 10, y: 13, w: 80, h: 6,  content: `★ ${meta.category.toUpperCase()}`, color: meta.palette.primary, fontSize: 10, fontWeight: '800', fontFamily: meta.palette.fontHeading, align: 'center', zIndex: 3 } as CampaignElement,
+          { id: `${meta.id}-head`, type: 'heading', x: 8,  y: 21, w: 84, h: 18, content: meta.title,    color: textThemeColor, fontSize: 23, fontWeight: '900', fontFamily: meta.palette.fontHeading, align: 'center', zIndex: 3, animationType: 'fade-in', animationDuration: 0.5 } as CampaignElement,
+          { id: `${meta.id}-desc`, type: 'text',    x: 10, y: 40, w: 80, h: 9,  content: meta.subtitle, color: bodyThemeColor, fontSize: 12, fontFamily: meta.palette.fontBody, align: 'center', zIndex: 3 } as CampaignElement,
+        );
+        // Answer buttons stacked in the lower half: the first is the primary (filled), the rest are outline.
+        const n = choices.length;
+        const bw = 66, bx = (100 - bw) / 2, bh = Math.min(12, Math.floor(42 / n) - 2), gap = 3, startY = 52;
+        choices.forEach((c, i) => {
+          const alt = i > 0;
+          mainElementsList.push({
+            id: `${meta.id}-choice-${i}`, type: 'button',
+            x: bx, y: startY + i * (bh + gap), w: bw, h: bh, content: c.label,
+            color: alt ? meta.palette.primary : '#FFFFFF',
+            backgroundColor: alt ? meta.palette.bg : meta.palette.primary,
+            borderWidth: alt ? 1 : 0, borderColor: alt ? meta.palette.primary : 'transparent',
+            borderRadius: 8, fontSize: 12, fontWeight: '700', fontFamily: meta.palette.fontHeading, align: 'center',
+            href: c.href ?? '', zIndex: 4,
+          } as CampaignElement);
+        });
 
       } else {
         // CENTERED — centred layout with optional small feature image at top, works with or without image
