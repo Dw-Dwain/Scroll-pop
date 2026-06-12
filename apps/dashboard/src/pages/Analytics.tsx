@@ -235,7 +235,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   type RevenueApiData = { totals?: { revenueDollars: number; purchases: number; emailCaptures: number; revenuePerVisitor?: number }; campaigns?: RevCampaign[] };
   type FunnelApiData = {
     steps?: Array<{ label: string; count: number; dropOffPct: number }>;
-    exitStats?: { closes: number; dismissals: number; rageCloseRate: number };
+    exitStats?: { closes: number; fastCloses?: number; dismissals: number; rageCloseRate: number };
   };
   type TrafficSource = { source: string; impressions: number; ctr: number };
   type IntelApiData = {
@@ -797,18 +797,23 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
                 ))}
                 <div style={{
                   marginTop: 16, padding: '12px 14px',
-                  background: funnel.exitStats.rageCloseRate > 40 ? 'rgba(239,68,68,0.06)' : 'rgba(99,102,241,0.04)',
-                  border: `1px solid ${funnel.exitStats.rageCloseRate > 40 ? 'rgba(239,68,68,0.2)' : 'var(--border-subtle)'}`,
+                  background: funnel.exitStats.rageCloseRate > 20 ? 'rgba(239,68,68,0.06)' : 'rgba(99,102,241,0.04)',
+                  border: `1px solid ${funnel.exitStats.rageCloseRate > 20 ? 'rgba(239,68,68,0.2)' : 'var(--border-subtle)'}`,
                   borderRadius: 6,
                 }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
-                    Rage-Close Rate
+                    Rage-Close Rate <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>· closed in under 3s</span>
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 500, color: funnel.exitStats.rageCloseRate > 40 ? 'var(--status-error)' : 'var(--text-primary)' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 500, color: funnel.exitStats.rageCloseRate > 20 ? 'var(--status-error)' : 'var(--text-primary)' }}>
                     {funnel.exitStats.rageCloseRate}%
+                    {funnel.exitStats.fastCloses !== undefined && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>
+                        ({funnel.exitStats.fastCloses.toLocaleString()} of {funnel.exitStats.closes.toLocaleString()} closes)
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    {funnel.exitStats.rageCloseRate > 40 ? 'High — consider reducing popup frequency or adjusting timing.' : 'Healthy — users are engaging before closing.'}
+                    {funnel.exitStats.rageCloseRate > 20 ? 'High — visitors are bailing on sight. Delay the popup (scroll/dwell/exit-intent), cap frequency, or soften the format.' : 'Healthy — most visitors read the offer before closing.'}
                   </div>
                 </div>
               </>
