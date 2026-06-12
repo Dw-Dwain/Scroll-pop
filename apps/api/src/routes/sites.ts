@@ -35,15 +35,18 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // Enrich each site with real campaign count and monthly impression count.
-    // Wrapped in try/catch per-site so a query error never kills the whole list.
-    const enriched = await Promise.all(tenantSites.map(async (site) => {
+    // SEQUENTIAL (not Promise.all): under RLS each request holds a single reserved tenant
+    // connection that can't run concurrent queries → 500. Per-site try/catch keeps one bad query
+    // from killing the whole list (the site just returns zeroes).
+    const enriched: Array<typeof tenantSites[number] & { campaignCount: number; totalViews: number }> = [];
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    for (const site of tenantSites) {
       try {
         const [campaignRow] = await db
           .select({ count: sql<number>`count(*)::int` })
           .from(campaigns)
           .where(and(eq(campaigns.siteId, site.id), isNull(campaigns.deletedAt)));
 
-        const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const [viewRow] = await db
           .select({ count: sql<number>`count(*)::int` })
           .from(events)
@@ -53,16 +56,11 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
             gte(events.ts, monthStart)
           ));
 
-        return {
-          ...site,
-          campaignCount: campaignRow?.count ?? 0,
-          totalViews:    viewRow?.count    ?? 0,
-        };
+        enriched.push({ ...site, campaignCount: campaignRow?.count ?? 0, totalViews: viewRow?.count ?? 0 });
       } catch {
-        // Enrichment failed (e.g. missing partition) — return site with zeroes
-        return { ...site, campaignCount: 0, totalViews: 0 };
+        enriched.push({ ...site, campaignCount: 0, totalViews: 0 });
       }
-    }));
+    }
 
     return reply.send({ data: enriched });
   });

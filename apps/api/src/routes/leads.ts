@@ -40,20 +40,20 @@ export const leadRoutes: FastifyPluginAsync = async (fastify) => {
       clientLeadFilter(q.clientId, request.tenantId),
     );
 
-    const [rows, totals] = await Promise.all([
-      db
-        .select({
-          id: leads.id, email: leads.email, name: leads.name,
-          campaignId: leads.campaignId, siteId: leads.siteId,
-          source: leads.source, pageUrl: leads.pageUrl, createdAt: leads.createdAt,
-        })
-        .from(leads)
-        .where(where)
-        .orderBy(desc(leads.createdAt))
-        .limit(q.limit)
-        .offset(q.offset),
-      db.select({ total: sql<number>`count(*)::int` }).from(leads).where(where),
-    ]);
+    // Sequential (not Promise.all): under RLS each request holds a single reserved tenant
+    // connection that can't run concurrent queries → 500. Sequential keeps RLS enforced.
+    const rows = await db
+      .select({
+        id: leads.id, email: leads.email, name: leads.name,
+        campaignId: leads.campaignId, siteId: leads.siteId,
+        source: leads.source, pageUrl: leads.pageUrl, createdAt: leads.createdAt,
+      })
+      .from(leads)
+      .where(where)
+      .orderBy(desc(leads.createdAt))
+      .limit(q.limit)
+      .offset(q.offset);
+    const totals = await db.select({ total: sql<number>`count(*)::int` }).from(leads).where(where);
 
     // Attach campaign names for display (batched, tenant-scoped).
     const campaignIds = [...new Set(rows.map((r) => r.campaignId).filter((x): x is string => !!x))];

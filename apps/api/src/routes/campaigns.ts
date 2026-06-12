@@ -255,13 +255,12 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: { code: 'CLONE_FAILED', message: 'Could not duplicate campaign' } });
     }
 
-    // Clone child rows. Best-effort per group — a missing design shouldn't abort the others.
-    const [srcDesign, srcTriggers, srcTargeting, srcFreq] = await Promise.all([
-      db.query.designs.findFirst({ where: and(eq(designs.campaignId, source.id), eq(designs.tenantId, request.tenantId)) }),
-      db.query.triggers.findMany({ where: and(eq(triggers.campaignId, source.id), eq(triggers.tenantId, request.tenantId)) }),
-      db.query.targetingRules.findMany({ where: and(eq(targetingRules.campaignId, source.id), eq(targetingRules.tenantId, request.tenantId)) }),
-      db.query.frequencyRules.findFirst({ where: and(eq(frequencyRules.campaignId, source.id), eq(frequencyRules.tenantId, request.tenantId)) }),
-    ]);
+    // Clone child rows. Sequential (not Promise.all): under RLS the per-request tenant connection
+    // is a single reserved connection that can't run concurrent queries → 500.
+    const srcDesign = await db.query.designs.findFirst({ where: and(eq(designs.campaignId, source.id), eq(designs.tenantId, request.tenantId)) });
+    const srcTriggers = await db.query.triggers.findMany({ where: and(eq(triggers.campaignId, source.id), eq(triggers.tenantId, request.tenantId)) });
+    const srcTargeting = await db.query.targetingRules.findMany({ where: and(eq(targetingRules.campaignId, source.id), eq(targetingRules.tenantId, request.tenantId)) });
+    const srcFreq = await db.query.frequencyRules.findFirst({ where: and(eq(frequencyRules.campaignId, source.id), eq(frequencyRules.tenantId, request.tenantId)) });
 
     if (srcDesign) {
       await db.insert(designs).values({

@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { db } from '../db/client.js';
+// systemDb (system pool): analytics is read-only aggregation and every query filters by
+// request.tenantId at the app layer. Under RLS the per-request tenant pool hands out a single
+// reserved connection, which can't run the Promise.all parallel queries these endpoints use
+// (breakdown/intelligence) → 500. The system pool has many connections; tenant isolation is kept
+// by the explicit tenantId filters. Same pattern as me.ts.
+import { systemDb as db } from '../db/client.js';
 import { events, campaigns } from '../db/schema.js';
 import { eq, and, gte, isNull, sql } from 'drizzle-orm';
 
