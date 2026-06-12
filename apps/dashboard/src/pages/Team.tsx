@@ -1,7 +1,7 @@
 import React from 'react';
-import { useCustom, useCustomMutation } from '@refinedev/core';
+import { useCustomMutation } from '@refinedev/core';
 import { Users, Mail, Trash2, Send, Loader2, Crown, ShieldCheck, AlertCircle } from 'lucide-react';
-import { getApiBase } from '../providers/dataProvider';
+import { getApiBase, authedFetch } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
 
 interface Member { userId: string; role: string; email: string; name: string | null; isSelf: boolean }
@@ -18,20 +18,32 @@ export const Team: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavi
   const { plan, isUnlimited, canWrite } = usePlan();
   const isAgency = plan === 'agency' || isUnlimited;
 
-  const { data, refetch, isLoading } = useCustom<{ data: TeamData }>({
-    url: `${getApiBase()}/team`,
-    method: 'get',
-    queryOptions: { enabled: isAgency, retry: false },
-  });
   const { mutateAsync } = useCustomMutation();
+
+  // GET /team via authedFetch — Refine's useCustom returns empty in production (systemic bug), which
+  // left the owner's member + pending-invite lists blank even on an agency tenant. authedFetch
+  // sidesteps it. `refetch` is awaited by the mutation handlers below to reload after changes.
+  const [team, setTeam] = React.useState<TeamData>({ isAgency: false, members: [], invites: [] });
+  const [isLoading, setIsLoading] = React.useState(false);
+  const refetch = React.useCallback(async () => {
+    if (!isAgency) return;
+    setIsLoading(true);
+    try {
+      const res = await authedFetch('/team');
+      if (res.ok) {
+        const body = await res.json() as { data: TeamData };
+        setTeam(body.data ?? { isAgency: false, members: [], invites: [] });
+      }
+    } catch { /* keep current state on a transient failure */ }
+    finally { setIsLoading(false); }
+  }, [isAgency]);
+  React.useEffect(() => { void refetch(); }, [refetch]);
 
   const [email, setEmail] = React.useState('');
   const [role, setRole] = React.useState<'editor' | 'admin' | 'viewer'>('editor');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [ok, setOk] = React.useState('');
-
-  const team = (data?.data as unknown as TeamData) ?? { isAgency: false, members: [], invites: [] };
 
   if (!isAgency) {
     return (
