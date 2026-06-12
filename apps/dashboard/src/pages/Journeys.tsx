@@ -152,8 +152,9 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
     setSaving(true); setStatus(null);
     try {
       const res = await authedFetch(`/journeys/${journeyId}/graph`, { method: 'PUT', body: JSON.stringify(toGraph()) });
-      setStatus(res.ok ? { kind: 'ok', msg: 'Saved' } : { kind: 'err', msg: 'Save failed' });
-    } finally { setSaving(false); }
+      setStatus(res.ok ? { kind: 'ok', msg: '✓ Saved' } : { kind: 'err', msg: `Save failed (${res.status})` });
+    } catch { setStatus({ kind: 'err', msg: 'Save failed — check your connection' }); }
+    finally { setSaving(false); }
   };
 
   const publish = async () => {
@@ -161,11 +162,12 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
     try {
       await authedFetch(`/journeys/${journeyId}/graph`, { method: 'PUT', body: JSON.stringify(toGraph()) }); // save first
       const res = await authedFetch(`/journeys/${journeyId}/publish`, { method: 'POST' });
-      if (res.ok) { setStatus({ kind: 'ok', msg: 'Published — live' }); return; }
+      if (res.ok) { setStatus({ kind: 'ok', msg: '✓ Published — live' }); return; }
       const body = await res.json().catch(() => null) as { error?: { details?: string[]; message?: string } } | null;
       const details = body?.error?.details;
-      setStatus({ kind: 'err', msg: details?.length ? details.join(' · ') : (body?.error?.message || 'Publish failed') });
-    } finally { setSaving(false); }
+      setStatus({ kind: 'err', msg: details?.length ? details.join(' · ') : (body?.error?.message || `Publish failed (${res.status})`) });
+    } catch { setStatus({ kind: 'err', msg: 'Publish failed — check your connection' }); }
+    finally { setSaving(false); }
   };
 
   const selectedNode = nodes.find((n) => n.id === selNode) || null;
@@ -205,8 +207,15 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ ...floatCard, display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto' }}>
-          {status && <span style={{ fontSize: 12, color: status.kind === 'ok' ? '#16a34a' : '#dc2626', maxWidth: 280, textAlign: 'right' }}>{status.msg}</span>}
-          <button onClick={save} disabled={saving} style={btn('ghost')}><Save size={14} /> Save</button>
+          {status && (
+            <span style={{
+              fontSize: 12, fontWeight: 600, padding: '5px 11px', borderRadius: 999, maxWidth: 340, textAlign: 'right',
+              color: status.kind === 'ok' ? '#16a34a' : '#dc2626',
+              background: status.kind === 'ok' ? 'rgba(22,163,74,0.14)' : 'rgba(220,38,38,0.14)',
+              border: `1px solid ${status.kind === 'ok' ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.35)'}`,
+            }}>{status.msg}</span>
+          )}
+          <button onClick={save} disabled={saving} style={btn('ghost')}><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
           <button onClick={publish} disabled={saving} style={btn('primary')}><Rocket size={14} /> Publish</button>
         </div>
       </div>
