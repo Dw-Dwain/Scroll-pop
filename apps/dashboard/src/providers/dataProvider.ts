@@ -47,6 +47,10 @@ export async function authedFetch(path: string, init: RequestInit = {}): Promise
   const token = await activeGetToken();
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
+  // Default JSON content-type when sending a body so Fastify parses it (callers pass
+  // JSON.stringify(...)). Only when a body is present — avoids FST_ERR_CTP_EMPTY_JSON_BODY on
+  // bodyless POST/DELETE. Without this, the API receives a raw string and z.object().parse 400s.
+  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   const apiBase = getApiBase();
   const url = path.startsWith('http')
     ? path
