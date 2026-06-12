@@ -4,6 +4,7 @@ import { useCustom, useCreate, useDelete, useList, useUpdate, useApiUrl } from '
 import { authedFetch } from '../providers/dataProvider';
 import { useActiveClient } from '../hooks/useClients';
 import { DesignThumbnail } from '../components/DesignThumbnail';
+import { usePlan } from '../hooks/usePlan';
 
 interface CampaignsProps {
   onNavigate: (path: string) => void;
@@ -18,6 +19,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
   const { mutate: updateCampaign } = useUpdate();
   const { mutate: deleteCampaign } = useDelete();
   const { mutate: createResource } = useCreate();
+  const { canWrite } = usePlan();
   const apiUrl = useApiUrl();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
@@ -119,10 +121,12 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
             {statusFilter !== 'all' ? ` · ${statusFilter}` : ''}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Plus size={14} />
-          New Campaign
-        </button>
+        {canWrite && (
+          <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={14} />
+            New Campaign
+          </button>
+        )}
       </div>
 
       {/* Filter strip */}
@@ -190,9 +194,11 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
             {campaignsData?.data?.length === 0 ? 'Create your first campaign to start driving conversions.' : 'Try adjusting your search or filters.'}
           </p>
           {campaignsData?.data?.length === 0 ? (
-            <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')}>
-              Create Campaign
-            </button>
+            canWrite && (
+              <button className="btn btn-primary" onClick={() => onNavigate('/campaigns/new')}>
+                Create Campaign
+              </button>
+            )
           ) : (
             <button className="btn btn-secondary" onClick={() => { setQuery(''); setStatusFilter('all'); }}>
               Clear Filters
@@ -317,9 +323,10 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
 
                   <button
                     onClick={() => handleToggleStatus(c.id, c.status ?? 'draft')}
+                    disabled={!canWrite}
                     className="btn btn-icon"
-                    title={c.status === 'active' ? 'Pause campaign' : 'Activate campaign'}
-                    style={{ color: c.status === 'active' ? 'var(--status-warning)' : 'var(--status-success)' }}
+                    title={!canWrite ? 'View-only access' : (c.status === 'active' ? 'Pause campaign' : 'Activate campaign')}
+                    style={{ color: c.status === 'active' ? 'var(--status-warning)' : 'var(--status-success)', opacity: canWrite ? 1 : 0.5, cursor: canWrite ? 'pointer' : 'not-allowed' }}
                   >
                     {c.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
                   </button>
@@ -355,6 +362,7 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                           <Download size={12} style={{ marginRight: 6, display: 'inline' }} />
                           Download data
                         </button>
+                        {canWrite && (
                         <button
                           onClick={() => { handleDuplicate(c.id); setOpenMenuId(null); }}
                           style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer' }}
@@ -364,6 +372,9 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                           <Copy size={12} style={{ marginRight: 6, display: 'inline' }} />
                           Duplicate
                         </button>
+                        )}
+                        {canWrite && (
+                        <>
                         <div style={{ height: 1, background: 'var(--border-subtle)' }} />
                         <button
                           onClick={() => { handleDelete(c.id); setOpenMenuId(null); }}
@@ -374,6 +385,8 @@ export const Campaigns: React.FC<CampaignsProps> = ({ onNavigate }) => {
                           <Trash2 size={12} style={{ marginRight: 6, display: 'inline' }} />
                           Delete
                         </button>
+                        </>
+                        )}
                       </div>
                     )}
                   </div>

@@ -15,7 +15,7 @@ const roleBadge = (role: string) => {
 };
 
 export const Team: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavigate }) => {
-  const { plan, isUnlimited } = usePlan();
+  const { plan, isUnlimited, canWrite } = usePlan();
   const isAgency = plan === 'agency' || isUnlimited;
 
   const { data, refetch, isLoading } = useCustom<{ data: TeamData }>({
@@ -98,7 +98,8 @@ export const Team: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavi
         </p>
       </div>
 
-      {/* Invite form */}
+      {/* Invite form — hidden for view-only members (the API also restricts invites to owner/admin) */}
+      {canWrite && (
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16, marginBottom: 24 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>Invite a team member</div>
         <form onSubmit={invite} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -122,6 +123,7 @@ export const Team: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavi
           The invite is tied to that exact email — they must accept it from an account with the same verified address.
         </p>
       </div>
+      )}
 
       {isLoading && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: 13 }}><Loader2 size={14} className="spin" /> Loading team…</div>}
 
@@ -147,7 +149,7 @@ export const Team: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavi
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: b.color, fontWeight: 500 }}>
                 <Icon size={12} /> {b.label}
               </span>
-              {!m.isSelf && m.role !== 'owner' && (
+              {canWrite && !m.isSelf && m.role !== 'owner' && (
                 <button onClick={() => void removeMember(m)} title="Remove member" className="btn btn-icon" style={{ color: 'var(--text-muted)' }}>
                   <Trash2 size={13} />
                 </button>
@@ -171,9 +173,11 @@ export const Team: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNavi
                   <div style={{ fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.email}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Invited as {inv.role} · awaiting acceptance</div>
                 </div>
+                {canWrite && (
                 <button onClick={() => void revoke(inv.id)} title="Revoke invite" className="btn btn-icon" style={{ color: 'var(--text-muted)' }}>
                   <Trash2 size={13} />
                 </button>
+                )}
               </div>
             ))}
           </div>

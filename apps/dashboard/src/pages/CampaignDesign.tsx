@@ -9,6 +9,7 @@ import SidebarRight from '../components/campaign-designer/SidebarRight';
 import InteractivePreview from '../components/campaign-designer/InteractivePreview';
 
 import { Campaign, CampaignElement, CampaignStep, ElementType, CampaignStepConfig, CanvasPosition } from '../components/campaign-designer/types';
+import { usePlan } from '../hooks/usePlan';
 
 interface CampaignDesignProps {
   campaignId: string;
@@ -752,8 +753,10 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     handleUpdateStepConfig('elements', updated);
   };
 
+  const { canWrite } = usePlan();
   const handleSave = () => {
     if (!campaign) return;
+    if (!canWrite) { toastMessage('View-only access — changes are disabled.'); return; }
     setIsSaving(true);
     const designPayload = mapCampaignToDesign(campaign);
     // Preserve existing affiliate slots — mapCampaignToDesign always returns [] because
@@ -910,6 +913,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
         onUndo={handleUndo}
         onRedo={handleRedo}
         onSave={handleSave}
+        canSave={canWrite}
         onLaunchSim={() => setShowStoreSim(true)}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}

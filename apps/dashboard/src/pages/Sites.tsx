@@ -386,7 +386,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const { mutate: deleteSite } = useDelete();
   const { mutate: updateSite } = useUpdate();
   const { mutateAsync: customMutate } = useCustomMutation<{ disconnected: boolean }>();
-  const { withinLimit: _withinLimit, limits, isAdmin } = usePlan();
+  const { withinLimit: _withinLimit, limits, isAdmin, canWrite } = usePlan();
   const { clients, isAgency } = useClients();
   const { activeClientId } = useActiveClient();
 
@@ -579,6 +579,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
               <span style={{ fontSize: 12, color: 'var(--status-success)' }}>{liveSites} Live {liveSites === 1 ? 'Domain' : 'Domains'}</span>
             </div>
           )}
+          {canWrite && (
           <button
             onClick={() => {
               if (atSiteLimit) { onNavigate?.('/billing'); return; }
@@ -592,6 +593,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
             {atSiteLimit ? <Lock size={14} /> : <Plus size={14} />}
             {atSiteLimit ? `Limit (${siteCount}/${limits.maxSites})` : '+ New Site'}
           </button>
+          )}
         </div>
       </div>
 
@@ -624,6 +626,8 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 4 }}>
+                    {canWrite && (
+                    <>
                     <button
                       className="btn btn-icon"
                       onClick={() => { setEditSite({ id: site.id, name: site.name, platform: site.platform, clientId: site.clientId ?? '' }); setIsEditOpen(true); }}
@@ -639,6 +643,8 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                     >
                       <Trash2 size={14} />
                     </button>
+                    </>
+                    )}
                   </div>
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{site.domain ?? site.name}</div>

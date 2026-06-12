@@ -243,7 +243,8 @@ export const Layout: React.FC<LayoutProps> = ({
         {/* Right section */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0, paddingRight: 16 }}>
 
-          {/* New Campaign shortcut */}
+          {/* New Campaign shortcut — hidden for view-only members (they can't create) */}
+          {!isViewer && (
           <button
             onClick={() => onNavigate('/campaigns/new')}
             className="hidden md:flex"
@@ -263,6 +264,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <Plus size={12} />
             New Campaign
           </button>
+          )}
 
           {/* Usage pill — desktop only, non-admin */}
           {!isAdmin && (
