@@ -614,7 +614,7 @@ const CAMPAIGN_METADATA_PRESETS: DynamicTemplateMeta[] = [
 // Replaces the old single generic "vertical" template. Each is a full-bleed creative image with an
 // invisible full-card CTA overlay (set your affiliate href) and a white-circle X close. Lightweight:
 // one image + two overlay primitives, triggers + design primitives included out of the box.
-const CREATIVE_W = 330;   // fixed width
+const CREATIVE_W = 380;   // fixed width  (Wisepops-style vertical affiliate card)
 const CREATIVE_H = 560;   // fixed height
 const creativeUrl = (file: string) => `https://cdn.scrollpop.online/creatives/${encodeURIComponent(file)}.jpg`;
 
@@ -645,8 +645,12 @@ const creativeTemplate = (id: string, name: string, file: string): Campaign => (
       elements: [
         // The creative image IS the click target (href → tracked + opens the affiliate link). No
         // separate full-card button overlaying it. White-circle X on top to dismiss.
-        { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: creativeUrl(file), href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', borderRadius: 16, zIndex: 1 },
-        { id: 'close-btn', type: 'close', x: 88, y: 2.5, w: 9, h: 5.4, content: '✕', color: '#18181b', fontSize: 15, fontWeight: '700', align: 'center', backgroundColor: '#ffffff', borderRadius: 99, zIndex: 100, extraProps: { adClose: false } },
+        // objectFit:'contain' shows the WHOLE creative (no edge cropping) on the dark card.
+        { id: 'cr-img', type: 'image', x: 0, y: 0, w: 100, h: 100, content: creativeUrl(file), href: 'https://REPLACE-WITH-YOUR-AFFILIATE-LINK', objectFit: 'contain', borderRadius: 16, zIndex: 1 },
+        // adClose:true → the X is a two-step ad-then-close (1st click opens the affiliate link in a
+        // new tab + keeps the popup, 2nd click closes). The snippet falls back to the image href when
+        // the close element has none, so this works out of the box for affiliate creatives.
+        { id: 'close-btn', type: 'close', x: 88, y: 2.5, w: 9, h: 5.4, content: '✕', color: '#18181b', fontSize: 15, fontWeight: '700', align: 'center', backgroundColor: '#ffffff', borderRadius: 99, zIndex: 100, extraProps: { adClose: true } },
       ],
     },
     success: {
