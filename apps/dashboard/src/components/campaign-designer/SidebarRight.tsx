@@ -91,8 +91,10 @@ export default function SidebarRight({
             </span>
           </div>
 
-          {/* 1. Context Content/Text string */}
-          {activeElement.type !== 'close' && (
+          {/* 1. Context Content/Text string. For a ScrollPop creative-template image (a /creatives/
+              CDN asset) we HIDE the source URL + picker — clients shouldn't swap the creative; the
+              panel starts at the affiliate link + fit. */}
+          {activeElement.type !== 'close' && !(activeElement.type === 'image' && String(activeElement.content ?? '').includes('/creatives/')) && (
             <div className="space-y-1.5">
               <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider font-mono">
                 {activeElement.type === 'image' ? 'Image Source URL' : 'Display Text Content'}
@@ -107,8 +109,8 @@ export default function SidebarRight({
             </div>
           )}
 
-          {/* ScrollPop Creatives thumbnail picker — image elements only */}
-          {activeElement.type === 'image' && (
+          {/* ScrollPop Creatives thumbnail picker — image elements only, hidden for locked creative-template images */}
+          {activeElement.type === 'image' && !String(activeElement.content ?? '').includes('/creatives/') && (
             <CreativePicker
               value={activeElement.content}
               onSelect={(url) => onUpdateElement(activeElement.id, 'content', url)}
