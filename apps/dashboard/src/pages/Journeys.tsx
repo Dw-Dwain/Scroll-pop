@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch, Lock, AlertCircle, Pencil, Link2Off, ShieldCheck, ZoomIn, ZoomOut, Maximize, X, Crosshair } from 'lucide-react';
+import { GitBranch, Lock, AlertCircle, Pencil, Link2Off, ShieldCheck, ZoomIn, ZoomOut, Maximize, X } from 'lucide-react';
 import { useCustom, useApiUrl } from '@refinedev/core';
 import { useActiveClient } from '../hooks/useClients';
 import { usePlan } from '../hooks/usePlan';
@@ -84,63 +84,65 @@ export const Journeys: React.FC<JourneysProps> = ({ onNavigate }) => {
 
   if (!isAgency) {
     return (
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <Header />
-        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 40, textAlign: 'center' }}>
-          <Lock size={28} style={{ color: 'var(--text-muted)', marginBottom: 14 }} />
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Journeys is an Agency feature</div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 420, margin: '0 auto' }}>
-            Upgrade to the Agency plan to chain your clients' popups into multi-step flows.
-          </p>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 24px 12px', borderBottom: '1px solid var(--border-subtle)' }}><Header /></div>
+        <div style={{ flex: 1, display: 'flex' }}>
+          <div style={{ margin: 'auto', maxWidth: 460, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 40, textAlign: 'center' }}>
+            <Lock size={28} style={{ color: 'var(--text-muted)', marginBottom: 14 }} />
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Journeys is an Agency feature</div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 auto' }}>
+              Upgrade to the Agency plan to chain your clients' popups into multi-step flows.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-      <Header />
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, padding: '16px 24px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+        <Header />
+        {sites.length > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Site</span>
+            <select value={siteKey ?? ''} onChange={(e) => setActiveSite(e.target.value)} className="input" style={{ maxWidth: 280 }}>
+              {sites.map((s) => <option key={s.siteId} value={s.siteId}>{s.siteName} ({s.nodes.length})</option>)}
+            </select>
+          </div>
+        )}
+      </div>
 
-      {isLoading ? (
-        <div className="skeleton" style={{ height: 520, borderRadius: 12 }} />
-      ) : allNodes.length === 0 ? (
-        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 40, textAlign: 'center' }}>
-          <GitBranch size={26} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>No campaigns to chain yet</div>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: 10 }} onClick={() => onNavigate('/campaigns')}>View campaigns</button>
-        </div>
-      ) : (
-        <>
-          {sites.length > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Site</span>
-              <select value={siteKey ?? ''} onChange={(e) => setActiveSite(e.target.value)} className="input" style={{ maxWidth: 280 }}>
-                {sites.map((s) => <option key={s.siteId} value={s.siteId}>{s.siteName} ({s.nodes.length})</option>)}
-              </select>
-            </div>
-          )}
-          {site && (
-            <JourneyCanvas
-              key={site.siteId}
-              nodes={site.nodes}
-              onNavigate={onNavigate}
-              onChanged={() => void refetch()}
-            />
-          )}
-        </>
-      )}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        {isLoading ? (
+          <div className="skeleton" style={{ flex: 1, margin: 16, borderRadius: 12 }} />
+        ) : allNodes.length === 0 ? (
+          <div style={{ margin: 'auto', textAlign: 'center', padding: 40 }}>
+            <GitBranch size={26} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>No campaigns to chain yet</div>
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 10 }} onClick={() => onNavigate('/campaigns')}>View campaigns</button>
+          </div>
+        ) : site ? (
+          <JourneyCanvas
+            key={site.siteId}
+            nodes={site.nodes}
+            onNavigate={onNavigate}
+            onChanged={() => void refetch()}
+          />
+        ) : null}
+      </div>
     </div>
   );
 };
 
 const Header: React.FC = () => (
-  <div style={{ marginBottom: 18, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Journeys</h1>
+  <div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+      <h1 style={{ fontSize: 19, fontWeight: 500, margin: 0, letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Journeys</h1>
       <span className="badge badge-accent" style={{ fontSize: 9 }}>Agency</span>
     </div>
-    <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-      Drag campaigns to arrange them, drag from a node's right dot to another node to chain them. Edits go live immediately.
+    <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: 0 }}>
+      Drag campaigns to arrange them, drag from a node's right dot to another to chain them. Edits go live immediately.
     </p>
   </div>
 );
@@ -168,44 +170,78 @@ const JourneyCanvas: React.FC<{
   const [pan, setPan] = React.useState<Pos>({ x: 0, y: 0 });
   const [zoom, setZoom] = React.useState(1);
   const [selected, setSelected] = React.useState<string | null>(null);
-  const [linkFrom, setLinkFrom] = React.useState<string | null>(null);
+  // Active connection drag: the source node + the live cursor position (canvas coords) for the
+  // rubber-band line, n8n-style. Released over a node creates the link.
+  const [connecting, setConnecting] = React.useState<{ fromId: string; cx: number; cy: number } | null>(null);
   const [diag, setDiag] = React.useState<Record<string, Diagnose | 'loading'>>({});
 
+  const viewportRef = React.useRef<HTMLDivElement>(null);
   const drag = React.useRef<{ id: string; sx: number; sy: number; ox: number; oy: number } | null>(null);
   const panning = React.useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  // Refs mirror live state so the stable window listeners never read stale closures.
+  const connectingRef = React.useRef(connecting); connectingRef.current = connecting;
+  const panRef = React.useRef(pan); panRef.current = pan;
+  const zoomRef = React.useRef(zoom); zoomRef.current = zoom;
 
-  // Global mouse handlers for drag + pan.
+  // Screen coords → canvas coords (undo the viewport offset + pan + zoom).
+  const toCanvas = (clientX: number, clientY: number): Pos => {
+    const r = viewportRef.current?.getBoundingClientRect();
+    return { x: (clientX - (r?.left ?? 0) - panRef.current.x) / zoomRef.current, y: (clientY - (r?.top ?? 0) - panRef.current.y) / zoomRef.current };
+  };
+
+  // Stable global handlers (read live values via refs).
   React.useEffect(() => {
     const move = (e: MouseEvent) => {
       if (drag.current) {
-        const d = drag.current;
-        setPos((p) => ({ ...p, [d.id]: { x: d.ox + (e.clientX - d.sx) / zoom, y: d.oy + (e.clientY - d.sy) / zoom } }));
+        const d = drag.current; const z = zoomRef.current;
+        setPos((p) => ({ ...p, [d.id]: { x: d.ox + (e.clientX - d.sx) / z, y: d.oy + (e.clientY - d.sy) / z } }));
       } else if (panning.current) {
         const pn = panning.current;
         setPan({ x: pn.ox + (e.clientX - pn.sx), y: pn.oy + (e.clientY - pn.sy) });
+      } else if (connectingRef.current) {
+        const c = toCanvas(e.clientX, e.clientY);
+        setConnecting((cur) => (cur ? { ...cur, cx: c.x, cy: c.y } : cur));
       }
     };
     const up = () => {
       if (drag.current) { savePos(posRef.current); drag.current = null; }
       panning.current = null;
+      if (connectingRef.current) setConnecting(null); // released on empty canvas → cancel
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-  }, [zoom]);
+  }, []);
 
   const startNodeDrag = (e: React.MouseEvent, id: string) => {
-    if (linkFrom) return; // in linking mode, clicks connect instead of drag
     e.stopPropagation();
     const p = pos[id] ?? { x: 0, y: 0 };
     drag.current = { id, sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y };
     setSelected(id);
   };
 
-  const onNodeClick = (e: React.MouseEvent, id: string) => {
+  // Begin dragging a connection from a node's output port.
+  const startConnect = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (linkFrom && linkFrom !== id) { void saveLink(linkFrom, id); setLinkFrom(null); return; }
-    setSelected(id);
+    const c = toCanvas(e.clientX, e.clientY);
+    setConnecting({ fromId: id, cx: c.x, cy: c.y });
+  };
+
+  // Released over a node → create the link (node onMouseUp fires before the window handler).
+  const dropConnect = (id: string) => {
+    const c = connectingRef.current;
+    if (c && c.fromId !== id) void saveLink(c.fromId, id);
+    setConnecting(null);
+  };
+
+  // Zoom toward the cursor (n8n feel): keep the point under the pointer fixed while scaling.
+  const onWheelZoom = (e: React.WheelEvent) => {
+    const z2 = Math.min(1.8, Math.max(0.3, zoom * (e.deltaY < 0 ? 1.1 : 0.9)));
+    const r = viewportRef.current?.getBoundingClientRect();
+    const mx = e.clientX - (r?.left ?? 0), my = e.clientY - (r?.top ?? 0);
+    const cxp = (mx - pan.x) / zoom, cyp = (my - pan.y) / zoom;
+    setPan({ x: mx - cxp * z2, y: my - cyp * z2 });
+    setZoom(z2);
   };
 
   const saveLink = async (fromId: string, nextId: string | null, advanceOn: Sequence['advanceOn'] = 'dismiss', delaySeconds = MIN_DELAY) => {
@@ -235,10 +271,10 @@ const JourneyCanvas: React.FC<{
   const chainCount = nodes.filter((n) => n.sequence).length;
 
   return (
-    <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-      {/* Canvas */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderTopLeftRadius: 10, borderTopRightRadius: 10, padding: '6px 10px', fontSize: 11, color: 'var(--text-muted)' }}>
+    <div style={{ height: '100%', display: 'flex', minHeight: 0 }}>
+      {/* Canvas column */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-raised)', borderBottom: '1px solid var(--border-subtle)', padding: '7px 14px', fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
           <ShieldCheck size={13} style={{ color: 'var(--status-success)' }} />
           <span>Guarded: max {MAX_CHAIN} chained / load · ≥{MIN_DELAY}s gap · no repeats. {chainCount} link{chainCount === 1 ? '' : 's'} set.</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
@@ -248,21 +284,14 @@ const JourneyCanvas: React.FC<{
           </div>
         </div>
 
-        {linkFrom && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--accent-50, #eef2ff)', border: '1px solid var(--accent-300, #c7d2fe)', padding: '5px 10px', fontSize: 11, color: 'var(--accent-700, #4338ca)' }}>
-            <Crosshair size={13} /> Click a target campaign to chain <strong>{byId.get(linkFrom)?.name}</strong> into it.
-            <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', fontSize: 10 }} onClick={() => setLinkFrom(null)}>Cancel</button>
-          </div>
-        )}
-
         <div
-          onMouseDown={(e) => { panning.current = { sx: e.clientX, sy: e.clientY, ox: pan.x, oy: pan.y }; setSelected(null); if (linkFrom) setLinkFrom(null); }}
-          onWheel={(e) => { setZoom((z) => Math.min(1.6, Math.max(0.4, z * (e.deltaY < 0 ? 1.08 : 0.92)))); }}
+          ref={viewportRef}
+          onMouseDown={(e) => { panning.current = { sx: e.clientX, sy: e.clientY, ox: pan.x, oy: pan.y }; setSelected(null); }}
+          onWheel={onWheelZoom}
           style={{
-            position: 'relative', height: 560, overflow: 'hidden', cursor: panning.current ? 'grabbing' : 'grab',
-            background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderTop: 'none',
-            borderBottomLeftRadius: 10, borderBottomRightRadius: 10,
-            backgroundImage: 'radial-gradient(var(--border-subtle) 1px, transparent 0)', backgroundSize: '22px 22px',
+            position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', cursor: panning.current ? 'grabbing' : 'grab',
+            background: 'var(--bg-surface)',
+            backgroundImage: 'radial-gradient(var(--border-subtle) 1px, transparent 0)', backgroundSize: '24px 24px',
           }}
         >
           <div style={{ position: 'absolute', top: 0, left: 0, transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
@@ -280,9 +309,22 @@ const JourneyCanvas: React.FC<{
                 if (!t || !a || !b) return null;
                 const sx = a.x + NODE_W, sy = a.y + NODE_H / 2;
                 const tx = b.x, ty = b.y + NODE_H / 2;
-                const dx = Math.max(40, Math.abs(tx - sx) / 2);
-                return <path key={n.id} d={`M${sx},${sy} C${sx + dx},${sy} ${tx - dx},${ty} ${tx},${ty}`} fill="none" stroke="var(--accent-500, #6366f1)" strokeWidth={2} markerEnd="url(#jarrow)" />;
+                const dx = Math.max(60, Math.abs(tx - sx) * 0.5);
+                const d = `M${sx},${sy} C${sx + dx},${sy} ${tx - dx},${ty} ${tx},${ty}`;
+                return (
+                  <g key={n.id}>
+                    <path d={d} fill="none" stroke="var(--accent-500, #6366f1)" strokeWidth={2.5} strokeLinecap="round" markerEnd="url(#jarrow)" />
+                    <circle cx={sx} cy={sy} r={4} fill="var(--accent-500, #6366f1)" />
+                  </g>
+                );
               })}
+              {/* Live rubber-band while dragging a new connection */}
+              {connecting && (() => {
+                const s = pos[connecting.fromId]; if (!s) return null;
+                const sx = s.x + NODE_W, sy = s.y + NODE_H / 2, tx = connecting.cx, ty = connecting.cy;
+                const dx = Math.max(40, Math.abs(tx - sx) * 0.5);
+                return <path d={`M${sx},${sy} C${sx + dx},${sy} ${tx - dx},${ty} ${tx},${ty}`} fill="none" stroke="var(--accent-500, #6366f1)" strokeWidth={2.5} strokeDasharray="6 4" strokeLinecap="round" />;
+              })()}
             </svg>
 
             {/* Edge labels (HTML, clickable) */}
@@ -306,17 +348,19 @@ const JourneyCanvas: React.FC<{
             {nodes.map((n) => {
               const p = pos[n.id] ?? { x: 0, y: 0 };
               const isSel = selected === n.id;
-              const isLinkSrc = linkFrom === n.id;
+              const isConnSrc = connecting?.fromId === n.id;
+              const isDropTarget = !!connecting && connecting.fromId !== n.id;
               return (
                 <div
                   key={n.id}
                   onMouseDown={(e) => startNodeDrag(e, n.id)}
-                  onClick={(e) => onNodeClick(e, n.id)}
+                  onMouseUp={() => dropConnect(n.id)}
+                  onClick={(e) => { e.stopPropagation(); setSelected(n.id); }}
                   style={{
                     position: 'absolute', left: p.x, top: p.y, width: NODE_W, height: NODE_H,
-                    background: 'var(--bg-raised)', border: `1.5px solid ${isSel ? 'var(--accent-500,#6366f1)' : isLinkSrc ? 'var(--status-warning,#d97706)' : 'var(--border-subtle)'}`,
+                    background: 'var(--bg-raised)', border: `1.5px solid ${isSel ? 'var(--accent-500,#6366f1)' : isConnSrc ? 'var(--status-warning,#d97706)' : isDropTarget ? 'var(--accent-400,#818cf8)' : 'var(--border-subtle)'}`,
                     borderRadius: 10, boxShadow: isSel ? '0 4px 16px rgba(99,102,241,0.18)' : '0 1px 4px rgba(0,0,0,0.08)',
-                    cursor: linkFrom ? 'pointer' : 'grab', userSelect: 'none', padding: 10, boxSizing: 'border-box',
+                    cursor: connecting ? 'crosshair' : 'grab', userSelect: 'none', padding: 10, boxSizing: 'border-box',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -327,13 +371,13 @@ const JourneyCanvas: React.FC<{
                   <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{n.status}</div>
 
                   {/* input port */}
-                  <span style={{ position: 'absolute', left: -6, top: NODE_H / 2 - 6, width: 12, height: 12, borderRadius: 99, background: 'var(--bg-surface)', border: '2px solid var(--text-muted)' }} />
-                  {/* output port — drag/click to start a link */}
+                  <span style={{ position: 'absolute', left: -6, top: NODE_H / 2 - 6, width: 12, height: 12, borderRadius: 99, background: isDropTarget ? 'var(--accent-500,#6366f1)' : 'var(--bg-surface)', border: '2px solid var(--text-muted)' }} />
+                  {/* output port — drag to another node to chain */}
                   <span
-                    title="Drag/click to chain to another campaign"
-                    onMouseDown={(e) => { e.stopPropagation(); setLinkFrom(n.id); }}
+                    title="Drag to another campaign to chain it"
+                    onMouseDown={(e) => startConnect(e, n.id)}
                     onClick={(e) => e.stopPropagation()}
-                    style={{ position: 'absolute', right: -7, top: NODE_H / 2 - 7, width: 14, height: 14, borderRadius: 99, background: isLinkSrc ? 'var(--status-warning,#d97706)' : 'var(--accent-500,#6366f1)', border: '2px solid var(--bg-surface)', cursor: 'crosshair' }}
+                    style={{ position: 'absolute', right: -7, top: NODE_H / 2 - 7, width: 14, height: 14, borderRadius: 99, background: isConnSrc ? 'var(--status-warning,#d97706)' : 'var(--accent-500,#6366f1)', border: '2px solid var(--bg-surface)', cursor: 'crosshair' }}
                   />
                 </div>
               );
@@ -343,9 +387,9 @@ const JourneyCanvas: React.FC<{
       </div>
 
       {/* Inspector */}
-      <div style={{ width: 280, flexShrink: 0, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 14, minHeight: 200 }}>
+      <div style={{ width: 300, flexShrink: 0, background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-subtle)', padding: 16, overflowY: 'auto' }}>
         {!selNode ? (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 30 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 40 }}>
             <GitBranch size={20} style={{ marginBottom: 8, opacity: 0.6 }} />
             <div>Select a node to edit its step, or drag from a node's right dot to chain it.</div>
           </div>

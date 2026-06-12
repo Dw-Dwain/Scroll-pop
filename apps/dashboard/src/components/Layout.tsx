@@ -136,7 +136,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
   // Full-screen editor paths: campaign wizard + campaign design editor
   const isFullScreenEditor = currentPath === '/campaigns/new' || /\/campaigns\/.+\/design/.test(currentPath);
-  const isSplitPage = currentPath === '/profile' || currentPath === '/settings';
+  const isSplitPage = currentPath === '/profile' || currentPath === '/settings' || currentPath === '/journeys';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-root)' }}>
