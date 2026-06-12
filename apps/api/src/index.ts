@@ -8,7 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import sanitizeHtml from 'sanitize-html';
-import { db, rlsActive, disableRls } from './db/client.js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { db, systemDb, sqlClient, rlsActive, disableRls } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
 import { ensureRlsSchema } from './db/ensure-rls.js';
 import { ensureNotificationsSchema } from './db/ensure-notifications.js';
@@ -988,6 +989,40 @@ async function bootstrap() {
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
     : null;
+
+  // Apply formal Drizzle migrations on boot. This REPLACES the Fly `release_command` (which ran
+  // drizzle-kit migrate in a release machine that hung holding a single connection → "machine never
+  // reached state destroyed" → every deploy aborted). A Postgres advisory lock held on a reserved
+  // connection serializes machines so only one applies; the rest find them applied and no-op.
+  // NON-FATAL: a failure here never blocks boot — the idempotent ensure-* self-heal below still
+  // converges the schema. Runs on the system pool (superuser) so RLS can't interfere.
+  {
+    const MIGRATE_LOCK = 472701; // app-specific advisory lock key
+    let lockConn: Awaited<ReturnType<typeof sqlClient.reserve>> | null = null;
+    try {
+      lockConn = await sqlClient.reserve();
+      // NON-blocking: if another machine already holds the lock it's mid-migrate, so we skip rather
+      // than block boot. A hard timeout means a hung migrate can never stall the app from listening.
+      const rows = await lockConn`SELECT pg_try_advisory_lock(${MIGRATE_LOCK}) AS locked`;
+      if (rows[0]?.['locked']) {
+        const folder = fileURLToPath(new URL('../drizzle/migrations', import.meta.url));
+        await Promise.race([
+          migrate(systemDb, { migrationsFolder: folder }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('boot migrate timed out (90s)')), 90_000)),
+        ]);
+        app.log.info('[migrate] Drizzle migrations applied (boot)');
+      } else {
+        app.log.info('[migrate] another machine holds the migrate lock — skipping (it applies them)');
+      }
+    } catch (err) {
+      app.log.error({ err }, '[migrate] boot migrate failed — continuing; ensure-* self-heal covers schema');
+    } finally {
+      if (lockConn) {
+        try { await lockConn`SELECT pg_advisory_unlock(${MIGRATE_LOCK})`; } catch { /* ignore */ }
+        try { lockConn.release(); } catch { /* ignore */ }
+      }
+    }
+  }
 
   // Partition creation is TIME-sensitive: next month's events partition must exist before
   // the calendar rollover, so this runs on EVERY boot and is deliberately NOT gated behind

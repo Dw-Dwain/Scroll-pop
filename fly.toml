@@ -6,9 +6,10 @@ primary_region = "ord"
 
 [build]
 
-[deploy]
-  release_command = "pnpm --filter @scrollpop/api exec drizzle-kit migrate"
-
+# Migrations are NOT a release_command anymore: drizzle-kit migrate in a release machine hung
+# holding a connection, so the machine never destroyed and every deploy aborted. They now run on
+# app boot (advisory-locked + non-fatal — see apps/api/src/index.ts), so a slow/hung migration can
+# never block a deployment.
 [env]
   NODE_ENV = "production"
   PORT = "8080"
