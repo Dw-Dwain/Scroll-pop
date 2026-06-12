@@ -456,11 +456,21 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
     const isPlaceholder = (s: string) =>
       !s || s === 'Dev Admin' || s === 'admin@scrollpop.dev' || s === 'admin@scrollpop.local';
     setProfile((prev: typeof profile) => {
+      // localStorage is shared across accounts on one device, so a cached profile may belong to a
+      // DIFFERENT user (e.g. you accepted a team invite from an account that was signed in here
+      // before). When the cached email doesn't match the real Clerk identity, drop the previous
+      // user's personal fields so you never see their avatar/name/bio.
+      const accountChanged =
+        !!prev.email && !!clerkIdentity.email &&
+        prev.email.toLowerCase() !== clerkIdentity.email.toLowerCase();
       const next = { ...prev };
-      if (clerkIdentity.name && isPlaceholder(prev.name)) next.name = clerkIdentity.name;
+      if (accountChanged) { next.avatarUrl = ''; next.bio = ''; next.name = ''; }
       // Email is the authenticated login identity — always reflect the real one in Clerk mode.
       if (clerkIdentity.email) next.email = clerkIdentity.email;
-      if (clerkIdentity.avatarUrl && !prev.avatarUrl) next.avatarUrl = clerkIdentity.avatarUrl;
+      if (clerkIdentity.name && isPlaceholder(next.name)) next.name = clerkIdentity.name;
+      if (clerkIdentity.avatarUrl && !next.avatarUrl) next.avatarUrl = clerkIdentity.avatarUrl;
+      // Persist so the corrected identity sticks (otherwise the stale cache reloads next mount).
+      try { localStorage.setItem('_sp_profile_v2', JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   }, [isClerkMode, clerkIdentity]);

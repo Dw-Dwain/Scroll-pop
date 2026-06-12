@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   Users,
+  Eye,
 } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
 import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
@@ -66,7 +67,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
   const [userProfile, setUserProfile] = React.useState(loadProfileFromStorage);
-  const { plan, isAdmin, isUnlimited, usage: liveUsage, monthlyViewLimit: liveLimit, loaded: planLoaded } = usePlan();
+  const { plan, isAdmin, isUnlimited, isViewer, usage: liveUsage, monthlyViewLimit: liveLimit, loaded: planLoaded } = usePlan();
   const isAgency = plan === 'agency' || isUnlimited;
 
   // ── Global theme ────────────────────────────────────────────
@@ -445,6 +446,17 @@ export const Layout: React.FC<LayoutProps> = ({
           }}
         >
           {!isFullScreenEditor && !isSplitPage && <PendingInvites />}
+          {!isFullScreenEditor && isViewer && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20,
+              padding: '10px 14px', borderRadius: 8, fontSize: 12.5,
+              background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+              color: 'var(--text-secondary)',
+            }}>
+              <Eye size={15} style={{ color: '#f59e0b', flexShrink: 0 }} />
+              <span>You have <strong>view-only</strong> access to this workspace. You can browse everything, but changes are disabled — ask an owner or admin for edit access.</span>
+            </div>
+          )}
           {children}
         </div>
       </main>
