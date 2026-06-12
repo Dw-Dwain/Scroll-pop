@@ -32,6 +32,13 @@ import { Campaign, CampaignElement, ElementType, PopupType, BrandStyle, Campaign
 import { PREBUILT_TEMPLATES } from './data/templates';
 import { TargetingRuleBuilder } from './TargetingRuleBuilder';
 
+// Deferred element types. These (product/review/qrcode/ticker/progressbar/couponcard) are in the
+// palette source + type system but are half-built: no property editors and the live snippet renders
+// them blank. Hidden from the palette so nobody can add an element that shows nothing on a customer
+// site. Flip to true once they have a real data model + editors + snippet renderers.
+// Roadmap: "render/audit gaps → 6 element types" (deferred Jun 13 2026).
+const WIP_ELEMENT_TYPES_ENABLED = false;
+
 interface SidebarLeftProps {
   campaign: Campaign;
   siblingCampaigns?: { id: string; name: string }[];
@@ -1385,7 +1392,8 @@ export default function SidebarLeft({
                   <span className="text-[9px] text-zinc-500 mt-0.5">Limited offer clock</span>
                 </button>
 
-                {/* 6. Product Box */}
+                {/* 6. Product Box — DEFERRED (hidden; see WIP_ELEMENT_TYPES_ENABLED) */}
+                {WIP_ELEMENT_TYPES_ENABLED && (
                 <button
                   onClick={() => onAddElement('product')}
                   className="flex flex-col items-center justify-center p-3 border border-zinc-700 rounded-md bg-zinc-800 hover:bg-zinc-700 hover:border-zinc-500 transition-all duration-150 text-zinc-100 cursor-pointer text-center group"
@@ -1394,8 +1402,10 @@ export default function SidebarLeft({
                   <span className="text-xs font-semibold">Product Card</span>
                   <span className="text-[9px] text-zinc-500 mt-0.5">Featured item node</span>
                 </button>
+                )}
 
-                {/* 7. Star Review */}
+                {/* 7. Star Review — DEFERRED (hidden; see WIP_ELEMENT_TYPES_ENABLED) */}
+                {WIP_ELEMENT_TYPES_ENABLED && (
                 <button
                   onClick={() => onAddElement('review')}
                   className="flex flex-col items-center justify-center p-3 border border-zinc-700 rounded-md bg-zinc-800 hover:bg-zinc-700 hover:border-zinc-500 transition-all duration-150 text-zinc-100 cursor-pointer text-center group"
@@ -1404,8 +1414,10 @@ export default function SidebarLeft({
                   <span className="text-xs font-semibold">Reviews</span>
                   <span className="text-[9px] text-zinc-500 mt-0.5">Proof star reviewer</span>
                 </button>
+                )}
 
-                {/* 8. QR Code */}
+                {/* 8. QR Code — DEFERRED (hidden; see WIP_ELEMENT_TYPES_ENABLED) */}
+                {WIP_ELEMENT_TYPES_ENABLED && (
                 <button
                   onClick={() => onAddElement('qrcode')}
                   className="flex flex-col items-center justify-center p-3 border border-zinc-700 rounded-md bg-zinc-800 hover:bg-zinc-700 hover:border-zinc-500 transition-all duration-150 text-zinc-100 cursor-pointer text-center group"
@@ -1414,6 +1426,7 @@ export default function SidebarLeft({
                   <span className="text-xs font-semibold">QR Code</span>
                   <span className="text-[9px] text-zinc-500 mt-0.5">Offline mobile scan</span>
                 </button>
+                )}
 
                 {/* 9. Urgent Notice */}
                 <button
@@ -1435,7 +1448,8 @@ export default function SidebarLeft({
                   <span className="text-[9px] text-zinc-500 mt-0.5">Brand graphic node</span>
                 </button>
 
-                {/* 11. Social Proof Ticker */}
+                {/* 11. Social Proof Ticker — DEFERRED (hidden; see WIP_ELEMENT_TYPES_ENABLED) */}
+                {WIP_ELEMENT_TYPES_ENABLED && (
                 <button
                   onClick={() => onAddElement('ticker')}
                   className="flex flex-col items-center justify-center p-3 border border-zinc-700 rounded-md bg-zinc-800 hover:bg-zinc-700 hover:border-zinc-500 transition-all duration-150 text-zinc-100 cursor-pointer text-center group"
@@ -1444,8 +1458,10 @@ export default function SidebarLeft({
                   <span className="text-xs font-semibold">Live Ticker</span>
                   <span className="text-[9px] text-zinc-500 mt-0.5">Social proof feed</span>
                 </button>
+                )}
 
-                {/* 12. Progress Bar */}
+                {/* 12. Progress Bar — DEFERRED (hidden; see WIP_ELEMENT_TYPES_ENABLED) */}
+                {WIP_ELEMENT_TYPES_ENABLED && (
                 <button
                   onClick={() => onAddElement('progressbar')}
                   className="flex flex-col items-center justify-center p-3 border border-zinc-700 rounded-md bg-zinc-800 hover:bg-zinc-700 hover:border-zinc-500 transition-all duration-150 text-zinc-100 cursor-pointer text-center group"
@@ -1454,8 +1470,10 @@ export default function SidebarLeft({
                   <span className="text-xs font-semibold">Progress Bar</span>
                   <span className="text-[9px] text-zinc-500 mt-0.5">Goal completion</span>
                 </button>
+                )}
 
-                {/* 13. Coupon Reveal Card */}
+                {/* 13. Coupon Reveal Card — DEFERRED (hidden; see WIP_ELEMENT_TYPES_ENABLED) */}
+                {WIP_ELEMENT_TYPES_ENABLED && (
                 <button
                   onClick={() => onAddElement('couponcard')}
                   className="flex flex-col items-center justify-center p-3 border border-zinc-700 rounded-md bg-zinc-800 hover:bg-zinc-700 hover:border-zinc-500 transition-all duration-150 text-zinc-100 cursor-pointer text-center group"
@@ -1464,6 +1482,7 @@ export default function SidebarLeft({
                   <span className="text-xs font-semibold">Coupon Card</span>
                   <span className="text-[9px] text-zinc-500 mt-0.5">Reveal promo code</span>
                 </button>
+                )}
 
                 {/* 14. Phone Input */}
                 <button
