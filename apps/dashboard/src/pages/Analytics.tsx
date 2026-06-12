@@ -428,7 +428,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
               },
             ];
           })().map(({ icon: Icon, label, value, sub, color, mono, empty }) => (
-            <div key={label} style={{
+            <div key={label} className="sp-metric" style={{
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 10,
