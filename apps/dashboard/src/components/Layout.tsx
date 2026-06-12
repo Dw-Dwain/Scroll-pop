@@ -406,7 +406,12 @@ export const Layout: React.FC<LayoutProps> = ({
         style={{
           flex: 1,
           overflowY: (isFullScreenEditor || isSplitPage) ? 'hidden' : 'auto',
-          background: 'var(--bg-root)',
+          // Premium, restrained backdrop: two faint accent glows (top-right + bottom-left) add depth
+          // and guide the eye toward content without competing with it. Editors/canvases stay clean.
+          background: (isFullScreenEditor || isSplitPage)
+            ? 'var(--bg-root)'
+            : 'radial-gradient(1000px 560px at 100% -5%, rgba(99,102,241,0.07), transparent 55%), radial-gradient(760px 520px at -5% 105%, rgba(99,102,241,0.045), transparent 50%), var(--bg-root)',
+          backgroundAttachment: 'fixed',
           display: 'flex',
           flexDirection: 'column',
         }}

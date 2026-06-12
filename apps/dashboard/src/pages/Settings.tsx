@@ -1145,7 +1145,7 @@ export const Settings: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8 }}>
                       <Zap size={14} style={{ color: 'var(--accent-500)', flexShrink: 0 }} />
                       <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        <strong>WordPress plugin coming soon</strong> — one-click install, auto-updates, and WooCommerce integration.
+                        Both methods above work today. A <strong>one-click WordPress plugin</strong> (auto-updates + WooCommerce integration) is on the way.
                       </span>
                     </div>
                   </div>
