@@ -36,6 +36,22 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
 
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [data, setData] = React.useState<Record<string, ExpData | 'loading'>>({});
+  const [creating, setCreating] = React.useState<string | null>(null);
+
+  // Create a variant B (seeded from the base design) and open it in the designer to differentiate.
+  const createVariant = async (campaignId: string) => {
+    setCreating(campaignId);
+    try {
+      const res = await authedFetch(`/variants`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId }),
+      });
+      if (!res.ok) { alert('Could not create the variant.'); return; }
+      const body = await res.json() as { data: { id: string } };
+      onNavigate(`/campaigns/${campaignId}/design?variant=${body.data.id}`);
+    } catch { alert('Could not create the variant.'); }
+    finally { setCreating(null); }
+  };
 
   const toggle = async (id: string) => {
     if (expanded === id) { setExpanded(null); return; }
@@ -103,7 +119,7 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
                     {d === 'loading' || !d ? (
                       <div className="skeleton" style={{ height: 60 }} />
                     ) : (
-                      <ExpResults data={d} onManage={() => onNavigate(`/campaigns/detail/${c.campaignId}`)} />
+                      <ExpResults data={d} creating={creating === c.campaignId} onCreate={() => void createVariant(c.campaignId)} onManage={() => onNavigate(`/campaigns/detail/${c.campaignId}`)} />
                     )}
                   </div>
                 )}
@@ -128,20 +144,24 @@ const Header: React.FC = () => (
   </div>
 );
 
-const ExpResults: React.FC<{ data: ExpData; onManage: () => void }> = ({ data, onManage }) => {
+const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => void; onManage: () => void }> = ({ data, creating, onCreate, onManage }) => {
   const { variants, results } = data;
   if (variants.length < 2) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          No A/B experiment yet — this campaign serves a single design.
+          No A/B test yet — this campaign serves a single design. Create a variant B and edit it to test a different design head-to-head.
         </span>
-        <button className="btn btn-secondary btn-sm" onClick={onManage}>
-          Add variants <ArrowRight size={12} style={{ marginLeft: 4 }} />
+        <button className="btn btn-primary btn-sm" disabled={creating} onClick={onCreate} style={{ flexShrink: 0 }}>
+          {creating ? 'Creating…' : <>Create A/B test <ArrowRight size={12} style={{ marginLeft: 4 }} /></>}
         </button>
       </div>
     );
   }
+
+  // A/B variants seed identical from the base design — flag when none has been differentiated yet.
+  const allIdentical = variants.length >= 2 &&
+    variants.every((v) => JSON.stringify(v.config ?? {}) === JSON.stringify(variants[0]?.config ?? {}));
 
   // Winner = highest conversion rate among variants with a meaningful sample.
   let winnerId: string | null = null;
@@ -158,6 +178,12 @@ const ExpResults: React.FC<{ data: ExpData; onManage: () => void }> = ({ data, o
 
   return (
     <div>
+      {allIdentical && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-raised)', border: '1px solid var(--status-warning)', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+          <span>⚠️ All variants share the same design, so there's nothing to compare yet. Edit a variant to make it different.</span>
+          <button className="btn btn-secondary btn-sm" onClick={onManage} style={{ marginLeft: 'auto', flexShrink: 0 }}>Edit variants</button>
+        </div>
+      )}
       {/* Real visual copies of each A/B variant — the actual saved design, not just a weight. */}
       <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, marginBottom: 8 }}>
         Variant designs (live)
