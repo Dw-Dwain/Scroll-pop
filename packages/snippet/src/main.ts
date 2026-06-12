@@ -306,12 +306,12 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
         (window as unknown as {
           __sp_journey?: {
             run: (j: JourneyConfig[], ctx: {
-              show: (id: string) => boolean;
+              show: (id: string, bypassFreq?: boolean) => boolean;
               arm: (t: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
             }) => void;
           };
         }).__sp_journey?.run(journeys, {
-          show: (id: string) => { const c = campaignById.get(id); return c ? presentCampaign(c) : false; },
+          show: (id: string, bypassFreq?: boolean) => { const c = campaignById.get(id); return c ? presentCampaign(c, { bypassFreq: bypassFreq === true }) : false; },
           arm: (t, cb) => registerTrigger(
             { id: 'journey', type: t.type as TriggerConfig['type'], params: t.params ?? {} },
             () => cb(),
@@ -844,8 +844,8 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
 // ─── Sequence chaining (FU-7) ─────────────────────────────────────────────────
 // Present a campaign programmatically (used by the lazy journey.js runtime to chain to a
 // "next" popup). Respects the next campaign's frequency cap; beacons a 'sequence' impression.
-function presentCampaign(campaign: CampaignConfig): boolean {
-  if (!checkFrequencyCap(campaign.id, campaign.frequency)) return false;
+function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean }): boolean {
+  if (!opts?.bypassFreq && !checkFrequencyCap(campaign.id, campaign.frequency)) return false;
   resolveVariant(campaign);
   beaconEvent(campaign, 'impression', undefined, { triggerType: 'sequence' });
   renderPopup(campaign);

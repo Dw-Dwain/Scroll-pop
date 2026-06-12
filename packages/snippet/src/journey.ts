@@ -17,7 +17,9 @@
 
 interface JNode {
   id: string;
-  type: 'entry' | 'popup' | 'delay' | 'condition' | 'split' | 'goal';
+  // 'trigger' = a gate that waits for a scroll/dwell/exit-intent/inactivity/click trigger before
+  // advancing (config.trigger = { type, params }). Lets a chain interleave triggers between popups.
+  type: 'entry' | 'popup' | 'delay' | 'condition' | 'split' | 'goal' | 'trigger';
   campaignId?: string;
   config?: Record<string, any>;
   next: Record<string, string>;
@@ -32,7 +34,9 @@ interface JCompiled {
   nodes: JNode[];
 }
 interface JCtx {
-  show: (campaignId: string) => boolean;
+  // bypassFreq: skip the campaign's per-visitor frequency cap (used for a deliberate repeat of the
+  // same campaign within one journey run — the journey's own maxPopups/minDelay/no-repeat guard it).
+  show: (campaignId: string, bypassFreq?: boolean) => boolean;
   arm: (trigger: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
 }
 
@@ -44,6 +48,7 @@ interface RunState {
   nodes: Record<string, JNode>;
   shown: number;
   seen: Set<string>;
+  shownCampaigns: Set<string>; // campaigns already shown in this run (for repeat → cap bypass)
   active?: { nodeId: string; campaignId: string; timer?: ReturnType<typeof setTimeout> } | undefined;
 }
 
@@ -116,11 +121,15 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
       break;
 
     case 'popup': {
-      if (rs.seen.has(nodeId)) return;          // no-repeat (cycle guard)
+      if (rs.seen.has(nodeId)) return;          // no-repeat (cycle guard, per node)
       if (rs.shown >= maxPopups) return;         // anti-trap cap
       if (!node.campaignId) return;
       rs.seen.add(nodeId);
-      if (!_ctx.show(node.campaignId)) return;   // frequency-capped / blocked → stop this branch
+      // First appearance of a campaign respects its frequency cap; a deliberate REPEAT (same
+      // campaign on a later node) bypasses the cap so a chain can re-show it with a new delay.
+      const repeat = rs.shownCampaigns.has(node.campaignId);
+      if (!_ctx.show(node.campaignId, repeat)) return; // capped / blocked → stop this branch
+      rs.shownCampaigns.add(node.campaignId);
       rs.shown++;
       const active: NonNullable<RunState['active']> = { nodeId, campaignId: node.campaignId };
       rs.active = active;
@@ -139,6 +148,16 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
         ? minDelay
         : Math.max(minDelay, Number(node.config?.['seconds']) || minDelay);
       setTimeout(() => stepTo(rs, node.next['always']), secs * 1000);
+      break;
+    }
+
+    case 'trigger': {
+      // Wait for the configured trigger (scroll/dwell/exit-intent/inactivity/click), then advance.
+      // Misconfigured → pass straight through so the chain never dead-ends. Uses the core's arm()
+      // seam, which shares the exact trigger primitives standalone popups use.
+      const t = node.config?.['trigger'] as { type?: string; params?: Record<string, unknown> } | undefined;
+      if (!t || !t.type) { stepTo(rs, node.next['always']); break; }
+      _ctx.arm(t.params ? { type: t.type, params: t.params } : { type: t.type }, () => stepTo(rs, node.next['always']));
       break;
     }
 
@@ -163,7 +182,7 @@ function startJourney(j: JCompiled): void {
   if (!withinWindow(j.schedule)) return;         // outside the journey's scheduled window
   const nodes: Record<string, JNode> = {};
   for (const n of j.nodes) nodes[n.id] = n;
-  const rs: RunState = { j, nodes, shown: 0, seen: new Set() };
+  const rs: RunState = { j, nodes, shown: 0, seen: new Set(), shownCampaigns: new Set() };
   runs.push(rs);
   if (j.trigger && j.trigger.type) {
     _ctx!.arm(j.trigger, () => stepTo(rs, j.entryNodeId));
