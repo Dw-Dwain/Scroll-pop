@@ -717,6 +717,10 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
       case 'button': {
         const isSubmit = hasInput && !usedCtaId;
         usedCtaId = true;
+        // A transparent button is a full-card invisible click overlay (affiliate creatives) — it
+        // must NOT show a default "Continue" label over the image. Only labelled/visible buttons do.
+        const bgRaw = String(el.backgroundColor ?? '');
+        const transp = bgRaw === 'transparent' || bgRaw === 'rgba(0,0,0,0)' || bgRaw === '#00000000' || /,\s*0(\.0+)?\s*\)$/.test(bgRaw);
         const style = `${pos}display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;background:${elBgColor(el.backgroundColor, cssAccent)};color:${elColor(el.color, '#fff')};border-radius:${elBorderR(el.borderRadius, 8)}px;font-size:${cssNum(el.fontSize, 14)}px;font-weight:700;font-family:${ff};border:${el.borderWidth ? `${cssNum(el.borderWidth, 1)}px solid ${elColor(el.borderColor, 'transparent')}` : 'none'};`;
         if (isSubmit) {
           out.push(`<button type="button" id="cta-submit-btn" style="${style}">${escapeHtml(content || 'Submit')}</button>`);
@@ -726,7 +730,7 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
              rawHref = withKeyword(rawHref, smartProduct.title);
           }
           const href = safeHref(injectMacros(rawHref));
-          out.push(`<a id="cta-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" style="${style}">${escapeHtml(content || 'Continue')}</a>`);
+          out.push(`<a id="cta-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" style="${style}">${escapeHtml(content || (transp ? '' : 'Continue'))}</a>`);
         }
         break;
       }
@@ -760,11 +764,16 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
         break;
       }
       case 'close': {
-        // The default '✕' (U+2715) is missing from several UI fonts → rendered blank on the front
-        // end (but fine in the designer). Normalize any X-like glyph to '×' (U+00D7, present in every
-        // font); keep genuinely custom text (e.g. "Close").
-        const cc = content && !/^[×✕✖xX]$/.test(content.trim()) ? content : '×';
-        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:${elBgColor(el.backgroundColor, '#fff')};border:1px solid #E4E4E7;border-radius:${elBorderR(el.borderRadius, 999)}px;box-shadow:0 1px 4px rgba(0,0,0,.18);cursor:pointer;color:${elColor(el.color, cssText)};font-weight:700;font-size:${cssNum(el.fontSize, 16)}px;">${escapeHtml(cc)}</button>`);
+        // The default '✕' (U+2715) — and several other X marks — are missing from common UI fonts →
+        // rendered blank on the front end (but fine in the designer). Normalize ANY X-like glyph to
+        // '×' (U+00D7, present in every font); keep genuinely custom text (e.g. "Close").
+        const cc = content && !/^[×✕✖✗✘⨯╳xX✕＋]$/.test(content.trim()) ? content : '×';
+        const cbg = elBgColor(el.backgroundColor, '#fff');
+        let xcol = elColor(el.color, '#18181b'); // default DARK (the circle is white by default)
+        // Guarantee contrast: a white/near-white X on a white/transparent circle would be invisible.
+        const light = (c: string) => /^#(f{3}|f{6})$/i.test(c) || c === 'transparent';
+        if (light(cbg) && light(xcol)) xcol = '#18181b';
+        out.push(`<button type="button" id="close-btn" aria-label="Close" style="${pos}display:flex;align-items:center;justify-content:center;background:${cbg};border:1px solid #E4E4E7;border-radius:${elBorderR(el.borderRadius, 999)}px;box-shadow:0 1px 4px rgba(0,0,0,.18);cursor:pointer;color:${xcol};font-weight:700;font-size:${cssNum(el.fontSize, 16)}px;">${escapeHtml(cc)}</button>`);
         break;
       }
       case 'shape':
