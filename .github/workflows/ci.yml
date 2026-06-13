@@ -231,7 +231,7 @@ jobs:
         run: pnpm --filter @scrollpop/e2e run e2e
         env:
           CI: 'true'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
