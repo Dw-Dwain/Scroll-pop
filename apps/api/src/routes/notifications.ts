@@ -81,7 +81,23 @@ async function sendNotificationEmail(
   }
 }
 
-const PrefsBody = z.record(z.union([z.boolean(), z.string(), z.number()]));
+// Cookie-consent banner config (stored as a sibling key in the tenant prefs JSONB). Validated
+// here so the snippet can trust shape/colors; unknown keys are stripped by the object schema.
+const ConsentBannerSchema = z.object({
+  enabled: z.boolean().optional(),
+  message: z.string().max(500).optional(),
+  acceptText: z.string().max(60).optional(),
+  rejectText: z.string().max(60).optional(),
+  policyUrl: z.union([z.string().url().max(2048), z.literal('')]).optional(),
+  policyText: z.string().max(60).optional(),
+  position: z.enum(['bottom', 'top']).optional(),
+  accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+});
+
+// Notification prefs are a flat record of scalars, plus the optional structured consentBanner.
+const PrefsBody = z.record(z.union([z.boolean(), z.string(), z.number(), ConsentBannerSchema]));
 
 export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/v1/notifications — recent feed + unread count

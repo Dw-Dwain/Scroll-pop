@@ -502,6 +502,20 @@ export const Settings: React.FC = () => {
       .catch(() => showToast("Couldn't save notification preference to the server."));
   };
 
+  // ── Cookie-consent banner ────────────────────────────────────────────────
+  // Stored as a structured `consentBanner` object inside notification prefs (tenant JSONB).
+  // The edge config forwards it to the snippet, which renders the bar via its consent.js chunk.
+  const bannerVal = (k: string, dflt = '') =>
+    String((settings['consentBanner'] as Record<string, unknown> | undefined)?.[k] ?? dflt);
+  const bannerEnabled = !!((settings['consentBanner'] as Record<string, unknown> | undefined)?.['enabled']);
+  const handleBannerChange = (patch: Record<string, unknown>) => {
+    const current = (settings['consentBanner'] as Record<string, unknown> | undefined) ?? {};
+    const next = { ...current, ...patch };
+    persistSettings({ ...settings, consentBanner: next });
+    customMutate({ url: `${getApiBase()}/notification-prefs`, method: 'put', values: { consentBanner: next } })
+      .catch(() => showToast("Couldn't save consent banner settings."));
+  };
+
   // ── ESP Integrations (Klaviyo + Mailchimp) ────────────────────────────────
   type EspCfg = { enabled: boolean; apiKey: string; listId: string };
   const [klaviyo, setKlaviyo] = React.useState<EspCfg>({ enabled: false, apiKey: '', listId: '' });
@@ -730,18 +744,96 @@ export const Settings: React.FC = () => {
 
               {/* Visitor Privacy / Consent */}
               <SectionCard title="Visitor Privacy" subtitle="Consent controls for the analytics your popups collect.">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                   <div style={{ flex: 1, paddingRight: 24 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Require visitor consent before tracking</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.5 }}>
                       Strict opt-in (recommended for EU/UK). Popups still display, but no analytics or
-                      visitor ID is recorded until your consent banner grants it via
-                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, margin: '0 3px' }}>window.__sp_consent = true</code>
+                      visitor ID is recorded until consent is granted — via the banner below,
+                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, margin: '0 3px' }}>window.__sp_consent = true</code>,
                       or Google Consent Mode. Off by default (the snippet only honors Do-Not-Track and explicit denial).
                     </div>
                   </div>
                   <Toggle checked={!!settings['require_consent']} onChange={(v) => handleNotifChange('require_consent', v)} label="Require visitor consent" />
                 </div>
+
+                {/* Cookie-consent banner */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0 4px' }}>
+                  <div style={{ flex: 1, paddingRight: 24 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Show a cookie-consent banner</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.5 }}>
+                      Display a GDPR/CCPA Accept/Reject bar on a visitor&rsquo;s first session. Their choice is
+                      remembered, syncs with Google Consent Mode, and Global Privacy Control is auto-honored.
+                    </div>
+                  </div>
+                  <Toggle checked={bannerEnabled} onChange={(v) => handleBannerChange({ enabled: v })} label="Show consent banner" />
+                </div>
+
+                {bannerEnabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14, padding: 16, background: 'var(--bg-raised, var(--bg-overlay))', borderRadius: 8 }}>
+                    <FieldRow label="Banner message" hint="Main text shown in the consent bar.">
+                      <textarea
+                        className="input"
+                        style={{ fontFamily: 'inherit', minHeight: 56, resize: 'vertical' }}
+                        value={bannerVal('message')}
+                        maxLength={500}
+                        onChange={(e) => handleBannerChange({ message: e.target.value })}
+                        placeholder="We use cookies to analyze traffic and improve your experience. Do you accept?"
+                      />
+                    </FieldRow>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <FieldRow label="Accept button text">
+                        <input className="input" value={bannerVal('acceptText', 'Accept')} maxLength={60}
+                          onChange={(e) => handleBannerChange({ acceptText: e.target.value })} placeholder="Accept" />
+                      </FieldRow>
+                      <FieldRow label="Reject button text">
+                        <input className="input" value={bannerVal('rejectText', 'Reject')} maxLength={60}
+                          onChange={(e) => handleBannerChange({ rejectText: e.target.value })} placeholder="Reject" />
+                      </FieldRow>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <FieldRow label="Privacy policy URL" hint="Optional — shown as a link.">
+                        <input className="input" type="url" value={bannerVal('policyUrl')}
+                          onChange={(e) => handleBannerChange({ policyUrl: e.target.value })} placeholder="https://yoursite.com/privacy" />
+                      </FieldRow>
+                      <FieldRow label="Policy link text">
+                        <input className="input" value={bannerVal('policyText', 'Privacy Policy')} maxLength={60}
+                          onChange={(e) => handleBannerChange({ policyText: e.target.value })} placeholder="Privacy Policy" />
+                      </FieldRow>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: 12, alignItems: 'end' }}>
+                      <FieldRow label="Position">
+                        <select className="input" value={bannerVal('position', 'bottom')}
+                          onChange={(e) => handleBannerChange({ position: e.target.value })}>
+                          <option value="bottom">Bottom</option>
+                          <option value="top">Top</option>
+                        </select>
+                      </FieldRow>
+                      <FieldRow label="Accent">
+                        <input type="color" value={bannerVal('accentColor', '#6366f1')}
+                          onChange={(e) => handleBannerChange({ accentColor: e.target.value })}
+                          style={{ height: 36, width: '100%', cursor: 'pointer', padding: 2, borderRadius: 6, border: '1px solid var(--border-default)' }} />
+                      </FieldRow>
+                      <FieldRow label="Background">
+                        <input type="color" value={bannerVal('backgroundColor', '#111827')}
+                          onChange={(e) => handleBannerChange({ backgroundColor: e.target.value })}
+                          style={{ height: 36, width: '100%', cursor: 'pointer', padding: 2, borderRadius: 6, border: '1px solid var(--border-default)' }} />
+                      </FieldRow>
+                      <FieldRow label="Text">
+                        <input type="color" value={bannerVal('textColor', '#f9fafb')}
+                          onChange={(e) => handleBannerChange({ textColor: e.target.value })}
+                          style={{ height: 36, width: '100%', cursor: 'pointer', padding: 2, borderRadius: 6, border: '1px solid var(--border-default)' }} />
+                      </FieldRow>
+                    </div>
+
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                      Changes publish to the edge on your next campaign publish, or within the config cache window.
+                    </div>
+                  </div>
+                )}
               </SectionCard>
 
               </div>
