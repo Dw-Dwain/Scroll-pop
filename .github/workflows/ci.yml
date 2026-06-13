@@ -15,7 +15,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
@@ -29,7 +29,7 @@ jobs:
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
@@ -43,7 +43,7 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
@@ -65,7 +65,7 @@ jobs:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
@@ -86,7 +86,7 @@ jobs:
     name: Snippet Size Budgets (core ≤10KB · lazy chunks capped)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
@@ -143,7 +143,7 @@ jobs:
     name: No history.* / popstate in snippet
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check for banned APIs in snippet source
         run: |
           BANNED_PATTERNS=(
@@ -172,7 +172,7 @@ jobs:
     name: Migration Safety Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Check for destructive SQL in new migrations
@@ -215,7 +215,7 @@ jobs:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
@@ -244,7 +244,7 @@ jobs:
     needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Deploy to Fly
         run: |
@@ -268,7 +268,7 @@ jobs:
     needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
@@ -336,7 +336,7 @@ jobs:
     needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with: { version: '${{ env.PNPM_VERSION }}' }
       - uses: actions/setup-node@v6
