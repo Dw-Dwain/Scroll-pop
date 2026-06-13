@@ -1,0 +1,35 @@
+# Dependabot — automated dependency & GitHub Actions update PRs + security alerts.
+# Supports SOC 2 CC6.8 / CC7.1 (vulnerability management) by keeping dependencies patched
+# continuously, between the CI dependency-scan runs. Security updates are raised automatically
+# regardless of the schedule below.
+version: 2
+updates:
+  # JavaScript/TypeScript dependencies (pnpm workspace — the root manifest covers the monorepo).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk dev/minor/patch bumps into a single PR to cut review noise.
+      dev-and-minor:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+
+  # WordPress plugin is PHP (Composer) — include if/when it declares composer dependencies.
+  # - package-ecosystem: composer
+  #   directory: "/packages/wp-plugin/scrollpop"
+  #   schedule: { interval: weekly }
+
+  # Keep the GitHub Actions used in CI/CD patched (pinned-action supply-chain hygiene).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - ci
