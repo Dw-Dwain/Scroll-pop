@@ -118,10 +118,26 @@ interface SiteConfig {
   siteId: string;
   plan: string;
   requireConsent?: boolean;
+  // Optional GDPR/CCPA cookie-consent bar. When enabled, the lazy consent.js chunk renders a
+  // banner on first visit and reports the visitor's Accept/Reject choice (persisted locally).
+  consentBanner?: ConsentBannerConfig;
   geo?: { country?: string }; // injected per-request by the edge Worker (CF-IPCountry)
   campaigns: CampaignConfig[];
   journeys?: JourneyConfig[];
   version: string;
+}
+
+interface ConsentBannerConfig {
+  enabled?: boolean;
+  message?: string;
+  acceptText?: string;
+  rejectText?: string;
+  policyUrl?: string;
+  policyText?: string;
+  position?: 'bottom' | 'top';
+  accentColor?: string;
+  backgroundColor?: string;
+  textColor?: string;
 }
 
 function getEdgeUrl(): string {
@@ -180,6 +196,9 @@ let _requireConsent = false; // strict per-tenant opt-in (set from config)
 // ─── Exclusion Guards ─────────────────────────────────────────────────────────
 // Evaluates if we should skip analytics tracking (but still show popups)
 function evaluateSkipTracking(): void {
+  // Recomputed from scratch each call so granting consent can flip tracking back ON
+  // (not just OFF) — the consent banner re-runs this after a visitor accepts.
+  _skipTracking = false;
   // Honor Global Privacy Control (legally recognized under CCPA/CPRA) and the
   // internal admin flag. We intentionally do NOT honor the legacy Do Not Track
   // signal: it's deprecated (W3C disbanded the working group, browsers dropped the
@@ -203,6 +222,49 @@ function evaluateSkipTracking(): void {
   if (w.__sp_consent === false || cm === 'denied' || (_requireConsent && w.__sp_consent !== true && cm !== 'granted')) {
     _skipTracking = true;
   }
+}
+
+// ─── Cookie-consent banner ────────────────────────────────────────────────────
+// When the site enables consentBanner, show a GDPR/CCPA consent bar on first visit
+// (rendered by the lazy consent.js chunk in its own closed Shadow DOM). The visitor's
+// choice is persisted locally and re-applied on return visits. Granting flips
+// window.__sp_consent on and re-evaluates tracking; rejecting keeps analytics off.
+// Honors Global Privacy Control as an automatic opt-out (never shows the bar).
+const CONSENT_CHOICE_KEY = '__sp_consent_choice';
+function initConsent(cfg: SiteConfig): void {
+  const banner = cfg.consentBanner;
+  if (!banner?.enabled) return;
+
+  const apply = (granted: boolean): void => {
+    (window as any).__sp_consent = granted;
+    // Mirror the choice into Google Consent Mode v2 if gtag is present on the host page.
+    const g = (window as any).gtag;
+    if (typeof g === 'function') {
+      const v = granted ? 'granted' : 'denied';
+      g('consent', 'update', { analytics_storage: v, ad_storage: v, ad_user_data: v, ad_personalization: v });
+    }
+    evaluateSkipTracking();
+  };
+  const store = (v: 'granted' | 'denied'): void => {
+    try { localStorage.setItem(CONSENT_CHOICE_KEY, v); } catch { /* private mode */ }
+  };
+
+  // GPC is a legally recognized opt-out (CCPA/CPRA): record denial, never nag with the bar.
+  if ((navigator as any).globalPrivacyControl === true) { store('denied'); return apply(false); }
+
+  let prior: string | null = null;
+  try { prior = localStorage.getItem(CONSENT_CHOICE_KEY); } catch { /* private mode */ }
+  if (prior === 'granted') return apply(true);
+  if (prior === 'denied') return apply(false);
+
+  // No prior choice → show the banner. Guard on the chunk's global so a blocked/failed
+  // fetch degrades gracefully (the existing consent gate still governs tracking).
+  void loadChunk('consent.js').then(() => {
+    (window as any).__sp_consent_banner?.show(banner, (granted: boolean) => {
+      store(granted ? 'granted' : 'denied');
+      apply(granted);
+    });
+  });
 }
 
 // Returns true if the snippet should abort entirely (e.g. bots)
@@ -268,6 +330,8 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     // Strict opt-in: popups still render, but record no analytics until consent is
     // granted. Re-evaluate now that we know the tenant's requireConsent setting.
     if (config.requireConsent) { _requireConsent = true; evaluateSkipTracking(); }
+    // Cookie-consent bar: apply a returning visitor's stored choice, or show the banner.
+    initConsent(config);
     console.log('[ScrollPop] Config loaded successfully:', config);
 
     if (!config.campaigns || config.campaigns.length === 0) {
@@ -306,12 +370,12 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
         (window as unknown as {
           __sp_journey?: {
             run: (j: JourneyConfig[], ctx: {
-              show: (id: string) => boolean;
+              show: (id: string, bypassFreq?: boolean) => boolean;
               arm: (t: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
             }) => void;
           };
         }).__sp_journey?.run(journeys, {
-          show: (id: string) => { const c = campaignById.get(id); return c ? presentCampaign(c) : false; },
+          show: (id: string, bypassFreq?: boolean) => { const c = campaignById.get(id); return c ? presentCampaign(c, { bypassFreq: bypassFreq === true }) : false; },
           arm: (t, cb) => registerTrigger(
             { id: 'journey', type: t.type as TriggerConfig['type'], params: t.params ?? {} },
             () => cb(),
@@ -844,8 +908,8 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
 // ─── Sequence chaining (FU-7) ─────────────────────────────────────────────────
 // Present a campaign programmatically (used by the lazy journey.js runtime to chain to a
 // "next" popup). Respects the next campaign's frequency cap; beacons a 'sequence' impression.
-function presentCampaign(campaign: CampaignConfig): boolean {
-  if (!checkFrequencyCap(campaign.id, campaign.frequency)) return false;
+function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean }): boolean {
+  if (!opts?.bypassFreq && !checkFrequencyCap(campaign.id, campaign.frequency)) return false;
   resolveVariant(campaign);
   beaconEvent(campaign, 'impression', undefined, { triggerType: 'sequence' });
   renderPopup(campaign);
@@ -992,6 +1056,9 @@ function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   host.setAttribute('role', 'dialog');
   host.setAttribute('aria-modal', 'true');
   host.setAttribute('aria-label', design.headline);
+  // A11y: remember what had focus on the host page so we can restore it when the modal closes
+  // (WCAG 2.4.3 Focus Order — focus must return somewhere sensible, not the top of the document).
+  const prevFocus = document.activeElement as HTMLElement | null;
   document.body.appendChild(host);
 
   // Attach Shadow DOM — CSS isolation
@@ -1075,7 +1142,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   // Popup Container
   // --sp-ar lets the mobile media query scale the popup to the viewport while keeping the design's
   // aspect ratio (so a fixed-size creative shrinks to fit instead of overflowing/zooming the page).
-  htmlChunks.push(`<div class="popup" role="dialog" id="popup-card" style="--sp-ar:${cssNum(mainStep?.width, 360)}/${cssNum(mainStep?.height, 520)};">`);
+  htmlChunks.push(`<div class="popup" role="dialog" aria-modal="true" tabindex="-1" id="popup-card" style="--sp-ar:${cssNum(mainStep?.width, 360)}/${cssNum(mainStep?.height, 520)};">`);
   // Default close button — skipped in element mode when the design includes its own close element.
   if (design.showCloseButton && !hasCloseEl) {
     htmlChunks.push('<button class="close-btn" id="close-btn" aria-label="Close">✕</button>');
@@ -1135,6 +1202,33 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   const reopenMax = safeCssInt((design as any).uiTriggers?.reopenMaxTimes, 0, 20, 1);
   let reopens = 0;
 
+  // ─── Accessibility: keyboard focus trap + Esc dismiss (WCAG 2.1 SC 2.1.2 / 4.1.2) ──
+  // The popup is a modal dialog, so keyboard focus is kept inside it while open — but ALWAYS
+  // escapable via Esc or the close control, which is exactly what SC 2.1.2 ("No Keyboard Trap")
+  // requires (trapping is permitted only when a discoverable exit exists). Focus is moved into
+  // the dialog on open and restored to the host page on close. Listener lives on the closed
+  // shadow root for the popup's lifetime; it self-guards while minimised to the teaser.
+  const FOCUS_SEL =
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  const focusables = () =>
+    Array.from(shadow.querySelectorAll<HTMLElement>(FOCUS_SEL)).filter((el) => el.getClientRects().length > 0);
+  const focusFirst = () => {
+    const f = focusables();
+    try { (f[0] || popupCard || host).focus(); } catch { /* element not focusable — ignore */ }
+  };
+  const onKeydown = (e: KeyboardEvent) => {
+    if (!popupCard || popupCard.style.display === 'none') return; // minimised to teaser → no trap
+    if (e.key === 'Escape') { e.stopPropagation(); dismiss(true); return; }
+    if (e.key !== 'Tab') return;
+    const f = focusables();
+    if (f.length === 0) { e.preventDefault(); return; }
+    const first = f[0]!, last = f[f.length - 1]!;
+    const active = shadow.activeElement as HTMLElement | null;
+    if (e.shiftKey && (active === first || !active || !shadow.contains(active))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  };
+  shadow.addEventListener('keydown', onKeydown as EventListener);
+
   // dismiss() — close the popup and minimise to the teaser badge.
   // Beacons the 'dismiss' event exactly once.
   let dismissed = false;
@@ -1151,6 +1245,8 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     if (popupCard) popupCard.style.display = 'none';
     if (overlay)   overlay.style.display = 'none';
     if (teaser)    teaser.style.display = 'flex';
+    // A11y: return keyboard focus to whatever the visitor was on before the popup stole it.
+    try { prevFocus?.focus?.(); } catch { /* element gone — ignore */ }
     if (!rage && reopenAfter > 0 && reopens < reopenMax) {
       reopens++;
       setTimeout(() => {
@@ -1171,6 +1267,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     if (popupCard) popupCard.style.display = 'block';
     if (overlay) overlay.style.display = 'block';
     if (teaser) teaser.style.display = 'none';
+    setTimeout(focusFirst, 60); // a11y: re-arm focus inside the dialog on re-open
   };
 
   // Switch to success congratulations screen state
@@ -1297,10 +1394,12 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     if (emailInput && (!emailVal || !emailVal.includes('@'))) {
       if (emailInput) {
         emailInput.style.borderColor = '#ef4444';
+        emailInput.setAttribute('aria-invalid', 'true'); // a11y: announce the error to AT
         emailInput.focus();
       }
       return;
     }
+    if (emailInput) emailInput.removeAttribute('aria-invalid');
     // Marketing-consent gate: if a required consent checkbox is present and unticked, block submit.
     const consentBox = shadow.getElementById('consent-checkbox') as HTMLInputElement | null;
     if (consentBox && consentBox.getAttribute('data-required') === '1' && !consentBox.checked) {
@@ -1317,6 +1416,9 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
       executeLeadSubmit();
     });
   }
+
+  // A11y: move keyboard focus into the dialog now that it has rendered and wired up.
+  setTimeout(focusFirst, 60);
 
   // Beacon view after 1s (user actually saw it)
   setTimeout(() => beaconEvent(campaign, 'view'), 1000);

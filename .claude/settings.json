@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(pnpm exec tsc --noEmit)",
+      "Bash(pnpm typecheck)",
+      "Bash(git fetch)",
+      "Bash(git fetch *)",
+      "mcp__Claude_Preview__preview_screenshot",
+      "mcp__Claude_Preview__preview_snapshot",
+      "mcp__Claude_Preview__preview_logs",
+      "mcp__Claude_Preview__preview_console_logs",
+      "mcp__Claude_Preview__preview_list",
+      "mcp__Claude_Preview__preview_network",
+      "mcp__Neon__list_projects",
+      "mcp__Neon__list_shared_projects",
+      "mcp__Neon__list_organizations"
+    ]
+  }
+}

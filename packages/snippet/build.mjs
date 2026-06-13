@@ -94,11 +94,20 @@ const journeyCtx = await esbuild.context({
   outfile: 'dist/journey.js',
 });
 
+// Cookie-consent banner lazy chunk — built separately; the core fetches it only when the site
+// config has consentBanner.enabled and the visitor has no stored choice. Budget: ≤3 KB gzip.
+const consentCtx = await esbuild.context({
+  ...sharedOpts,
+  entryPoints: ['src/consent.ts'],
+  outfile: 'dist/consent.js',
+});
+
 if (watch) {
   await ctx.watch();
   await spinCtx.watch();
   await targetingCtx.watch();
   await journeyCtx.watch();
+  await consentCtx.watch();
   console.log('Watching for changes...');
 } else {
   await ctx.rebuild();
@@ -109,5 +118,7 @@ if (watch) {
   await targetingCtx.dispose();
   await journeyCtx.rebuild();
   await journeyCtx.dispose();
-  console.log('Snippet built → dist/p.js + dist/spin.js + dist/targeting.js + dist/journey.js');
+  await consentCtx.rebuild();
+  await consentCtx.dispose();
+  console.log('Snippet built → dist/p.js + dist/spin.js + dist/targeting.js + dist/journey.js + dist/consent.js');
 }

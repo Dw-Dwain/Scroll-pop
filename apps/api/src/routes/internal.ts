@@ -68,6 +68,10 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
       // Strict per-tenant opt-in consent: when on, the snippet records no analytics
       // until the host grants consent. Stored in the tenant prefs JSONB (no migration).
       const requireConsent = !!((tenant?.notificationPrefs as Record<string, unknown> | undefined)?.['require_consent']);
+      // Optional GDPR/CCPA consent bar — stored alongside require_consent in the tenant prefs
+      // JSONB (no migration). Only forwarded to the snippet when the operator has enabled it.
+      const consentBanner = (tenant?.notificationPrefs as Record<string, unknown> | undefined)?.['consentBanner'] as
+        SiteConfigPayload['consentBanner'] | undefined;
 
       if (tenant && tenant.monthlyViewLimit > 0) {
         let monthlyViews = 0;
@@ -208,6 +212,7 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
         siteId: site.id,
         plan: (tenant?.plan ?? 'free') as SiteConfigPayload['plan'],
         requireConsent,
+        ...(consentBanner?.enabled ? { consentBanner } : {}),
         ...(compiledJourneys.length ? { journeys: compiledJourneys as NonNullable<SiteConfigPayload['journeys']> } : {}),
         // Internal (edge-only) — the Worker enforces the cap on every request in real time
         // then strips these before responding to the browser. This closes the up-to-60s

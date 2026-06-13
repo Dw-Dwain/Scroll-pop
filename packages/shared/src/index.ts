@@ -272,6 +272,20 @@ export interface SiteConfigPayload {
   plan: 'free' | 'starter' | 'growth' | 'scale' | 'agency';
   /** Strict opt-in: when true the snippet records no analytics until the host grants consent. */
   requireConsent?: boolean;
+  /** Optional GDPR/CCPA cookie-consent bar, rendered by the snippet's lazy consent.js chunk.
+   *  Only present when the operator has enabled it. */
+  consentBanner?: {
+    enabled?: boolean;
+    message?: string;
+    acceptText?: string;
+    rejectText?: string;
+    policyUrl?: string;
+    policyText?: string;
+    position?: 'bottom' | 'top';
+    accentColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
+  };
   /** Internal (edge-only): the edge Worker uses these to enforce the monthly view cap in
    *  real time, then STRIPS them before the response reaches the browser. Never sent to the snippet. */
   tenantId?: string;
