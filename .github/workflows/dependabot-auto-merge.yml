@@ -1,0 +1,52 @@
+# Dependabot auto-merge
+#
+# Auto-merges LOW-RISK Dependabot PRs once all required CI checks pass:
+#   • patch & minor npm version updates
+#   • all GitHub Actions updates (CI infra — low risk, and CI-tested either way)
+#
+# Deliberately NOT auto-merged — these wait for a human review + manual merge:
+#   • major npm version bumps (version-update:semver-major)
+#   • security updates (Dependabot sets an advisory id — we review the fix ourselves)
+#
+# ── ONE-TIME REPO SETTINGS REQUIRED for this to actually merge ──────────────────
+#   1. Settings → General → Pull Requests → enable "Allow auto-merge".
+#   2. Branch protection on `main` with REQUIRED status checks (Lint, Typecheck, Unit
+#      Tests, etc.). Auto-merge only WAITS for CI when checks are required; without
+#      branch protection it would merge immediately. This is what makes it "once CI passes".
+#   3. Settings → Actions → General → enable "Allow GitHub Actions to create and
+#      approve pull requests".
+# Until #1 and #2 are set, this workflow runs but the merge will not complete.
+
+name: Dependabot auto-merge
+
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    # Only act on PRs raised by Dependabot. (pull_request_target runs in the base-repo
+    # context with a write token; we never check out or run the PR's code, so this is safe.)
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for low-risk updates
+        # ghsa-id is empty for normal version updates and set for security updates —
+        # so this gate skips security fixes (review those) AND major bumps (not matched below).
+        if: >-
+          ${{ steps.meta.outputs.ghsa-id == '' &&
+              (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+               steps.meta.outputs.update-type == 'version-update:semver-minor' ||
+               steps.meta.outputs.package-ecosystem == 'github_actions') }}
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
