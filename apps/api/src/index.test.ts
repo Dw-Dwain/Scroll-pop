@@ -123,12 +123,15 @@ vi.mock('./db/client.js', () => {
 });
 
 vi.mock('@upstash/redis', () => ({
-  Redis: vi.fn().mockImplementation(() => ({
-    incr: vi.fn().mockResolvedValue(1),
-    expire: vi.fn().mockResolvedValue(1),
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue('OK'),
-  })),
+  // vitest 4: a mock used with `new` must be a `function`/`class` — arrow fns aren't constructors.
+  Redis: vi.fn().mockImplementation(function () {
+    return {
+      incr: vi.fn().mockResolvedValue(1),
+      expire: vi.fn().mockResolvedValue(1),
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue('OK'),
+    };
+  }),
 }));
 
 vi.mock('@clerk/fastify', () => ({
@@ -177,17 +180,21 @@ vi.mock('./lib/cache-purge.js', () => ({
 }));
 
 vi.mock('svix', () => ({
-  Webhook: vi.fn().mockImplementation(() => ({
-    verify: vi.fn().mockImplementation(() => { throw new Error('Invalid signature'); }),
-  })),
+  Webhook: vi.fn().mockImplementation(function () {
+    return {
+      verify: vi.fn().mockImplementation(() => { throw new Error('Invalid signature'); }),
+    };
+  }),
 }));
 
 vi.mock('stripe', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    webhooks: {
-      constructEvent: vi.fn().mockImplementation(() => { throw new Error('No signatures found'); }),
-    },
-  })),
+  default: vi.fn().mockImplementation(function () {
+    return {
+      webhooks: {
+        constructEvent: vi.fn().mockImplementation(() => { throw new Error('No signatures found'); }),
+      },
+    };
+  }),
 }));
 
 // Set minimal env vars before importing the app

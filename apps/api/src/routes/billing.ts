@@ -10,7 +10,11 @@ import { redis } from '../index.js';
 function getStripe(): Stripe {
   const key = process.env['STRIPE_SECRET_KEY'];
   if (!key) throw new Error('STRIPE_SECRET_KEY not configured');
-  return new Stripe(key, { apiVersion: '2024-06-20' });
+  // Pin the Stripe API version explicitly. We intentionally keep '2024-06-20' (the version this
+  // billing/webhook code was written and tested against) even though the SDK now defaults to a
+  // newer one — bumping the API version changes response/webhook shapes and must be done with
+  // live testing, not a silent dependency bump. The cast satisfies the v22 SDK's narrowed type.
+  return new Stripe(key, { apiVersion: '2024-06-20' as NonNullable<NonNullable<ConstructorParameters<typeof Stripe>[1]>['apiVersion']> });
 }
 
 // Allowlist the post-checkout redirect targets. Stripe will redirect the paying user to

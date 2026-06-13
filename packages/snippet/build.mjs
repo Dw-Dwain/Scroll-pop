@@ -58,6 +58,11 @@ const sharedOpts = {
   format: /** @type {'iife'} */ ('iife'),
   platform: /** @type {'browser'} */ ('browser'),
   target: ['es2020', 'chrome80', 'firefox75', 'safari13'],
+  // esbuild 0.28 over-eagerly tries to down-level destructuring for this target set (and then
+  // errors because it can't) — even though every one of these targets supports destructuring
+  // natively. Tell esbuild it's supported so it leaves destructuring as-is. This preserves the
+  // exact browser-support floor we shipped under esbuild 0.21.
+  supported: { destructuring: true },
   define: { 'process.env.NODE_ENV': '"production"' },
   drop: /** @type {['console']} */ (['console']),
   legalComments: /** @type {'none'} */ ('none'),

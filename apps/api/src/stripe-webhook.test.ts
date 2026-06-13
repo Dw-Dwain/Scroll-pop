@@ -73,7 +73,7 @@ process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_placeholder';
 process.env['STRIPE_SECRET_KEY'] = 'sk_test_placeholder';
 process.env['STRIPE_WEBHOOK_SECRET'] = WEBHOOK_SECRET;
 
-const stripe = new Stripe('sk_test_placeholder', { apiVersion: '2024-06-20' });
+const stripe = new Stripe('sk_test_placeholder', { apiVersion: '2024-06-20' as NonNullable<NonNullable<ConstructorParameters<typeof Stripe>[1]>['apiVersion']> });
 
 // Deliberately non-canonical formatting (indentation + newlines) so the raw bytes
 // differ from JSON.stringify(parsed). An unhandled event type hits the `default`

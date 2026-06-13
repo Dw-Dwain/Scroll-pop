@@ -269,7 +269,8 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: { code: 'CONFIG_ERROR', message: 'Stripe not configured' } });
     }
 
-    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+    // Keep the '2024-06-20' API version (see billing.ts) — cast for the v22 SDK's narrowed type.
+    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' as NonNullable<NonNullable<ConstructorParameters<typeof Stripe>[1]>['apiVersion']> });
     let event: Stripe.Event;
 
     // Stripe requires the exact raw payload bytes for signature verification.
