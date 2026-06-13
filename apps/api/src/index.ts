@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
-import sanitizeHtml from 'sanitize-html';
+import { sanitizeEmailHtml } from './lib/email-html.js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { db, systemDb, sqlClient, rlsActive, disableRls } from './db/client.js';
 import { ensureEventPartitions } from './db/ensure-partitions.js';
@@ -822,16 +822,7 @@ async function bootstrap() {
                       // and goes straight to subscribers' inboxes. Strip to an allowlist so a
                       // malicious/compromised operator can't deliver <script>, tracking pixels,
                       // or phishing markup as stored XSS in outbound email.
-                      const htmlBody = sanitizeHtml(rawHtml, {
-                        allowedTags: ['p', 'br', 'b', 'i', 'strong', 'em', 'a', 'ul', 'ol', 'li',
-                                      'h1', 'h2', 'h3', 'img', 'div', 'span', 'table', 'tr', 'td'],
-                        allowedAttributes: {
-                          a: ['href', 'target', 'rel'],
-                          img: ['src', 'alt', 'width', 'height'],
-                          '*': ['style'],
-                        },
-                        allowedSchemes: ['https', 'http', 'mailto'],
-                      });
+                      const htmlBody = sanitizeEmailHtml(rawHtml);
                       await sendEmail({ to: recipientEmail, subject, html: htmlBody });
                     }
                   }
