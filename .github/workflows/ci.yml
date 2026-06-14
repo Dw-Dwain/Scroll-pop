@@ -58,10 +58,11 @@ jobs:
     # Maps to SOC 2 CC6.8 / CC7.1 (vulnerability management). Continuous coverage between runs
     # comes from Dependabot (.github/dependabot.yml).
     #
-    # ⚠️ REPORT-ONLY for now (does not fail the build). As of 2026-06-13 the repo has a pre-existing
-    # advisory backlog — 1 critical (vitest <3.2.6, dev-only Vitest-UI RCE) + highs (esbuild via
-    # drizzle-kit dev tooling). Once that backlog is cleared, flip this to a hard gate by removing
-    # the `|| true` on the critical step below (see SOC 2 control-mapping doc, CC7.1).
+    # CRITICAL advisories FAIL the build (SOC 2 CC7.1). HIGH and below are reported but
+    # non-blocking. As of 2026-06-14 the only remaining high is a dev-only transitive
+    # (esbuild <0.28.1 via drizzle-kit's deprecated @esbuild-kit loader — migration tooling, not the
+    # customer runtime). If a HIGH ever lands in the runtime dependency tree, promote it to a hard
+    # gate here too.
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
@@ -73,14 +74,13 @@ jobs:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Audit dependencies (report-only — high & critical)
+      - name: Audit dependencies (fail on critical, report high)
         run: |
-          echo "::group::High/critical advisories"
+          echo "::group::High advisories (reported, non-blocking)"
           pnpm audit --audit-level high || true
           echo "::endgroup::"
-          # TODO(security): once the advisory backlog is cleared, drop `|| true` to make
-          # CRITICAL advisories block the build.
-          pnpm audit --audit-level critical || true
+          # CRITICAL advisories block the build (no `|| true`).
+          pnpm audit --audit-level critical
 
   snippet-size-check:
     name: Snippet Size Budgets (core ≤10KB · lazy chunks capped)
