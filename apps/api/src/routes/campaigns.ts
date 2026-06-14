@@ -114,6 +114,10 @@ export const campaignRoutes: FastifyPluginAsync = async (fastify) => {
           deletedAt: campaigns.deletedAt,
           design: designs.config,
           kind: designs.kind,
+          // Number of triggers configured on this campaign. Lets the Journeys editor warn that a
+          // journey-step campaign's own triggers are ignored (they're stripped on serve — see
+          // lib/journey-config.ts). Correlated subquery so it doesn't disturb the design join.
+          triggerCount: sql<number>`(SELECT count(*)::int FROM ${triggers} WHERE ${triggers.campaignId} = ${campaigns.id} AND ${triggers.tenantId} = ${campaigns.tenantId})`,
         })
         .from(campaigns)
         .leftJoin(designs, eq(designs.campaignId, campaigns.id))
