@@ -5,6 +5,7 @@ import { eq, and, isNull, sql, gte, inArray } from 'drizzle-orm';
 import type { SiteConfigPayload } from '@scrollpop/shared';
 import crypto from 'node:crypto';
 import { redis } from '../index.js';
+import { stripJourneyStepTriggers } from '../lib/journey-config.js';
 
 /** Group rows by their campaignId into a Map for O(1) per-campaign assembly. */
 function groupByCampaignId<T extends { campaignId: string }>(rows: T[]): Map<string, T[]> {
@@ -200,6 +201,11 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
           };
         })
         .filter((c) => c !== null) as Record<string, unknown>[];
+
+      // Harden journey steps: strip independent triggers from any campaign referenced by an active
+      // journey, so it can ONLY be shown by its journey (never fire out of sequence). Done before
+      // the version hash so the cache key reflects it. See lib/journey-config.ts + snippet/journey.ts.
+      validCampaigns = stripJourneyStepTriggers(validCampaigns, compiledJourneys);
 
       // Generate a version hash for cache-busting (covers campaigns AND journeys).
       const version = crypto
