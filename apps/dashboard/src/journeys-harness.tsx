@@ -37,8 +37,10 @@ const SAMPLE_GRAPH = {
 };
 
 const CAMPAIGNS = [
-  { id: 'cmp_1', name: 'Welcome 50% Off', status: 'active', siteId: 'site_1' },
-  { id: 'cmp_2', name: 'Exit-Intent Voucher', status: 'active', siteId: 'site_1' },
+  // cmp_1 has its own triggers → selecting the popup node that uses it shows the "triggers ignored
+  // inside a journey" hint. cmp_2 has none → no hint (clean contrast for visual verification).
+  { id: 'cmp_1', name: 'Welcome 50% Off', status: 'active', siteId: 'site_1', triggerCount: 2 },
+  { id: 'cmp_2', name: 'Exit-Intent Voucher', status: 'active', siteId: 'site_1', triggerCount: 0 },
 ];
 
 const realFetch = window.fetch.bind(window);

@@ -5,7 +5,7 @@ import {
   type Node, type Edge, type Connection, type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, ArrowLeft, Rocket, Save, Trash2, Lock, Flag, MousePointerClick, Clock, GitBranch, Split, Target } from 'lucide-react';
+import { Plus, ArrowLeft, Rocket, Save, Trash2, Lock, Flag, MousePointerClick, Clock, GitBranch, Split, Target, Info } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
 import { useActiveClient } from '../hooks/useClients';
 import { authedFetch } from '../providers/dataProvider';
@@ -27,7 +27,7 @@ interface JourneyGraph {
   status: string; startsAt: string | null; endsAt: string | null; version: number;
   nodes: ApiNode[]; edges: ApiEdge[];
 }
-interface CampaignLite { id: string; name: string; status: string; siteId: string | null }
+interface CampaignLite { id: string; name: string; status: string; siteId: string | null; triggerCount?: number }
 
 type NodeData = { kind: NodeType; campaignId?: string | null; config: Record<string, unknown>; campaignName?: string };
 type SpNode = Node<NodeData>;
@@ -286,6 +286,22 @@ const NodeInspector: React.FC<{ node: SpNode; campaigns: CampaignLite[]; minDela
             {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}{c.status !== 'active' ? ` (${c.status})` : ''}</option>)}
           </select>
           <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Only <b>active</b> campaigns can publish. Connect this node's outputs for dismiss / convert / timeout.</div>
+          {(() => {
+            // Warn when the chosen campaign has its OWN triggers: those are stripped from the served
+            // config for journey-step campaigns (see apps/api/src/lib/journey-config.ts), so the
+            // journey — not the campaign's triggers — decides when this popup fires.
+            const sel = campaigns.find((c) => c.id === node.data.campaignId);
+            const n = sel?.triggerCount ?? 0;
+            if (n <= 0) return null;
+            return (
+              <div style={{ marginTop: 2, padding: '9px 11px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 6, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <Info size={13} style={{ color: 'var(--status-warning, #f59e0b)', marginTop: 1, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  Heads up: this campaign has its own {n} trigger{n > 1 ? 's' : ''}, which are <b>ignored inside a journey</b> — the journey controls when this popup fires. (They still apply if the campaign also runs standalone.)
+                </span>
+              </div>
+            );
+          })()}
         </>
       )}
 
