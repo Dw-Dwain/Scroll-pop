@@ -20,6 +20,10 @@ const snippetPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../packages/snippet/dist/p.js',
 );
+const journeyChunkPath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../packages/snippet/dist/journey.js',
+);
 
 const PUBLIC_KEY = 'e2e-test-key-00000000';
 const EDGE = 'https://edge.e2e.test';
@@ -65,6 +69,10 @@ async function bootSnippet(browser: import('@playwright/test').Browser, config: 
   );
   await page.route('**/e', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{"received":1}' }),
+  );
+  // The core lazy-loads the journey engine from <edge>/journey.js when the config has journeys.
+  await page.route('**/journey.js', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/javascript', headers: cors, body: fs.readFileSync(journeyChunkPath, 'utf8') }),
   );
 
   // Serve the fixture from a REAL origin (routed navigation) — about:blank/setContent is an
@@ -115,6 +123,70 @@ test.describe('snippet runtime', () => {
   test('renders nothing when the config has no campaigns', async ({ browser }) => {
     const { context, page } = await bootSnippet(browser, mockConfig({ campaigns: [] }));
     await page.waitForTimeout(6_000);
+    await expect(page.locator('[id^="__sp_popup_"]')).toHaveCount(0);
+    await context.close();
+  });
+});
+
+// ─── Journey engine end-to-end ───────────────────────────────────────────────
+// Exercises the real journey.js engine in a real browser: the core boots, loads the journey
+// chunk, arms the entry, shows step 1, and — because each step's `timeout` branch auto-advances —
+// chains to step 2 with no in-popup interaction (the popup is a closed Shadow DOM, so its buttons
+// aren't reachable from Playwright; the timeout branch is the interaction-free proof of chaining).
+//
+// The two campaigns have EMPTY triggers, so the ONLY way either can appear is the journey engine
+// calling ctx.show — i.e. a popup host appearing proves the journey advanced to that node.
+function journeyDesign(headline: string) {
+  return {
+    kind: 'modal', position: 'center', size: 'md',
+    backgroundColor: '#ffffff', textColor: '#111111', accentColor: '#6366f1',
+    borderRadius: 12, overlayEnabled: true, overlayOpacity: 0.5,
+    headline, ctaText: 'Go', ctaStyle: 'button',
+    showCloseButton: true, closeButtonPosition: 'top-right',
+    showDismissText: false, animation: 'fade', showPoweredBy: false,
+  };
+}
+
+function mockJourneyConfig() {
+  return {
+    siteId: 'e2e-site', plan: 'growth', version: 'e2e-journey',
+    campaigns: [
+      { id: 'jcmp-1', design: journeyDesign('Journey Step 1'), triggers: [], targeting: [], frequency: { frequency: 'always' }, affiliateSlots: [] },
+      { id: 'jcmp-2', design: journeyDesign('Journey Step 2'), triggers: [], targeting: [], frequency: { frequency: 'always' }, affiliateSlots: [] },
+    ],
+    journeys: [
+      {
+        id: 'jny-e2e', entryNodeId: 'entry', trigger: null, maxPopups: 4, minDelay: 5,
+        nodes: [
+          { id: 'entry', type: 'entry', next: { always: 'pop1' } },
+          { id: 'pop1', type: 'popup', campaignId: 'jcmp-1', config: { timeoutSeconds: 5 }, next: { timeout: 'pop2' } },
+          { id: 'pop2', type: 'popup', campaignId: 'jcmp-2', config: { timeoutSeconds: 5 }, next: { timeout: 'goal' } },
+          { id: 'goal', type: 'goal', config: { kind: 'conversion' }, next: {} },
+        ],
+      },
+    ],
+  };
+}
+
+test.describe('journey engine', () => {
+  test('chains step 1 → step 2 via the engine (entry → popup → timeout branch → next popup)', async ({ browser }) => {
+    const { context, page } = await bootSnippet(browser, mockJourneyConfig());
+
+    // Entry has no trigger → the journey starts at boot and shows step 1's campaign.
+    await expect(page.locator('[id="__sp_popup_jcmp-1"]'), 'journey step 1 should appear').toHaveCount(1, { timeout: 12_000 });
+    // Step 2's campaign has no triggers of its own, so its host can ONLY come from the journey's
+    // timeout branch advancing — i.e. proof the engine chained popup → popup end to end.
+    await expect(page.locator('[id="__sp_popup_jcmp-2"]'), 'journey step 2 should appear after the timeout branch').toHaveCount(1, { timeout: 15_000 });
+
+    await context.close();
+  });
+
+  test('a campaign in a journey does NOT self-trigger (only the engine shows it)', async ({ browser }) => {
+    // Same campaigns but NO journeys block → with empty triggers, nothing should ever render.
+    const cfg = mockJourneyConfig();
+    delete (cfg as Record<string, unknown>)['journeys'];
+    const { context, page } = await bootSnippet(browser, cfg);
+    await page.waitForTimeout(8_000);
     await expect(page.locator('[id^="__sp_popup_"]')).toHaveCount(0);
     await context.close();
   });
