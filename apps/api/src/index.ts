@@ -977,7 +977,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '18'; // v18: journeys graph tables (journeys, journey_nodes, journey_edges)
+  const SCHEMA_VERSION = '19'; // v19: journeys.targeting + journeys.frequency columns (page targeting + per-visitor frequency)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
