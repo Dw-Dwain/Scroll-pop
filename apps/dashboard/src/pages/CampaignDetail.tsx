@@ -552,6 +552,14 @@ function TriggersTargetingPanel({
   );
 }
 
+// Human-readable labels for the snippet's trigger_blocked reasons (the trigger debugger).
+// Unknown reasons fall back to the raw string so new reasons still render.
+const BLOCK_REASON_LABELS: Record<string, string> = {
+  frequency_cap: 'Frequency cap reached',
+  popup_open: 'Another popup was open',
+  unknown: 'Other',
+};
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNavigate }) => {
   const { data: campaignData, isLoading: isCampaignLoading } = useOne({ resource: 'campaigns', id: campaignId });
@@ -568,7 +576,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
     url: `${apiUrl}/campaigns/${campaignId}/design`, method: 'get',
   });
   const { data: diagnoseRes } = useCustom({
-    url: `${apiUrl}/journeys/${campaignId}/diagnose`, method: 'get',
+    url: `${apiUrl}/campaigns/${campaignId}/diagnose`, method: 'get',
     queryOptions: { retry: false }, errorNotification: false,
   });
   const { data: liveEventsRes } = useCustom({
@@ -814,13 +822,13 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { label: 'Rules evaluated', value: diagnose.rulesEvaluated },
-                { label: 'Fired',           value: diagnose.fired },
-                { label: 'Blocked',         value: diagnose.blocked },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                { label: 'Triggered', value: diagnose.rulesEvaluated, hint: 'trigger condition met' },
+                { label: 'Shown',     value: diagnose.fired,          hint: 'proceeded to display' },
+                { label: 'Blocked',   value: diagnose.blocked,        hint: 'suppressed before display' },
+              ].map(({ label, value, hint }) => (
+                <div key={label} title={hint} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)' }}>{value}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)' }}>{value ?? 0}</span>
                 </div>
               ))}
               {(diagnose.topBlockedReasons ?? []).length > 0 && (
@@ -828,7 +836,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Top blocked reasons</div>
                   {diagnose.topBlockedReasons?.map((r) => (
                     <div key={r.reason} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 3 }}>
-                      <span>{r.reason}</span>
+                      <span>{BLOCK_REASON_LABELS[r.reason] ?? r.reason}</span>
                       <span style={{ fontFamily: 'var(--font-mono)' }}>{r.count}</span>
                     </div>
                   ))}
