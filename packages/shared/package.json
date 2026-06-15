@@ -11,7 +11,7 @@
     "lint": "echo 'No lint configured for shared package'"
   },
   "dependencies": {
-    "zod": "^3.23.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.5.0"
