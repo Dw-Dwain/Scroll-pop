@@ -3,7 +3,7 @@
  * Plugin Name: ScrollPop
  * Plugin URI:  https://scrollpop.online
  * Description: Google-compliant scroll-triggered popup campaigns for affiliate marketing, lead generation, and donations.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      ScrollPop
  * Author URI:  https://scrollpop.online
  * License:     GPL-2.0-or-later
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
 }
 
-define( 'SCROLLPOP_VERSION', '1.0.0' );
+define( 'SCROLLPOP_VERSION', '1.0.1' );
 define( 'SCROLLPOP_PLUGIN_FILE', __FILE__ );
 define( 'SCROLLPOP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SCROLLPOP_CDN_URL', 'https://cdn.scrollpop.online' );

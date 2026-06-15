@@ -255,7 +255,9 @@ const WordPressConnectPanel: React.FC<{
   // copy after the zip is re-uploaded. Pin a version query param and bump it whenever the
   // plugin zip changes — this guarantees a fresh download (the cache key includes the query).
   // Keep in sync with packages/wp-plugin/scrollpop/scrollpop.php "Version:".
-  const PLUGIN_VERSION = '1.0.0';
+  // 1.0.1: bumped to evict the cached 1.0.0 R2 object, which had backslash path
+  // separators (Windows-built zip) and failed WP activation with "Plugin file does not exist."
+  const PLUGIN_VERSION = '1.0.1';
   const pluginDownloadUrl = `https://pub-0a090ba944ba46269b65a6cfbb0ed1f0.r2.dev/scrollpop-wp.zip?v=${PLUGIN_VERSION}`;
 
   return (
@@ -280,9 +282,25 @@ const WordPressConnectPanel: React.FC<{
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Step 1 — Install Plugin
         </div>
-        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 10px' }}>
-          Download and install the ScrollPop WordPress plugin, then activate it.
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+          Download the plugin, then in WordPress go to{' '}
+          <strong>Plugins → Add New → Upload Plugin</strong>, choose the{' '}
+          <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>.zip</code>, and click{' '}
+          <strong>Install Now → Activate</strong>.
         </p>
+
+        {/* Don't-unzip warning. Extracting the zip and uploading the resulting folder nests
+            scrollpop.php one level too deep (e.g. scrollpop-wp-1/scrollpop/scrollpop.php),
+            and WordPress activation fails with "Plugin file does not exist." */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 6, padding: '8px 10px', margin: '0 0 10px' }}>
+          <AlertCircle size={13} style={{ color: '#eab308', flexShrink: 0, marginTop: 1 }} />
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+            <strong>Upload the .zip exactly as downloaded — do not unzip or extract it first.</strong>{' '}
+            WordPress unzips it for you. Uploading an extracted folder makes activation fail with
+            “Plugin file does not exist.”
+          </span>
+        </div>
+
         <div style={{ display: 'flex', gap: 8 }}>
           <a
             href={pluginDownloadUrl}
