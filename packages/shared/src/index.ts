@@ -50,6 +50,18 @@ const safeUrl = z.string().url().refine(
   { message: 'URL must use http or https protocol' },
 );
 
+// Per-site saved affiliate links. Managed in Settings, surfaced in the campaign designer as a
+// picker that pre-fills an element's `href` (X-close ad link / CTA / affiliate buttons). Stored
+// as a JSONB array on `sites.affiliate_links`. The snippet renders the chosen URL through
+// safeHref — these are plain element hrefs, so no snippet change is needed.
+export const AffiliateLinkSchema = z.object({
+  id: z.string().uuid(),
+  label: z.string().min(1).max(80),
+  url: safeUrl,
+  // Optional click-tracker / redirect URL (e.g. a Rakuten linksynergy wrapper).
+  clickTracker: safeUrl.optional(),
+});
+
 export const AffiliateSlotSchema = z.object({
   id: z.string().uuid(),
   product_name: z.string().min(1).max(200),
@@ -252,6 +264,7 @@ export type Platform = z.infer<typeof Platform>;
 export type CampaignStatus = z.infer<typeof CampaignStatus>;
 export type DesignConfig = z.infer<typeof DesignConfigSchema>;
 export type AffiliateSlot = z.infer<typeof AffiliateSlotSchema>;
+export type AffiliateLink = z.infer<typeof AffiliateLinkSchema>;
 export type TriggerType = z.infer<typeof TriggerType>;
 export type TargetingKind = z.infer<typeof TargetingKind>;
 export type JourneyStatus = z.infer<typeof JourneyStatus>;

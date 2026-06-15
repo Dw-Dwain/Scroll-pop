@@ -20,6 +20,7 @@ import { ensureJourneysSchema } from './db/ensure-journeys.js';
 import { ensureCouponsSchema } from './db/ensure-coupons.js';
 import { ensureClientsSchema } from './db/ensure-clients.js';
 import { ensureTeamInvitesSchema } from './db/ensure-team-invites.js';
+import { ensureAffiliateLinksSchema } from './db/ensure-affiliate-links.js';
 import { ensureWebhooksSchema } from './db/ensure-webhooks.js';
 import { ensureIntegrationsSchema } from './db/ensure-integrations.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
@@ -977,7 +978,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '19'; // v19: journeys.targeting + journeys.frequency columns (page targeting + per-visitor frequency)
+  const SCHEMA_VERSION = '20'; // v20: sites.affiliate_links column (per-site saved affiliate links)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
@@ -1061,6 +1062,8 @@ async function bootstrap() {
     await ensureTeamInvitesSchema(app.log);
     // Ensure journeys graph tables + self-contained RLS (migration 0015).
     await ensureJourneysSchema(app.log);
+    // Ensure sites.affiliate_links column (per-site saved affiliate links).
+    await ensureAffiliateLinksSchema(app.log);
 
     if (redis) {
       // 24h TTL — long enough to cover normal redeploys, short enough that a schema version

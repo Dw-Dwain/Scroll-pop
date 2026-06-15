@@ -76,6 +76,15 @@ export interface CampaignElement {
   extraProps?: Record<string, unknown>;
 }
 
+/** A saved affiliate link for a site (managed in Settings → Affiliate links). Surfaced in the
+ *  designer as a picker that fills an element's `href`. Mirrors @scrollpop/shared AffiliateLinkSchema. */
+export interface AffiliateLink {
+  id: string;
+  label: string;
+  url: string;
+  clickTracker?: string;
+}
+
 export type CampaignStep = 'teaser' | 'main' | 'success';
 
 export interface CampaignStepConfig {
