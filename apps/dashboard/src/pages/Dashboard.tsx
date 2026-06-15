@@ -238,8 +238,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const prevImpr  = sumMetric(prev30, 'impressions');
   const prevViews = sumMetric(prev30, 'views');
   const prevClks  = sumMetric(prev30, 'clicks');
-  const prevCtr   = prevImpr > 0 ? (prevClks / prevImpr) * 100 : 0;
-  const currCtr   = currImpr > 0 ? (currClks / currImpr) * 100 : 0;
+  // Clamp the client-side fallback CTR ≤100% (raw click events can exceed impressions — multi-click
+  // per popup view; the server CTR is unique-visitor based). Only used until /overview loads.
+  const prevCtr   = prevImpr > 0 ? Math.min(prevClks / prevImpr, 1) * 100 : 0;
+  const currCtr   = currImpr > 0 ? Math.min(currClks / currImpr, 1) * 100 : 0;
 
   const kpis = [
     {
@@ -269,7 +271,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       delta: pctDelta(currCtr, prevCtr),
       suffix: '%',
       color: 'var(--data-4)',
-      spark: curr30.slice(-14).map((d) => d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0),
+      spark: curr30.slice(-14).map((d) => d.impressions > 0 ? Math.min(d.clicks / d.impressions, 1) * 100 : 0),
     },
   ];
 
