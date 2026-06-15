@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useList, useUpdate, useCustomMutation, useCustom } from '@refinedev/core';
 import { useOrganization } from '@clerk/clerk-react';
-import { getApiBase } from '../providers/dataProvider';
+import { getApiBase, authedFetch } from '../providers/dataProvider';
 import { usePlan } from '../hooks/usePlan';
 
 const STORAGE_KEY = '_sp_settings';
@@ -410,9 +410,26 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleResetAnalytics = () => {
-    // Events are an immutable append-only log; there is no reset endpoint. Don't fake it.
-    showToast("Resetting analytics isn't available — event history is immutable in this beta.");
+  const [resetting, setResetting] = React.useState(false);
+  const handleResetAnalytics = async () => {
+    if (!confirm('Permanently delete ALL analytics (impressions, clicks, conversions) for this organization?\n\nCampaigns, sites, and captured leads are kept. This cannot be undone.')) return;
+    setResetting(true);
+    try {
+      const res = await authedFetch('/analytics/reset', { method: 'POST', body: JSON.stringify({}) });
+      if (res.ok) {
+        const body = await res.json().catch(() => ({})) as { data?: { deleted?: number } };
+        showToast(`Analytics reset — ${(body.data?.deleted ?? 0).toLocaleString()} events deleted. Reloading…`);
+        setTimeout(() => window.location.reload(), 1200);
+      } else if (res.status === 403) {
+        showToast('Only an owner or admin can reset analytics.');
+      } else {
+        showToast(`Couldn't reset analytics (${res.status}).`);
+      }
+    } catch {
+      showToast('Reset failed — check your connection.');
+    } finally {
+      setResetting(false);
+    }
   };
 
   const handleDeleteOrg = () => {
@@ -1354,8 +1371,8 @@ export const Settings: React.FC = () => {
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Reset Analytics</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Permanently erase all impression, click, and conversion event data. Campaign configurations are preserved. Cannot be undone.</div>
                 </div>
-                <button type="button" onClick={handleResetAnalytics} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0, color: 'var(--status-error)', borderColor: 'rgba(239,68,68,0.3)' }}>
-                  <BarChart2 size={13} /> Reset Data
+                <button type="button" onClick={() => void handleResetAnalytics()} disabled={resetting} className="btn btn-secondary" style={{ gap: 6, flexShrink: 0, color: 'var(--status-error)', borderColor: 'rgba(239,68,68,0.3)' }}>
+                  <BarChart2 size={13} /> {resetting ? 'Resetting…' : 'Reset Data'}
                 </button>
               </div>
 
