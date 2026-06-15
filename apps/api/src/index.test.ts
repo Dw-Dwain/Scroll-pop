@@ -659,17 +659,19 @@ describe('Journey compile + validation (compileJourney)', () => {
     expect(r.errors.join(' ')).toMatch(/reachable/i);
   });
 
-  it('rejects a delay below the floor', async () => {
+  it('rejects a delay below the 1s floor but accepts 1s', async () => {
     const { compileJourney } = await import('./routes/journeys.js');
-    const r = compileJourney(
-      [entry(), { id: 'd', type: 'delay', config: { seconds: 2 }, posX: 0, posY: 0 }, goal()] as never,
+    const mk = (seconds: number) => compileJourney(
+      [entry(), { id: 'd', type: 'delay', config: { seconds }, posX: 0, posY: 0 }, goal()] as never,
       [
         { id: 'x1', sourceNodeId: 'e', targetNodeId: 'd', branch: 'always', config: {} },
         { id: 'x2', sourceNodeId: 'd', targetNodeId: 'g', branch: 'always', config: {} },
       ] as never,
     );
-    expect(r.ok).toBe(false);
-    expect(r.errors.join(' ')).toMatch(/at least/i);
+    const below = mk(0);
+    expect(below.ok).toBe(false);
+    expect(below.errors.join(' ')).toMatch(/at least/i);
+    expect(mk(1).ok).toBe(true); // 1s is now the configurable floor — operators can set it
   });
 
   it('rejects a self-loop edge', async () => {

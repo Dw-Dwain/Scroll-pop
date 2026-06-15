@@ -41,7 +41,7 @@ interface JCtx {
 }
 
 const DEFAULT_MAX_POPUPS = 4;
-const DEFAULT_MIN_DELAY = 5;
+const DEFAULT_MIN_DELAY = 1; // seconds; floor so popups can't fire truly back-to-back (operator-set 1s+)
 
 interface RunState {
   j: JCompiled;

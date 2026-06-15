@@ -21,7 +21,7 @@ import { purgeSiteConfigCache } from '../lib/cache-purge.js';
 
 // Runtime guardrails the snippet engine ALSO enforces (surfaced so the builder reflects limits).
 const JOURNEY_MAX_POPUPS = 4;   // hard cap on popups shown per journey run (anti-trap)
-const JOURNEY_MIN_DELAY = 5;    // seconds floor on any delay node
+const JOURNEY_MIN_DELAY = 1;    // seconds floor on any delay node (operators can set 1s+ per step)
 
 const since30d = () => {
   const d = new Date();

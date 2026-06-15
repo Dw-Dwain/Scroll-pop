@@ -358,7 +358,7 @@ export const Journeys: React.FC<JourneysProps> = () => {
   // saved journey never showed up on the list ("it says Saved but nothing's there"). refetch() is
   // called after create/delete and when closing the editor, so the list always reflects the latest.
   const [journeys, setJourneys] = React.useState<JourneyListItem[]>([]);
-  const [meta, setMeta] = React.useState<{ maxPopups: number; minDelaySeconds: number }>({ maxPopups: 4, minDelaySeconds: 5 });
+  const [meta, setMeta] = React.useState<{ maxPopups: number; minDelaySeconds: number }>({ maxPopups: 4, minDelaySeconds: 1 });
   const [isLoading, setIsLoading] = React.useState(true);
   const refetch = React.useCallback(async () => {
     if (!canAccess) { setIsLoading(false); return; }
