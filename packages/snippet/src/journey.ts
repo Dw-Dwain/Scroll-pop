@@ -51,7 +51,6 @@ interface RunState {
   nodes: Record<string, JNode>;
   shown: number;
   seen: Set<string>;
-  shownCampaigns: Set<string>; // campaigns already shown in this run (for repeat → cap bypass)
   active?: { nodeId: string; campaignId: string; timer?: ReturnType<typeof setTimeout> } | undefined;
 }
 
@@ -152,11 +151,13 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
       if (rs.shown >= maxPopups) return;         // anti-trap cap
       if (!node.campaignId) return;
       rs.seen.add(nodeId);
-      // First appearance of a campaign respects its frequency cap; a deliberate REPEAT (same
-      // campaign on a later node) bypasses the cap so a chain can re-show it with a new delay.
-      const repeat = rs.shownCampaigns.has(node.campaignId);
-      if (!_ctx.show(node.campaignId, repeat)) return; // capped / blocked → stop this branch
-      rs.shownCampaigns.add(node.campaignId);
+      // ALWAYS bypass the campaign's own frequency cap for journey-driven shows. A journey-step
+      // campaign's independent triggers are stripped at serve time, so it can ONLY be shown by the
+      // journey — its per-campaign cap (once_per_session/day/visitor, cooldown, rage-close) must NOT
+      // gate the journey, or the first popup silently stops re-showing on later page views (and the
+      // chain dead-ends). The journey's own controls govern: frequency (journeyRan), maxPopups, and
+      // the per-node no-repeat above.
+      if (!_ctx.show(node.campaignId, true)) return; // false only if the campaign id is unknown
       rs.shown++;
       if (rs.shown === 1) markJourneyRan(rs.j); // record the run once the first popup actually shows
       const active: NonNullable<RunState['active']> = { nodeId, campaignId: node.campaignId };
@@ -211,7 +212,7 @@ function startJourney(j: JCompiled): void {
   if (!withinWindow(j.schedule)) return;          // outside the journey's scheduled window
   const nodes: Record<string, JNode> = {};
   for (const n of j.nodes) nodes[n.id] = n;
-  const rs: RunState = { j, nodes, shown: 0, seen: new Set(), shownCampaigns: new Set() };
+  const rs: RunState = { j, nodes, shown: 0, seen: new Set() };
   runs.push(rs);
   if (j.trigger && j.trigger.type) {
     _ctx!.arm(j.trigger, () => stepTo(rs, j.entryNodeId));
