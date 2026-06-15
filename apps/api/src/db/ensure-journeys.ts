@@ -68,6 +68,9 @@ export async function ensureJourneysSchema(
       -- Self-heal for a journeys table created before the schedule columns existed.
       ALTER TABLE journeys ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ;
       ALTER TABLE journeys ADD COLUMN IF NOT EXISTS ends_at   TIMESTAMPTZ;
+      -- Page targeting (URL rules) + per-visitor frequency for the whole journey.
+      ALTER TABLE journeys ADD COLUMN IF NOT EXISTS targeting JSONB NOT NULL DEFAULT '[]';
+      ALTER TABLE journeys ADD COLUMN IF NOT EXISTS frequency TEXT  NOT NULL DEFAULT 'once_per_visitor';
 
       CREATE TABLE IF NOT EXISTS journey_nodes (
         id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -109,6 +109,11 @@ interface JourneyConfig {
   entryNodeId: string;
   trigger?: { type: string; params?: Record<string, unknown> } | null;
   schedule?: { startsAt?: string | null; endsAt?: string | null };
+  // Page targeting (URL rules) evaluated in the core before the journey is handed to the engine —
+  // empty/absent = all pages. Reuses the same evaluator campaigns use.
+  targeting?: TargetingRule[];
+  // every_page | once_per_session | once_per_visitor — gated inside the engine (journey.ts).
+  frequency?: string;
   maxPopups?: number;
   minDelay?: number;
   nodes: Array<{ id: string; type: string; campaignId?: string; config?: Record<string, unknown>; next: Record<string, string> }>;
@@ -341,9 +346,9 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
 
     // Lazy-load the advanced-targeting evaluator before we evaluate rules, but only if a
     // campaign actually uses one of its rule kinds (keeps it off the critical path otherwise).
-    const needsTargeting = config.campaigns.some(
-      (c) => c.targeting?.some((r) => ADVANCED_TARGET_KINDS.has(r.kind)),
-    );
+    const needsTargeting =
+      config.campaigns.some((c) => c.targeting?.some((r) => ADVANCED_TARGET_KINDS.has(r.kind))) ||
+      (config.journeys?.some((j) => j.targeting?.some((r) => ADVANCED_TARGET_KINDS.has(r.kind))) ?? false);
     if (needsTargeting) await loadChunk('targeting.js');
 
     for (const campaign of config.campaigns) {
@@ -365,7 +370,12 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     // so it never touches the core budget. Hand it the compiled graphs + the two core seams it
     // needs: show a campaign by id, and arm a trigger using the core's own trigger primitives.
     if (config.journeys && config.journeys.length) {
-      const journeys = config.journeys;
+      // Page targeting is evaluated HERE (in the core), reusing the same rule evaluator campaigns
+      // use — so a journey only reaches the engine on a page it's allowed to run on. The engine
+      // (journey.ts) handles per-visitor frequency. Schedule is still gated by the engine's
+      // withinWindow() on the served `schedule`.
+      const journeys = config.journeys.filter((j) => meetsTargetingRules(j.targeting ?? []));
+      if (!journeys.length) return;
       void loadChunk('journey.js').then(() => {
         (window as unknown as {
           __sp_journey?: {

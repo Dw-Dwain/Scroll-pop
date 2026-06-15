@@ -156,6 +156,11 @@ export const journeys = pgTable('journeys', {
   // Journey-level active window (whole flow only arms between these). Visitor-local time.
   startsAt: timestamp('starts_at', { withTimezone: true }),
   endsAt: timestamp('ends_at', { withTimezone: true }),
+  // Page targeting: URL rules ({kind,operator,value}) evaluated against the current page before the
+  // journey arms — empty = all pages. Mirrors campaign targeting_rules.
+  targeting: jsonb('targeting').notNull().default([]),
+  // How often the whole journey may run for one visitor: every_page | once_per_session | once_per_visitor.
+  frequency: text('frequency').notNull().default('once_per_visitor'),
   // Compiled graph snapshot served to the snippet, written on publish.
   compiled: jsonb('compiled').notNull().default({}),
   version: integer('version').notNull().default(1),
