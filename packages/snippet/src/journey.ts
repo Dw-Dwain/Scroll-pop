@@ -29,6 +29,9 @@ interface JCompiled {
   entryNodeId: string;
   trigger?: { type: string; params?: Record<string, unknown> } | null;
   schedule?: { startsAt?: string | null; endsAt?: string | null };
+  // How often the whole journey runs for one visitor: every_page | once_per_session |
+  // once_per_visitor (default). Page targeting is handled in the core before we ever see it.
+  frequency?: string;
   maxPopups?: number;
   minDelay?: number;
   nodes: JNode[];
@@ -57,6 +60,30 @@ let _ctx: JCtx | undefined;
 
 function ls(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
 function lsSet(key: string, v: string): void { try { localStorage.setItem(key, v); } catch { /* private mode */ } }
+function ss(key: string): string | null { try { return sessionStorage.getItem(key); } catch { return null; } }
+function ssSet(key: string, v: string): void { try { sessionStorage.setItem(key, v); } catch { /* private mode */ } }
+
+// Per-visitor journey frequency. every_page → no cap; once_per_session → sessionStorage flag;
+// once_per_day → localStorage stamped with the day number (re-arms next day); once_per_visitor
+// (default) → localStorage flag. The flag is set when the journey shows its first popup (see the
+// popup node), so an armed-but-never-fired journey isn't consumed.
+const dayNum = () => String(Math.floor(Date.now() / 86_400_000)); // UTC day index
+function journeyRan(j: JCompiled): boolean {
+  const f = j.frequency ?? 'once_per_visitor';
+  if (f === 'every_page') return false;
+  const k = '_sp_jf_' + j.id;
+  if (f === 'once_per_session') return !!ss(k);
+  if (f === 'once_per_day') return ls(k) === dayNum();
+  return !!ls(k); // once_per_visitor
+}
+function markJourneyRan(j: JCompiled): void {
+  const f = j.frequency ?? 'once_per_visitor';
+  if (f === 'every_page') return;
+  const k = '_sp_jf_' + j.id;
+  if (f === 'once_per_session') ssSet(k, '1');
+  else if (f === 'once_per_day') lsSet(k, dayNum());
+  else lsSet(k, '1');
+}
 
 // Journey-level active window, evaluated in the visitor's local time (mirrors design.schedule).
 function withinWindow(s?: { startsAt?: string | null; endsAt?: string | null }): boolean {
@@ -131,6 +158,7 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
       if (!_ctx.show(node.campaignId, repeat)) return; // capped / blocked → stop this branch
       rs.shownCampaigns.add(node.campaignId);
       rs.shown++;
+      if (rs.shown === 1) markJourneyRan(rs.j); // record the run once the first popup actually shows
       const active: NonNullable<RunState['active']> = { nodeId, campaignId: node.campaignId };
       rs.active = active;
       // 'timeout' branch — taken if the visitor neither dismisses nor converts in time.
@@ -170,7 +198,8 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
       break;
 
     case 'goal':
-      lsSet('_sp_j_' + rs.j.id, 'done'); // sticky: completed journeys never re-trigger
+      // Reaching the goal ends this run. Re-entry is governed by the journey frequency (marked when
+      // the first popup showed), so there's no separate completion flag.
       rs.active = undefined;
       break;
   }
@@ -178,8 +207,8 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
 
 function startJourney(j: JCompiled): void {
   if (!j || !Array.isArray(j.nodes) || !j.entryNodeId) return;
-  if (ls('_sp_j_' + j.id) === 'done') return;   // already completed for this visitor
-  if (!withinWindow(j.schedule)) return;         // outside the journey's scheduled window
+  if (journeyRan(j)) return;                      // per-visitor/session frequency already satisfied
+  if (!withinWindow(j.schedule)) return;          // outside the journey's scheduled window
   const nodes: Record<string, JNode> = {};
   for (const n of j.nodes) nodes[n.id] = n;
   const rs: RunState = { j, nodes, shown: 0, seen: new Set(), shownCampaigns: new Set() };

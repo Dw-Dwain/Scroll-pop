@@ -5,10 +5,11 @@ import {
   type Node, type Edge, type Connection, type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, ArrowLeft, Rocket, Save, Trash2, Lock, Flag, MousePointerClick, Clock, GitBranch, Split, Target, Info } from 'lucide-react';
+import { Plus, ArrowLeft, Rocket, Save, Trash2, Lock, Flag, MousePointerClick, Clock, GitBranch, Split, Target, Info, SlidersHorizontal, X } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
 import { useActiveClient } from '../hooks/useClients';
 import { authedFetch } from '../providers/dataProvider';
+import { TargetingRuleBuilder, type PageTargetingRule } from '../components/campaign-designer/TargetingRuleBuilder';
 
 interface JourneysProps { onNavigate: (path: string) => void }
 
@@ -22,11 +23,29 @@ interface JourneyListItem {
 }
 interface ApiNode { id: string; type: NodeType; campaignId: string | null; config: Record<string, unknown>; posX: number; posY: number }
 interface ApiEdge { id: string; sourceNodeId: string; targetNodeId: string; branch: Branch; config: Record<string, unknown> }
+interface ApiTargetingRule { kind: string; operator: 'include' | 'exclude'; value: Record<string, unknown> }
 interface JourneyGraph {
   id: string; name: string; description: string | null; siteId: string | null;
   status: string; startsAt: string | null; endsAt: string | null; version: number;
+  targeting?: ApiTargetingRule[]; frequency?: string;
   nodes: ApiNode[]; edges: ApiEdge[];
 }
+
+// Builder rule ({operator,matchType,value:string}) ⇄ API rule ({kind,operator,value:{pattern|url}})
+// — the SAME mapping the campaign editor uses, so journey + campaign page-targeting behave identically.
+const apiToPageRules = (t: ApiTargetingRule[] | undefined): PageTargetingRule[] =>
+  (t ?? []).filter((r) => r.kind === 'url_contains' || r.kind === 'url_exact' || r.kind === 'url_regex')
+    .map((r) => ({
+      operator: r.operator === 'exclude' ? 'exclude' : 'include',
+      matchType: r.kind === 'url_exact' ? 'exact' : r.kind === 'url_regex' ? 'regex' : 'contains',
+      value: String((r.value?.['pattern'] ?? r.value?.['url'] ?? '') || ''),
+    }));
+const pageRulesToApi = (rules: PageTargetingRule[]): ApiTargetingRule[] =>
+  rules.filter((r) => r.value.trim()).map((r) => {
+    const kind = r.matchType === 'exact' ? 'url_exact' : r.matchType === 'regex' ? 'url_regex' : 'url_contains';
+    const v = r.value.trim();
+    return { kind, operator: r.operator, value: kind === 'url_exact' ? { url: v } : { pattern: v } };
+  });
 interface CampaignLite { id: string; name: string; status: string; siteId: string | null; triggerCount?: number }
 
 type NodeData = { kind: NodeType; campaignId?: string | null; config: Record<string, unknown>; campaignName?: string };
@@ -84,6 +103,11 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
   const [selEdge, setSelEdge] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [status, setStatus] = React.useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  // Journey-level settings (page targeting + how often it runs per visitor).
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [savingSettings, setSavingSettings] = React.useState(false);
+  const [pageRules, setPageRules] = React.useState<PageTargetingRule[]>([]);
+  const [frequency, setFrequency] = React.useState<string>('once_per_visitor');
 
   // Load the graph.
   React.useEffect(() => {
@@ -93,6 +117,8 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
       if (!res.ok || !alive) return;
       const { data } = await res.json() as { data: JourneyGraph };
       setJourney(data);
+      setPageRules(apiToPageRules(data.targeting));
+      setFrequency(data.frequency ?? 'once_per_visitor');
       setNodes(data.nodes.map((n) => ({
         id: n.id, type: 'sp', position: { x: n.posX, y: n.posY },
         data: { kind: n.type, campaignId: n.campaignId, config: n.config || {}, campaignName: campaignName(n.campaignId) },
@@ -169,6 +195,19 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
     finally { setSaving(false); }
   };
 
+  const saveSettings = async () => {
+    setSavingSettings(true); setStatus(null);
+    try {
+      const res = await authedFetch(`/journeys/${journeyId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ targeting: pageRulesToApi(pageRules), frequency }),
+      });
+      if (res.ok) { setSettingsOpen(false); setStatus({ kind: 'ok', msg: '✓ Pages & frequency saved' }); }
+      else setStatus({ kind: 'err', msg: `Couldn't save settings (${res.status})` });
+    } catch { setStatus({ kind: 'err', msg: 'Settings save failed — check your connection' }); }
+    finally { setSavingSettings(false); }
+  };
+
   const selectedNode = nodes.find((n) => n.id === selNode) || null;
   const selectedEdge = edges.find((e) => e.id === selEdge) || null;
   const branchOptions: Branch[] = (() => {
@@ -216,10 +255,42 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
               border: `1px solid ${status.kind === 'ok' ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.35)'}`,
             }}>{status.msg}</span>
           )}
+          <button onClick={() => setSettingsOpen(true)} style={btn('ghost')} title="Pages & frequency"><SlidersHorizontal size={14} /> Pages &amp; frequency</button>
           <button onClick={save} disabled={saving} style={btn('ghost')}><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
           <button onClick={publish} disabled={saving} style={btn('primary')}><Rocket size={14} /> Publish</button>
         </div>
       </div>
+
+      {/* Journey settings modal — page targeting + per-visitor frequency. */}
+      {settingsOpen && (
+        <div
+          onClick={() => setSettingsOpen(false)}
+          style={{ position: 'absolute', inset: 0, zIndex: 20, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ ...floatCard, width: 440, maxWidth: '100%', maxHeight: '88%', overflowY: 'auto', padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <strong style={{ fontSize: 15, display: 'flex', alignItems: 'center', gap: 7 }}><SlidersHorizontal size={15} /> Journey settings</strong>
+              <button onClick={() => setSettingsOpen(false)} style={btn('ghost')}><X size={14} /></button>
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-muted)', margin: '4px 0 6px' }}>How often per visitor</div>
+            <select className="input" value={frequency} onChange={(e) => setFrequency(e.target.value)} style={{ width: '100%', fontSize: 13 }}>
+              <option value="every_page">Every page (each qualifying page view)</option>
+              <option value="once_per_session">Once per session</option>
+              <option value="once_per_day">Once per day</option>
+              <option value="once_per_visitor">Once per visitor</option>
+            </select>
+
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-muted)', margin: '16px 0 6px' }}>Pages</div>
+            <TargetingRuleBuilder rules={pageRules} onChange={setPageRules} />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+              <button onClick={() => setSettingsOpen(false)} style={btn('ghost')}>Cancel</button>
+              <button onClick={saveSettings} disabled={savingSettings} style={btn('primary')}>{savingSettings ? 'Saving…' : 'Save settings'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating palette (left) */}
       <div style={{ ...floatCard, position: 'absolute', top: 80, left: 12, width: 150, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 'calc(100% - 104px)', overflowY: 'auto', zIndex: 5 }}>

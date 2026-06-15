@@ -263,6 +263,8 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
         status: journey.status,
         startsAt: journey.startsAt,
         endsAt: journey.endsAt,
+        targeting: journey.targeting ?? [],
+        frequency: journey.frequency ?? 'once_per_visitor',
         version: journey.version,
         publishedAt: journey.publishedAt,
         nodes: nodes.map((n) => ({
@@ -329,6 +331,14 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
       status: z.enum(['draft', 'active', 'paused', 'archived']).optional(),
       startsAt: z.string().datetime().nullable().optional(),
       endsAt: z.string().datetime().nullable().optional(),
+      // Page targeting (URL rules, evaluated client-side) — empty array = all pages.
+      targeting: z.array(z.object({
+        kind: z.string().max(40),
+        operator: z.enum(['include', 'exclude']).default('include'),
+        value: z.record(z.unknown()).default({}),
+      })).max(20).optional(),
+      // How often the whole journey runs for one visitor.
+      frequency: z.enum(['every_page', 'once_per_session', 'once_per_day', 'once_per_visitor']).optional(),
     }).parse(request.body);
 
     const journey = await getJourney(request.tenantId, request.params.id);
@@ -341,14 +351,17 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
         ...(body.status !== undefined ? { status: body.status } : {}),
         ...(body.startsAt !== undefined ? { startsAt: body.startsAt ? new Date(body.startsAt) : null } : {}),
         ...(body.endsAt !== undefined ? { endsAt: body.endsAt ? new Date(body.endsAt) : null } : {}),
+        ...(body.targeting !== undefined ? { targeting: body.targeting } : {}),
+        ...(body.frequency !== undefined ? { frequency: body.frequency } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(journeys.id, journey.id), eq(journeys.tenantId, request.tenantId)))
       .returning();
 
-    // Status flips and schedule edits change what the snippet serves (schedule is injected live at
-    // serve-time, so a re-publish isn't required for the new window to take effect).
-    if (body.status !== undefined || body.startsAt !== undefined || body.endsAt !== undefined) {
+    // Status flips, schedule, targeting, and frequency edits all change what the snippet serves and
+    // are injected live at serve-time, so a re-publish isn't required for them to take effect.
+    if (body.status !== undefined || body.startsAt !== undefined || body.endsAt !== undefined ||
+        body.targeting !== undefined || body.frequency !== undefined) {
       await purgeForSite(journey.siteId);
     }
     return reply.send({ data: { id: updated!.id, name: updated!.name, status: updated!.status } });

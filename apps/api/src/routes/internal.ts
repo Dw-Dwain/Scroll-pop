@@ -184,10 +184,10 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
       // + same-site, so they're present in `validCampaigns` above and core.show(id) resolves.
       const journeyRows = await db.query.journeys.findMany({
         where: and(eq(journeys.siteId, site.id), eq(journeys.status, 'active'), isNull(journeys.deletedAt)),
-        columns: { compiled: true, startsAt: true, endsAt: true },
+        columns: { compiled: true, startsAt: true, endsAt: true, targeting: true, frequency: true },
       });
-      // Overlay the journey-level schedule LIVE (from the row, not the baked compile) so window
-      // edits take effect on the next cache purge without forcing a re-publish.
+      // Overlay the journey-level schedule, page targeting, and frequency LIVE (from the row, not the
+      // baked compile) so those edits take effect on the next cache purge without forcing a re-publish.
       const compiledJourneys = journeyRows
         .map((j) => {
           const c = j.compiled as Record<string, unknown>;
@@ -198,6 +198,8 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
               startsAt: j.startsAt ? j.startsAt.toISOString() : null,
               endsAt: j.endsAt ? j.endsAt.toISOString() : null,
             },
+            targeting: Array.isArray(j.targeting) ? j.targeting : [],
+            frequency: j.frequency ?? 'once_per_visitor',
           };
         })
         .filter((c) => c !== null) as Record<string, unknown>[];
