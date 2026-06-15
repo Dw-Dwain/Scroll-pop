@@ -53,7 +53,20 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const counts = Object.fromEntries(rows.map((r) => [r.eventType, r.count]));
     const impressions = counts['impression'] ?? 0;
     const clicks = counts['click'] ?? 0;
-    const ctr = impressions > 0 ? (clicks / impressions) : 0;
+
+    // CTR on UNIQUE visitors (distinct clickers / distinct people who saw it). A clicker necessarily
+    // saw the popup, so this is bounded ≤100%. Raw click EVENTS can exceed impressions — one popup
+    // view produces several clicks (the CTA + the 2-step X-close affiliate click) — which made the
+    // old clicks/impressions CTR read >100%.
+    const [uniq] = await db
+      .select({
+        reach:    sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
+        clickers: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
+      })
+      .from(events)
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), clientFilter));
+    const reach = uniq?.reach ?? 0;
+    const ctr = reach > 0 ? Math.min((uniq?.clickers ?? 0) / reach, 1) : 0;
 
     return reply.send({
       data: {
@@ -63,6 +76,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         clicks,
         dismissals: counts['dismiss'] ?? 0,
         conversions: counts['conversion'] ?? 0,
+        uniqueVisitors: reach,
+        uniqueClicks: uniq?.clickers ?? 0, // distinct people who clicked (≤ uniqueVisitors)
         ctr: parseFloat(ctr.toFixed(4)),
       },
     });
@@ -113,6 +128,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         views: sql<number>`count(*) filter (where ${events.eventType}::text = 'view')::int`,
         clicks: sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
         conversions: sql<number>`count(*) filter (where ${events.eventType}::text = 'conversion')::int`,
+        // Unique-visitor counts for a bounded CTR (see /analytics/overview for the why).
+        reach: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
+        clickers: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
       })
       .from(events)
       .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), notDeleted, clientFilter))
@@ -124,7 +142,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       views: r.views,
       clicks: r.clicks,
       conversions: r.conversions,
-      ctr: r.impressions > 0 ? parseFloat((r.clicks / r.impressions).toFixed(4)) : 0,
+      uniqueVisitors: r.reach,
+      ctr: r.reach > 0 ? parseFloat(Math.min(r.clickers / r.reach, 1).toFixed(4)) : 0,
     }));
 
     return reply.send({ data: withCtr });
@@ -157,7 +176,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         campaignId: r.campaignId,
         impressions: r.impressions,
         clicks: r.clicks,
-        ctr: r.impressions > 0 ? parseFloat((r.clicks / r.impressions).toFixed(4)) : 0,
+        // Clamp ≤100% — raw click events can exceed impressions (multi-click per popup view).
+        ctr: r.impressions > 0 ? parseFloat(Math.min(r.clicks / r.impressions, 1).toFixed(4)) : 0,
       }));
 
       return reply.send({ data: withCtr });
@@ -320,7 +340,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       purchases:        r.purchases,
       revenueCents:     r.revenueCents,
       revenueDollars:   +(r.revenueCents / 100).toFixed(2),
-      ctr:              r.impressions > 0 ? +(r.clicks / r.impressions * 100).toFixed(2) : 0,
+      ctr:              r.impressions > 0 ? +(Math.min(r.clicks / r.impressions, 1) * 100).toFixed(2) : 0,
       conversionRate:   r.impressions > 0 ? +(r.purchases / r.impressions * 100).toFixed(2) : 0,
       revenuePerPopup:  r.impressions > 0 ? +(r.revenueCents / r.impressions / 100).toFixed(4) : 0,
     })).sort((a, b) => b.revenueCents - a.revenueCents);
