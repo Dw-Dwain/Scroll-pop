@@ -448,7 +448,13 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
 
     const result = compileJourney(nodes, edges);
 
-    // Validate referenced campaigns are this tenant's, active, and on the journey's site.
+    // The journey is served per-site (internal.ts: eq(journeys.siteId, site.id)). Journeys are
+    // created with no site (POST /journeys takes none), so without this an active, published journey
+    // is NEVER served. Derive the site from the popup campaigns (which all live on one site) and
+    // stamp it on publish — no extra UI needed; re-publishing fixes an orphaned journey.
+    let resolvedSiteId = journey.siteId;
+
+    // Validate referenced campaigns are this tenant's, active, and all on the same site.
     if (result.ok && result.popupCampaignIds.length) {
       const found = await db.query.campaigns.findMany({
         where: and(
@@ -463,7 +469,18 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
         const c = foundById.get(cid);
         if (!c) result.errors.push('A popup references a campaign that no longer exists.');
         else if (c.status !== 'active') result.errors.push('A popup references a campaign that is not active — activate it first.');
-        else if (journey.siteId && c.siteId !== journey.siteId) result.errors.push('A popup references a campaign on a different site.');
+      }
+      // All popups must share one site; that site becomes (or must match) the journey's site.
+      const siteIds = new Set(found.map((c) => c.siteId).filter((s): s is string => !!s));
+      if (siteIds.size > 1) {
+        result.errors.push('All popups in a journey must be on the same site.');
+      } else if (siteIds.size === 1) {
+        const campaignSite = [...siteIds][0]!;
+        if (journey.siteId && journey.siteId !== campaignSite) {
+          result.errors.push('The journey is assigned to a different site than its popups.');
+        } else {
+          resolvedSiteId = campaignSite;
+        }
       }
       if (result.errors.length) result.ok = false;
     }
@@ -476,11 +493,13 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
 
     const compiled = { ...result.compiled, id: journey.id };
     const [updated] = await systemDb.update(journeys)
-      .set({ status: 'active', compiled, version: journey.version + 1, publishedAt: new Date(), updatedAt: new Date() })
+      .set({ status: 'active', siteId: resolvedSiteId, compiled, version: journey.version + 1, publishedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(journeys.id, journey.id), eq(journeys.tenantId, request.tenantId)))
       .returning();
 
-    await purgeForSite(journey.siteId);
+    // Purge both the old and resolved site so a re-homed journey clears its previous site's cache too.
+    await purgeForSite(resolvedSiteId);
+    if (journey.siteId && journey.siteId !== resolvedSiteId) await purgeForSite(journey.siteId);
     return reply.send({ data: { id: journey.id, status: updated!.status, version: updated!.version, publishedAt: updated!.publishedAt } });
   });
 
