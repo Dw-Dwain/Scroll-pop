@@ -952,7 +952,7 @@ function closePopupById(campaignId: string): void {
 // campaigns are trigger-stripped (only the journey ever shows them); the next show overwrites it.
 let _journeyMeta: { id: string; meta: Record<string, unknown> } | null = null;
 
-function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean; journeyMeta?: Record<string, unknown> }): boolean {
+function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean; journeyMeta?: Record<string, unknown> | undefined }): boolean {
   if (!opts?.bypassFreq && !checkFrequencyCap(campaign.id, campaign.frequency)) return false;
   if (_spVisible) return false; // one popup at a time — don't stack over a visible popup
   resolveVariant(campaign);
