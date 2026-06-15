@@ -77,6 +77,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         dismissals: counts['dismiss'] ?? 0,
         conversions: counts['conversion'] ?? 0,
         uniqueVisitors: reach,
+        uniqueClicks: uniq?.clickers ?? 0, // distinct people who clicked (≤ uniqueVisitors)
         ctr: parseFloat(ctr.toFixed(4)),
       },
     });

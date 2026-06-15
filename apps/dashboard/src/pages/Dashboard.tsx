@@ -12,7 +12,7 @@ type ApiSite = { id: string; verifiedAt?: string | null };
 type CampaignStatRow = { campaignId: string; impressions: number; views: number; clicks: number; conversions: number; ctr?: number };
 type RecentEvent = { eventType?: string; campaignId?: string; ts?: string; domain?: string };
 type DailyRow = { day: string; impressions: number; views: number; clicks: number; conversions: number };
-type OverviewData = { impressions: number; views: number; clicks: number; conversions: number; ctr?: number };
+type OverviewData = { impressions: number; views: number; clicks: number; conversions: number; ctr?: number; uniqueVisitors?: number; uniqueClicks?: number };
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
   if (!data.length) return null;
@@ -259,8 +259,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       spark: spark('views'),
     },
     {
+      // "Clicks" = unique people who clicked (distinct clickers), not raw click events — so it can't
+      // exceed reach and pairs sensibly with the unique-visitor CTR. Falls back to raw until /overview loads.
       label: 'Clicks',
-      value: overview?.clicks ?? currClks,
+      value: overview?.uniqueClicks ?? overview?.clicks ?? currClks,
       delta: pctDelta(currClks, prevClks),
       color: 'var(--data-3)',
       spark: spark('clicks'),
