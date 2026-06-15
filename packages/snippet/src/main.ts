@@ -195,6 +195,12 @@ const campaignById = new Map<string, CampaignConfig>();
 
 // Track when the snippet loaded so we can report time-on-page at trigger
 const _pageLoadTime = Date.now();
+
+// One-popup-at-a-time guard. True while a full popup is on screen; a new flow (another campaign or
+// journey) whose trigger fires meanwhile is suppressed rather than stacked. Claimed when a popup
+// renders, released when it's dismissed/converted — including before a journey advances, so a
+// journey's own step-to-step chain still flows. (Spin-wheel popups are exempt — see renderPopup.)
+let _spVisible = false;
 let _skipTracking = false;
 let _requireConsent = false; // strict per-tenant opt-in (set from config)
 
@@ -524,6 +530,13 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
       // Real block telemetry (Journeys diagnose): the trigger fired but display was suppressed
       // by the frequency cap. This is the one block reason decided client-side.
       beaconEvent(campaign, 'trigger_blocked', undefined, { reason: 'frequency_cap' });
+      return;
+    }
+    // One popup at a time: don't stack over a popup that's already on screen. The trigger is
+    // one-shot, so this campaign just won't show on this page (keeps multiple campaigns/journeys
+    // on one page from overlapping).
+    if (_spVisible) {
+      beaconEvent(campaign, 'trigger_blocked', undefined, { reason: 'popup_open' });
       return;
     }
     fired = true;
@@ -920,6 +933,7 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
 // "next" popup). Respects the next campaign's frequency cap; beacons a 'sequence' impression.
 function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean }): boolean {
   if (!opts?.bypassFreq && !checkFrequencyCap(campaign.id, campaign.frequency)) return false;
+  if (_spVisible) return false; // one popup at a time — don't stack over a visible popup
   resolveVariant(campaign);
   beaconEvent(campaign, 'impression', undefined, { triggerType: 'sequence' });
   renderPopup(campaign);
@@ -1018,11 +1032,13 @@ function launchSpinWheel(campaign: CampaignConfig): void {
 
 function renderPopup(campaign: CampaignConfig, impressionTime?: number): void {
   const { id: campaignId } = campaign;
-  // Spin-to-win: delegate entirely to the lazy-loaded spin chunk.
+  // Spin-to-win: delegate entirely to the lazy-loaded spin chunk. (Exempt from the one-at-a-time
+  // slot — spin.js owns its own teardown and can't release the core flag.)
   if ((campaign.design as any).kind === 'spin_wheel') {
     launchSpinWheel(campaign);
     return;
   }
+  _spVisible = true; // claim the single on-screen popup slot (released on dismiss/convert)
   const { design, affiliateSlots } = resolveVariant(campaign);
   const _impressionTs = Date.now();
   const getDisplayDuration = () => Math.round(Date.now() - _impressionTs);
@@ -1253,6 +1269,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     const rage = isClose && dur < 3000;
     if (rage) { try { sessionStorage.setItem('_sp_rg' + campaign.id, '1'); } catch { /* private mode */ } }
     if (popupCard) popupCard.style.display = 'none';
+    _spVisible = false; // release the one-at-a-time slot (a blocked flow / journey step can show now)
     if (overlay)   overlay.style.display = 'none';
     if (teaser)    teaser.style.display = 'flex';
     // A11y: return keyboard focus to whatever the visitor was on before the popup stole it.
@@ -1273,6 +1290,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   };
 
   const reopen = () => {
+    _spVisible = true; // re-claim the slot for the re-opened popup (teaser click or auto-reopen)
     adOpened = false; // reset the X two-step ad-trigger flow so each cycle keeps the same close logic
     if (popupCard) popupCard.style.display = 'block';
     if (overlay) overlay.style.display = 'block';
@@ -1295,6 +1313,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     }
     beaconEvent(campaign, 'conversion', slot?.id, { email, ...consentMeta });
     markConverted(campaign.id); // recurrence: stops re-showing unless showAgainIfConverts
+    _spVisible = false; // release before chaining so a journey 'convert' branch can show the next step
     maybeAdvanceSequence(campaign, design, 'convert'); // chain to next popup if advanceOn=convert/both
     notifyJourney(campaign.id, 'convert'); // node-based journey: follow the 'convert' branch
 
