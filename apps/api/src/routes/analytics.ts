@@ -18,6 +18,22 @@ const clientEventFilter = (clientId: string | undefined, tenantId: string) =>
     : undefined;
 
 export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
+  // POST /api/v1/analytics/reset — permanently delete THIS tenant's analytics events (impressions,
+  // clicks, conversions, etc.). Campaign configs, sites, and leads are untouched. Owner/admin only
+  // (destructive, irreversible). Returns the number of event rows deleted.
+  fastify.post('/analytics/reset', async (request, reply) => {
+    if (request.memberRole !== 'owner' && request.memberRole !== 'admin') {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Only an owner or admin can reset analytics.' } });
+    }
+    const [c] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(events)
+      .where(eq(events.tenantId, request.tenantId));
+    await db.delete(events).where(eq(events.tenantId, request.tenantId));
+    request.log.warn({ tenantId: request.tenantId, deleted: c?.n ?? 0 }, '[analytics] tenant reset — events deleted');
+    return reply.send({ data: { deleted: c?.n ?? 0 } });
+  });
+
   // GET /api/v1/analytics/overview — tenant-level stats
   // Query param: ?days=7|30|90 (default 30)
   fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/overview', async (request, reply) => {
