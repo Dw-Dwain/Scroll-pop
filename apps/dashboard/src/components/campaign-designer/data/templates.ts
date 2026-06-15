@@ -719,6 +719,25 @@ const CREATIVE_TEMPLATES: Campaign[] = [
   creativeTemplate('creative-rakuten-ny', 'Rakuten — New Year Fukubukuro', 'RAKUTEN NEW YEAR FUKUBUKURO'),
   creativeTemplate('creative-rakuten-sale', 'Rakuten — Sale', 'RAKUTEN SALES'),
   creativeTemplate('creative-yahoo', 'Yahoo! Shopping / PayPay Mall', 'YAHOO SHOPPING PAYPAY MALL'),
+  // Amazon Prime themed creatives (added 2026-06-15). 3rd arg = exact R2 creatives/<name>.jpg key.
+  creativeTemplate('creative-amazon-prime-basic', 'Amazon Prime — Basic', 'AMAZON PRIME BASIC'),
+  creativeTemplate('creative-amazon-prime-clean', 'Amazon Prime — Clean', 'AMAZON PRIME CLEAN'),
+  creativeTemplate('creative-amazon-prime-dragon', 'Amazon Prime — Dragon', 'AMAZON PRIME DRAGON'),
+  creativeTemplate('creative-amazon-prime-electronics', 'Amazon Prime — Electronics Sale', 'AMAZON PRIME ELCTRONICS SALE'), // "ELCTRONICS" (sic) matches the R2 key
+  creativeTemplate('creative-amazon-prime-fashion', 'Amazon Prime — Fashion Sale', 'AMAZON PRIME FASHION SALE'),
+  creativeTemplate('creative-amazon-prime-hobby', 'Amazon Prime — Hobby', 'AMAZON PRIME HOBBY'),
+  creativeTemplate('creative-amazon-prime-japan', 'Amazon Prime — Japan', 'AMAZON PRIME JAPAN'),
+  creativeTemplate('creative-amazon-prime-manga', 'Amazon Prime — Manga Theme Sale', 'AMAZON PRIME MANGA THEME SALE'),
+  creativeTemplate('creative-amazon-prime-treasure-hunt', 'Amazon Prime — Treasure Hunt', 'AMAZON PRIME TREASURE HUNT'),
+  creativeTemplate('creative-amazon-prime-arts-crafts', 'Amazon Prime — Arts & Crafts', 'AMAZON PRIME ARTS CRAFTS'), // renamed in R2 to drop '&' (CDN can't serve '&' paths)
+  // Rakuten themed creatives (added 2026-06-15).
+  creativeTemplate('creative-rakuten-app-promo', 'Rakuten — App Promo', 'RAKUTEN APP PROMO'),
+  creativeTemplate('creative-rakuten-discounts', 'Rakuten — Discounts', 'RAKUTEN DISCOUNTS'),
+  creativeTemplate('creative-rakuten-everyday', 'Rakuten — Everyday', 'RAKUTEN EVERYDAY'),
+  creativeTemplate('creative-rakuten-home-improvement', 'Rakuten — Home Improvement', 'RAKUTEN HOME IMPROVEMENT'),
+  creativeTemplate('creative-rakuten-promo', 'Rakuten — Promo', 'RAKUTEN PROMO'),
+  creativeTemplate('creative-rakuten-sale-2026', 'Rakuten — Sale 2026', 'RAKUTEN SALE 2026'),
+  creativeTemplate('creative-rakuten-mascot', 'Rakuten — Sales Mascot', 'RAKUTEN SALES MASCOT'),
 ];
 
 // Preserving the 8 premium handcrafted elite assets
