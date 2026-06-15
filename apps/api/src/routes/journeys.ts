@@ -338,7 +338,7 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
         value: z.record(z.unknown()).default({}),
       })).max(20).optional(),
       // How often the whole journey runs for one visitor.
-      frequency: z.enum(['every_page', 'once_per_session', 'once_per_visitor']).optional(),
+      frequency: z.enum(['every_page', 'once_per_session', 'once_per_day', 'once_per_visitor']).optional(),
     }).parse(request.body);
 
     const journey = await getJourney(request.tenantId, request.params.id);

@@ -64,19 +64,25 @@ function ss(key: string): string | null { try { return sessionStorage.getItem(ke
 function ssSet(key: string, v: string): void { try { sessionStorage.setItem(key, v); } catch { /* private mode */ } }
 
 // Per-visitor journey frequency. every_page → no cap; once_per_session → sessionStorage flag;
-// once_per_visitor (default) → localStorage flag. The flag is set when the journey shows its
-// first popup (see the popup node), so an armed-but-never-fired journey isn't consumed.
+// once_per_day → localStorage stamped with the day number (re-arms next day); once_per_visitor
+// (default) → localStorage flag. The flag is set when the journey shows its first popup (see the
+// popup node), so an armed-but-never-fired journey isn't consumed.
+const dayNum = () => String(Math.floor(Date.now() / 86_400_000)); // UTC day index
 function journeyRan(j: JCompiled): boolean {
   const f = j.frequency ?? 'once_per_visitor';
   if (f === 'every_page') return false;
   const k = '_sp_jf_' + j.id;
-  return f === 'once_per_session' ? !!ss(k) : !!ls(k);
+  if (f === 'once_per_session') return !!ss(k);
+  if (f === 'once_per_day') return ls(k) === dayNum();
+  return !!ls(k); // once_per_visitor
 }
 function markJourneyRan(j: JCompiled): void {
   const f = j.frequency ?? 'once_per_visitor';
   if (f === 'every_page') return;
   const k = '_sp_jf_' + j.id;
-  if (f === 'once_per_session') ssSet(k, '1'); else lsSet(k, '1');
+  if (f === 'once_per_session') ssSet(k, '1');
+  else if (f === 'once_per_day') lsSet(k, dayNum());
+  else lsSet(k, '1');
 }
 
 // Journey-level active window, evaluated in the visitor's local time (mirrors design.schedule).

@@ -277,6 +277,7 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
             <select className="input" value={frequency} onChange={(e) => setFrequency(e.target.value)} style={{ width: '100%', fontSize: 13 }}>
               <option value="every_page">Every page (each qualifying page view)</option>
               <option value="once_per_session">Once per session</option>
+              <option value="once_per_day">Once per day</option>
               <option value="once_per_visitor">Once per visitor</option>
             </select>
 
