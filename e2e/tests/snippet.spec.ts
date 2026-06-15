@@ -54,12 +54,24 @@ function mockConfig(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function bootSnippet(browser: import('@playwright/test').Browser, config: unknown) {
+async function bootSnippet(
+  browser: import('@playwright/test').Browser,
+  config: unknown,
+  opts: { fixtureUrl?: string } = {},
+) {
+  // Default host ends in .local → the snippet's evaluateSkipTracking() suppresses analytics on
+  // dev/test hosts, so beacons DON'T fire. Tests that assert beacon payloads must pass a
+  // production-like fixtureUrl (no localhost/.local/.test/scrollpop) to keep tracking on.
+  const fixtureUrl = opts.fixtureUrl ?? 'https://e2e.fixture.local/';
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   });
   const page = await context.newPage();
+
+  // Captured beacon payloads (one event each) so tests can assert what the snippet reports — e.g.
+  // that a journey popup stamps journeyId + nodeId on its events for per-step funnels.
+  const beacons: Array<Record<string, unknown>> = [];
 
   // The snippet fetches the config cross-origin (edge.e2e.test), so the mocked response
   // MUST carry CORS headers or the browser blocks it and the snippet never boots.
@@ -67,9 +79,15 @@ async function bootSnippet(browser: import('@playwright/test').Browser, config: 
   await page.route('**/c/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify(config) }),
   );
-  await page.route('**/e', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{"received":1}' }),
-  );
+  await page.route('**/e', (route) => {
+    try {
+      // sendBeacon sends a Blob, for which postData() is null — read the raw buffer instead.
+      const raw = route.request().postData() ?? route.request().postDataBuffer()?.toString('utf8') ?? '{}';
+      const body = JSON.parse(raw) as { events?: Array<Record<string, unknown>> };
+      for (const evt of body.events ?? []) beacons.push(evt);
+    } catch { /* non-JSON body — ignore */ }
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{"received":1}' });
+  });
   // The core lazy-loads the journey engine from <edge>/journey.js when the config has journeys.
   await page.route('**/journey.js', (route) =>
     route.fulfill({ status: 200, contentType: 'application/javascript', headers: cors, body: fs.readFileSync(journeyChunkPath, 'utf8') }),
@@ -79,20 +97,23 @@ async function bootSnippet(browser: import('@playwright/test').Browser, config: 
   // opaque origin with no localStorage, which the snippet touches before fetching config and
   // would abort on. The inline script sets the globals and shadows navigator.webdriver so the
   // bot guard passes.
-  await page.route('https://e2e.fixture.local/', (route) =>
+  await page.route(fixtureUrl, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'text/html',
       body: `<!doctype html><html><head><script>
         try { Object.defineProperty(navigator, 'webdriver', { get: () => false, configurable: true }); } catch (e) {}
+        // Force the snippet's fetch() beacon fallback: Playwright can read a fetch body's postData,
+        // but not a sendBeacon Blob's — and the meta merge under test happens before either transport.
+        try { Object.defineProperty(navigator, 'sendBeacon', { value: undefined, configurable: true }); } catch (e) {}
         window.__SP_EDGE_URL = ${JSON.stringify(EDGE)};
         window.__sp = { publicKey: ${JSON.stringify(PUBLIC_KEY)}, q: [] };
       </script></head><body><h1>E2E fixture</h1></body></html>`,
     }),
   );
-  await page.goto('https://e2e.fixture.local/');
+  await page.goto(fixtureUrl);
   await page.addScriptTag({ content: fs.readFileSync(snippetPath, 'utf8') });
-  return { context, page };
+  return { context, page, beacons };
 }
 
 test.describe('snippet runtime', () => {
@@ -177,6 +198,26 @@ test.describe('journey engine', () => {
     // Step 2's campaign has no triggers of its own, so its host can ONLY come from the journey's
     // timeout branch advancing — i.e. proof the engine chained popup → popup end to end.
     await expect(page.locator('[id="__sp_popup_jcmp-2"]'), 'journey step 2 should appear after the timeout branch').toHaveCount(1, { timeout: 15_000 });
+
+    await context.close();
+  });
+
+  test('journey popup events carry journeyId + nodeId for per-step funnels', async ({ browser }) => {
+    // Production-like host so analytics aren't suppressed (skip-tracking fires on .local/.test).
+    const { context, page, beacons } = await bootSnippet(browser, mockJourneyConfig(), { fixtureUrl: 'https://e2e.fixture.example/' });
+
+    // Wait for both steps to show, which means each beaconed its impression.
+    await expect(page.locator('[id="__sp_popup_jcmp-1"]')).toHaveCount(1, { timeout: 12_000 });
+    await expect(page.locator('[id="__sp_popup_jcmp-2"]')).toHaveCount(1, { timeout: 15_000 });
+
+    // Step 1's impression must be attributed to the journey AND its specific node (pop1), and step 2
+    // to pop2 — so the same campaign reused as two nodes would still split cleanly.
+    const imp1 = beacons.find((e) => e.campaignId === 'jcmp-1' && e.eventType === 'impression');
+    const imp2 = beacons.find((e) => e.campaignId === 'jcmp-2' && e.eventType === 'impression');
+    expect(imp1, 'step 1 impression beacon').toBeTruthy();
+    expect(imp2, 'step 2 impression beacon').toBeTruthy();
+    expect((imp1!.meta as Record<string, unknown>)).toMatchObject({ journeyId: 'jny-e2e', nodeId: 'pop1' });
+    expect((imp2!.meta as Record<string, unknown>)).toMatchObject({ journeyId: 'jny-e2e', nodeId: 'pop2' });
 
     await context.close();
   });
