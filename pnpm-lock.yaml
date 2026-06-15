@@ -49,7 +49,7 @@ importers:
         version: 1.38.0
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260613.1)(@opentelemetry/api@1.9.1)(@upstash/redis@1.38.0)(postgres@3.4.9)
+        version: 0.45.2(@cloudflare/workers-types@4.20260615.1)(@opentelemetry/api@1.9.1)(@upstash/redis@1.38.0)(postgres@3.4.9)
       fastify:
         specifier: ^5.0.0
         version: 5.8.5
@@ -167,8 +167,8 @@ importers:
         specifier: ^5.0.0
         version: 5.2.0(eslint@10.5.0(jiti@2.7.0))
       eslint-plugin-react-refresh:
-        specifier: ^0.5.2
-        version: 0.5.2(eslint@10.5.0(jiti@2.7.0))
+        specifier: ^0.5.3
+        version: 0.5.3(eslint@10.5.0(jiti@2.7.0))
       globals:
         specifier: ^17.6.0
         version: 17.6.0
@@ -192,11 +192,11 @@ importers:
         version: link:../../packages/shared
       '@sentry/cloudflare':
         specifier: ^9.0.0
-        version: 9.47.1(@cloudflare/workers-types@4.20260613.1)
+        version: 9.47.1(@cloudflare/workers-types@4.20260615.1)
     devDependencies:
       '@cloudflare/workers-types':
-        specifier: ^4.20260613.1
-        version: 4.20260613.1
+        specifier: ^4.20260615.1
+        version: 4.20260615.1
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -205,7 +205,7 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@6.4.2(@types/node@25.9.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
       wrangler:
         specifier: ^4.100.0
-        version: 4.100.0(@cloudflare/workers-types@4.20260613.1)
+        version: 4.100.0(@cloudflare/workers-types@4.20260615.1)
 
   e2e:
     devDependencies:
@@ -515,8 +515,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@cloudflare/workers-types@4.20260613.1':
-    resolution: {integrity: sha512-1mrgjE6epolwBhroeGAp5ud5H6Vyi6tl1o/NP0T4rXJ8bmEjmhHnbCzAhHTDHV0PIeip43wcuzHKJarvaGTaUA==}
+  '@cloudflare/workers-types@4.20260615.1':
+    resolution: {integrity: sha512-fGOiTwoLj/8bU8mj3VAfa1EULx4ceZhDwnjvY+afDBlSXI9pvY7PE9t62rGEhJjbAOGd7i5WUDun0eZCWBDrzg==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -2697,8 +2697,8 @@ packages:
     peerDependencies:
       eslint: ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0 || ^9.0.0
 
-  eslint-plugin-react-refresh@0.5.2:
-    resolution: {integrity: sha512-hmgTH57GfzoTFjVN0yBwTggnsVUF2tcqi7RJZHqi9lIezSs4eFyAMktA68YD4r5kNw1mxyY4dmkyoFDb3FIqrA==}
+  eslint-plugin-react-refresh@0.5.3:
+    resolution: {integrity: sha512-5EMmLCV98Pi4o/f/3DP/v/tNqLHMIc9I8LKClNDWhZ9JTho89/kQcitCXQBMG7sAfVRK0Ie3T2EDOzp1YXYiVA==}
     peerDependencies:
       eslint: ^9 || ^10
 
@@ -4094,7 +4094,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20260611.1':
     optional: true
 
-  '@cloudflare/workers-types@4.20260613.1': {}
+  '@cloudflare/workers-types@4.20260615.1': {}
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -4978,12 +4978,12 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.60.4':
     optional: true
 
-  '@sentry/cloudflare@9.47.1(@cloudflare/workers-types@4.20260613.1)':
+  '@sentry/cloudflare@9.47.1(@cloudflare/workers-types@4.20260615.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@sentry/core': 9.47.1
     optionalDependencies:
-      '@cloudflare/workers-types': 4.20260613.1
+      '@cloudflare/workers-types': 4.20260615.1
 
   '@sentry/core@9.47.1': {}
 
@@ -5581,9 +5581,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.3
 
-  drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260613.1)(@opentelemetry/api@1.9.1)(@upstash/redis@1.38.0)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260615.1)(@opentelemetry/api@1.9.1)(@upstash/redis@1.38.0)(postgres@3.4.9):
     optionalDependencies:
-      '@cloudflare/workers-types': 4.20260613.1
+      '@cloudflare/workers-types': 4.20260615.1
       '@opentelemetry/api': 1.9.1
       '@upstash/redis': 1.38.0
       postgres: 3.4.9
@@ -5808,7 +5808,7 @@ snapshots:
     dependencies:
       eslint: 10.5.0(jiti@2.7.0)
 
-  eslint-plugin-react-refresh@0.5.2(eslint@10.5.0(jiti@2.7.0)):
+  eslint-plugin-react-refresh@0.5.3(eslint@10.5.0(jiti@2.7.0)):
     dependencies:
       eslint: 10.5.0(jiti@2.7.0)
 
@@ -6834,7 +6834,7 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20260611.1
       '@cloudflare/workerd-windows-64': 1.20260611.1
 
-  wrangler@4.100.0(@cloudflare/workers-types@4.20260613.1):
+  wrangler@4.100.0(@cloudflare/workers-types@4.20260615.1):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.5.0
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260611.1)
@@ -6845,7 +6845,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       workerd: 1.20260611.1
     optionalDependencies:
-      '@cloudflare/workers-types': 4.20260613.1
+      '@cloudflare/workers-types': 4.20260615.1
       fsevents: 2.3.3
     transitivePeerDependencies:
       - bufferutil
