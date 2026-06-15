@@ -388,6 +388,7 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
             run: (j: JourneyConfig[], ctx: {
               show: (id: string, bypassFreq?: boolean) => boolean;
               arm: (t: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
+              close: (campaignId: string) => void;
             }) => void;
           };
         }).__sp_journey?.run(journeys, {
@@ -396,6 +397,10 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
             { id: 'journey', type: t.type as TriggerConfig['type'], params: t.params ?? {} },
             () => cb(),
           ),
+          // Tear down a journey popup the engine advances PAST on its 'timeout' branch (the visitor
+          // neither dismissed nor converted, so the core's dismiss path never ran) and free the
+          // one-at-a-time slot, so the next step can show. dismiss/convert already close in the core.
+          close: (id: string) => closePopupById(id),
         });
       });
     }
@@ -931,6 +936,14 @@ function buildElementsHTML(step: any, design: any, slot: any, smartProduct?: any
 // ─── Sequence chaining (FU-7) ─────────────────────────────────────────────────
 // Present a campaign programmatically (used by the lazy journey.js runtime to chain to a
 // "next" popup). Respects the next campaign's frequency cap; beacons a 'sequence' impression.
+// Remove a popup's host from the page and free the one-at-a-time slot. Used by the journey engine
+// when it advances PAST a popup on the 'timeout' branch (the visitor didn't dismiss/convert, so the
+// core's dismiss path never ran). Best-effort — a missing host is fine.
+function closePopupById(campaignId: string): void {
+  document.getElementById('__sp_popup_' + campaignId)?.remove();
+  _spVisible = false;
+}
+
 function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean }): boolean {
   if (!opts?.bypassFreq && !checkFrequencyCap(campaign.id, campaign.frequency)) return false;
   if (_spVisible) return false; // one popup at a time — don't stack over a visible popup

@@ -41,6 +41,9 @@ interface JCtx {
   // same campaign within one journey run — the journey's own maxPopups/minDelay/no-repeat guard it).
   show: (campaignId: string, bypassFreq?: boolean) => boolean;
   arm: (trigger: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
+  // Close a popup the run is advancing past on its 'timeout' branch (it wasn't dismissed/converted).
+  // Optional so a new journey.js stays compatible with an older core during a rollout.
+  close?: (campaignId: string) => void;
 }
 
 const DEFAULT_MAX_POPUPS = 4;
@@ -166,7 +169,11 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
       const to = Number(node.config?.['timeoutSeconds']);
       if (Number.isFinite(to) && to > 0 && node.next['timeout']) {
         active.timer = setTimeout(() => {
-          if (rs.active === active) { rs.active = undefined; stepTo(rs, node.next['timeout']); }
+          if (rs.active === active) {
+            rs.active = undefined;
+            _ctx?.close?.(active.campaignId); // close the timed-out popup + free the slot before advancing
+            stepTo(rs, node.next['timeout']);
+          }
         }, Math.max(minDelay, to) * 1000);
       }
       break; // movement resumes in notify() when the outcome arrives
