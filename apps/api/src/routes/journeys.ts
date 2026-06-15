@@ -4,6 +4,7 @@ import { and, eq, gte, isNull, inArray, asc, sql } from 'drizzle-orm';
 import { db, systemDb } from '../db/client.js';
 import { journeys, journeyNodes, journeyEdges, campaigns, designs, sites, events, tenants } from '../db/schema.js';
 import { purgeSiteConfigCache } from '../lib/cache-purge.js';
+import { buildJourneyFunnel } from '../lib/journey-funnel.js';
 
 /**
  * Journeys API — node-based multi-step flows (the real engine; replaces the legacy 2-popup
@@ -503,51 +504,58 @@ export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: { id: journey.id, status: updated!.status, version: updated!.version, publishedAt: updated!.publishedAt } });
   });
 
-  // GET /journeys/:id/diagnose — per-popup-node funnel over the last 30 days. Real campaign-level
-  // event counts for each popup node (node-level attribution lands with the engine's node events).
+  // GET /journeys/:id/diagnose — per-NODE step funnel over the last 30 days.
+  //
+  // Attribution is per-popup-NODE, not per-campaign: the snippet stamps journeyId+nodeId on every
+  // event a journey popup fires (see packages/snippet beaconEvent), so a campaign reused as several
+  // nodes splits cleanly — the campaign-level aggregation this used to do conflated those steps.
+  // Counts come from events whose metadata->>'journeyId' matches this journey, grouped by
+  // metadata->>'nodeId'. Nodes are ordered by walking the graph from the entry node so the response
+  // reads as the real funnel (step 1 → 2 → 3) with the drop-off (stepRetention) between stages.
+  // Pre-attribution events (older snippet) carry no nodeId and are simply not counted here.
   fastify.get<{ Params: { id: string } }>('/journeys/:id/diagnose', async (request, reply) => {
     const journey = await getJourney(request.tenantId, request.params.id);
     if (!journey) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Journey not found' } });
 
-    const popups = await db.query.journeyNodes.findMany({
-      where: and(eq(journeyNodes.journeyId, journey.id), eq(journeyNodes.tenantId, request.tenantId), eq(journeyNodes.type, 'popup')),
-      columns: { id: true, campaignId: true },
-    });
-    const campaignIds = popups.map((p) => p.campaignId).filter((x): x is string => !!x);
-
-    let countsByCampaign = new Map<string, { impressions: number; clicks: number; conversions: number; dismissals: number }>();
-    if (campaignIds.length) {
-      const rows = await db
+    // Graph (for popup nodes + edge order) and node-tagged event counts, in parallel.
+    const journeyIdExpr = sql`${events.metadata} ->> 'journeyId'`;
+    const nodeIdExpr = sql<string>`${events.metadata} ->> 'nodeId'`;
+    const [allNodes, allEdges, countRows] = await Promise.all([
+      db.query.journeyNodes.findMany({
+        where: and(eq(journeyNodes.journeyId, journey.id), eq(journeyNodes.tenantId, request.tenantId)),
+        columns: { id: true, type: true, campaignId: true },
+      }),
+      db.query.journeyEdges.findMany({
+        where: and(eq(journeyEdges.journeyId, journey.id), eq(journeyEdges.tenantId, request.tenantId)),
+        columns: { sourceNodeId: true, targetNodeId: true },
+      }),
+      db
         .select({
-          campaignId: events.campaignId,
+          nodeId: nodeIdExpr,
           impressions: sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
+          views: sql<number>`count(*) filter (where ${events.eventType} = 'view')::int`,
           clicks: sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
           conversions: sql<number>`count(*) filter (where ${events.eventType} = 'conversion')::int`,
           dismissals: sql<number>`count(*) filter (where ${events.eventType} = 'dismiss')::int`,
         })
         .from(events)
-        .where(and(eq(events.tenantId, request.tenantId), inArray(events.campaignId, campaignIds), gte(events.ts, since30d())))
-        .groupBy(events.campaignId);
-      countsByCampaign = new Map(rows.map((r) => [r.campaignId as string, r]));
-    }
+        .where(and(eq(events.tenantId, request.tenantId), sql`${journeyIdExpr} = ${journey.id}`, gte(events.ts, since30d())))
+        .groupBy(nodeIdExpr),
+    ]);
 
-    return reply.send({
-      data: {
-        journeyId: journey.id,
-        nodes: popups.map((p) => {
-          const c = (p.campaignId && countsByCampaign.get(p.campaignId)) || { impressions: 0, clicks: 0, conversions: 0, dismissals: 0 };
-          return {
-            nodeId: p.id,
-            campaignId: p.campaignId,
-            impressions: c.impressions,
-            clicks: c.clicks,
-            conversions: c.conversions,
-            dismissals: c.dismissals,
-            ctr: c.impressions > 0 ? Number((c.clicks / c.impressions).toFixed(4)) : 0,
-            cvr: c.impressions > 0 ? Number((c.conversions / c.impressions).toFixed(4)) : 0,
-          };
-        }),
-      },
-    });
+    const countsByNode = new Map(countRows.filter((r) => r.nodeId).map((r) => [r.nodeId, r]));
+
+    // Campaign names for the popup nodes (nice labels for the editor overlay).
+    const campaignIds = [...new Set(allNodes.filter((n) => n.type === 'popup').map((p) => p.campaignId).filter((x): x is string => !!x))];
+    const camps = campaignIds.length
+      ? await db.query.campaigns.findMany({
+          where: and(inArray(campaigns.id, campaignIds), eq(campaigns.tenantId, request.tenantId)),
+          columns: { id: true, name: true },
+        })
+      : [];
+    const nameById = new Map(camps.map((c) => [c.id, c.name]));
+
+    const { totals, nodes } = buildJourneyFunnel({ nodes: allNodes, edges: allEdges, counts: countsByNode, nameById });
+    return reply.send({ data: { journeyId: journey.id, windowDays: 30, totals, nodes } });
   });
 };

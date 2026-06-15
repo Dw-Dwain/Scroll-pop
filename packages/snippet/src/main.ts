@@ -386,13 +386,14 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
         (window as unknown as {
           __sp_journey?: {
             run: (j: JourneyConfig[], ctx: {
-              show: (id: string, bypassFreq?: boolean) => boolean;
+              show: (id: string, bypassFreq?: boolean, jctx?: Record<string, unknown>) => boolean;
               arm: (t: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
               close: (campaignId: string) => void;
             }) => void;
           };
         }).__sp_journey?.run(journeys, {
-          show: (id: string, bypassFreq?: boolean) => { const c = campaignById.get(id); return c ? presentCampaign(c, { bypassFreq: bypassFreq === true }) : false; },
+          // jctx = { journeyId, nodeId } — stamped onto every event this popup beacons (per-step funnel).
+          show: (id: string, bypassFreq?: boolean, jctx?: Record<string, unknown>) => { const c = campaignById.get(id); return c ? presentCampaign(c, { bypassFreq: bypassFreq === true, journeyMeta: jctx }) : false; },
           arm: (t, cb) => registerTrigger(
             { id: 'journey', type: t.type as TriggerConfig['type'], params: t.params ?? {} },
             () => cb(),
@@ -944,10 +945,18 @@ function closePopupById(campaignId: string): void {
   _spVisible = false;
 }
 
-function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean }): boolean {
+// Attribution for the journey popup currently on screen. The one-at-a-time guard means at most one
+// is active, so a single holder is enough; beaconEvent merges it (when the campaign id matches) into
+// every event the popup fires, so per-step journey funnels work even when the same campaign is reused
+// as multiple nodes. Left set after close — harmless, since it's keyed by id and journey-step
+// campaigns are trigger-stripped (only the journey ever shows them); the next show overwrites it.
+let _journeyMeta: { id: string; meta: Record<string, unknown> } | null = null;
+
+function presentCampaign(campaign: CampaignConfig, opts?: { bypassFreq?: boolean; journeyMeta?: Record<string, unknown> }): boolean {
   if (!opts?.bypassFreq && !checkFrequencyCap(campaign.id, campaign.frequency)) return false;
   if (_spVisible) return false; // one popup at a time — don't stack over a visible popup
   resolveVariant(campaign);
+  _journeyMeta = opts?.journeyMeta ? { id: campaign.id, meta: opts.journeyMeta } : null;
   beaconEvent(campaign, 'impression', undefined, { triggerType: 'sequence' });
   renderPopup(campaign);
   setFrequencyCap(campaign.id, campaign.frequency);
@@ -1527,6 +1536,11 @@ function beaconEvent(
 ): void {
   if (_skipTracking) return;
 
+  // Merge journey/node attribution for the active journey popup so this event lands in its per-step
+  // funnel (only when the ids match — a standalone popup of a different campaign isn't tagged).
+  const jm = _journeyMeta && _journeyMeta.id === campaign.id ? _journeyMeta.meta : null;
+  const meta = jm ? { ...extraMeta, ...jm } : (extraMeta ?? null);
+
   const payload = {
     events: [{
       campaignId:     campaign.id,
@@ -1540,7 +1554,7 @@ function beaconEvent(
       pageUrl:        window.location.href,
       referrer:       document.referrer,
       scrollDepthPct: getScrollDepthPct(),
-      meta:           extraMeta ?? null,
+      meta,
     }],
   };
 

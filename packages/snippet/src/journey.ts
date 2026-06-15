@@ -39,7 +39,11 @@ interface JCompiled {
 interface JCtx {
   // bypassFreq: skip the campaign's per-visitor frequency cap (used for a deliberate repeat of the
   // same campaign within one journey run — the journey's own maxPopups/minDelay/no-repeat guard it).
-  show: (campaignId: string, bypassFreq?: boolean) => boolean;
+  // ctx: journey/node attribution stamped onto every event the popup beacons (impression/view/
+  // click/convert/dismiss), so per-step funnels can be built even when the SAME campaign is reused
+  // as several popup nodes — node-level, not campaign-level. Optional so a new journey.js stays
+  // compatible with an older core during a rollout.
+  show: (campaignId: string, bypassFreq?: boolean, ctx?: { journeyId: string; nodeId: string }) => boolean;
   arm: (trigger: { type: string; params?: Record<string, unknown> }, cb: () => void) => void;
   // Close a popup the run is advancing past on its 'timeout' branch (it wasn't dismissed/converted).
   // Optional so a new journey.js stays compatible with an older core during a rollout.
@@ -160,7 +164,8 @@ function stepTo(rs: RunState, nodeId: string | undefined): void {
       // gate the journey, or the first popup silently stops re-showing on later page views (and the
       // chain dead-ends). The journey's own controls govern: frequency (journeyRan), maxPopups, and
       // the per-node no-repeat above.
-      if (!_ctx.show(node.campaignId, true)) return; // false only if the campaign id is unknown
+      // Stamp journey+node attribution so the popup's events build a per-step funnel (see JCtx.show).
+      if (!_ctx.show(node.campaignId, true, { journeyId: rs.j.id, nodeId })) return; // false only if the campaign id is unknown
       rs.shown++;
       if (rs.shown === 1) markJourneyRan(rs.j); // record the run once the first popup actually shows
       const active: NonNullable<RunState['active']> = { nodeId, campaignId: node.campaignId };

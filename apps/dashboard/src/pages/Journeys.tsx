@@ -5,7 +5,7 @@ import {
   type Node, type Edge, type Connection, type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, ArrowLeft, Rocket, Save, Trash2, Lock, Flag, MousePointerClick, Clock, GitBranch, Split, Target, Info, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, ArrowLeft, Rocket, Save, Trash2, Lock, Flag, MousePointerClick, Clock, GitBranch, Split, Target, Info, SlidersHorizontal, X, BarChart3, TrendingDown } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
 import { useActiveClient } from '../hooks/useClients';
 import { authedFetch } from '../providers/dataProvider';
@@ -48,7 +48,19 @@ const pageRulesToApi = (rules: PageTargetingRule[]): ApiTargetingRule[] =>
   });
 interface CampaignLite { id: string; name: string; status: string; siteId: string | null; triggerCount?: number }
 
-type NodeData = { kind: NodeType; campaignId?: string | null; config: Record<string, unknown>; campaignName?: string };
+// Per-step funnel (GET /journeys/:id/diagnose) — node-level attribution over the last 30 days.
+interface NodeFunnel {
+  nodeId: string; campaignId: string | null; campaignName: string | null; order: number;
+  impressions: number; views: number; clicks: number; conversions: number; dismissals: number;
+  ctr: number; cvr: number; viewRate: number; stepRetention: number | null;
+}
+interface DiagnoseData {
+  journeyId: string; windowDays: number;
+  totals: { impressions: number; views: number; clicks: number; conversions: number; dismissals: number };
+  nodes: NodeFunnel[];
+}
+
+type NodeData = { kind: NodeType; campaignId?: string | null; config: Record<string, unknown>; campaignName?: string; funnel?: NodeFunnel | null };
 type SpNode = Node<NodeData>;
 
 const NODE_META: Record<NodeType, { label: string; icon: React.ReactNode; color: string; hasIn: boolean; hasOut: boolean }> = {
@@ -85,11 +97,29 @@ const SpNodeView: React.FC<NodeProps<SpNode>> = ({ data, selected }) => {
         {meta.icon}{meta.label}
       </div>
       <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-muted, #71717a)', minHeight: 18, wordBreak: 'break-word' }}>{subtitle}</div>
+      {/* Funnel overlay: per-node counts when the Funnel toggle is on (popup nodes only). */}
+      {data.kind === 'popup' && data.funnel && (
+        <div style={{ display: 'flex', borderTop: '1px solid var(--border-subtle, #e4e4e7)', fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}>
+          <FunnelStat label="impr" value={data.funnel.impressions} />
+          <FunnelStat label="view" value={data.funnel.views} />
+          <FunnelStat label="click" value={data.funnel.clicks} />
+          <FunnelStat label="conv" value={data.funnel.conversions} accent={meta.color} />
+        </div>
+      )}
       {meta.hasOut && <Handle type="source" position={Position.Bottom} style={{ background: meta.color }} />}
     </div>
   );
 };
 const nodeTypes = { sp: SpNodeView };
+
+// One cell of a popup node's funnel strip (impr / view / click / conv).
+const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+const FunnelStat: React.FC<{ label: string; value: number; accent?: string }> = ({ label, value, accent }) => (
+  <div style={{ flex: 1, padding: '5px 4px', textAlign: 'center', borderRight: '1px solid var(--border-subtle, #e4e4e7)' }}>
+    <div style={{ fontSize: 12, fontWeight: 700, color: accent ?? 'var(--text-primary, #18181b)', lineHeight: 1.1 }}>{fmt(value)}</div>
+    <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-muted, #71717a)' }}>{label}</div>
+  </div>
+);
 
 // ── Editor ──────────────────────────────────────────────────────────────────────
 // Exported so the auth-free local harness (journeys-harness.tsx) can mount the real editor
@@ -108,6 +138,10 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
   const [savingSettings, setSavingSettings] = React.useState(false);
   const [pageRules, setPageRules] = React.useState<PageTargetingRule[]>([]);
   const [frequency, setFrequency] = React.useState<string>('once_per_visitor');
+  // Per-step funnel overlay (node-level impressions/views/clicks/conversions + drop-off).
+  const [showFunnel, setShowFunnel] = React.useState(false);
+  const [funnel, setFunnel] = React.useState<DiagnoseData | null>(null);
+  const [funnelLoading, setFunnelLoading] = React.useState(false);
 
   // Load the graph.
   React.useEffect(() => {
@@ -144,6 +178,35 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
         ? { ...n, data: { ...n.data, campaignName: campaignName(n.data.campaignId) } }
         : n));
   }, [campaigns, campaignName, setNodes]);
+
+  // Fetch the per-step funnel only while the overlay is on. Refetches when toggled back on so the
+  // numbers are fresh after publishing/collecting more traffic.
+  React.useEffect(() => {
+    if (!showFunnel) return;
+    let alive = true;
+    setFunnelLoading(true);
+    (async () => {
+      try {
+        const res = await authedFetch(`/journeys/${journeyId}/diagnose`);
+        if (!res.ok || !alive) return;
+        const { data } = await res.json() as { data: DiagnoseData };
+        if (alive) setFunnel(data);
+      } catch { /* leave prior data rather than crash */ }
+      finally { if (alive) setFunnelLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, [showFunnel, journeyId]);
+
+  // Attach funnel counts to popup nodes (in place, like the label refresh) so SpNodeView can paint
+  // them; clear them when the overlay is off. Keyed by nodeId, so a campaign reused as two nodes
+  // shows each node's own numbers.
+  React.useEffect(() => {
+    const byNode = new Map((funnel?.nodes ?? []).map((n) => [n.nodeId, n]));
+    setNodes((nds) => nds.map((n) =>
+      n.data.kind === 'popup'
+        ? { ...n, data: { ...n.data, funnel: showFunnel ? (byNode.get(n.id) ?? null) : null } }
+        : n));
+  }, [funnel, showFunnel, setNodes]);
 
   const onConnect = React.useCallback((c: Connection) => {
     const src = nodes.find((n) => n.id === c.source);
@@ -255,6 +318,7 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
               border: `1px solid ${status.kind === 'ok' ? 'rgba(22,163,74,0.35)' : 'rgba(220,38,38,0.35)'}`,
             }}>{status.msg}</span>
           )}
+          <button onClick={() => setShowFunnel((v) => !v)} style={btn(showFunnel ? 'primary' : 'ghost')} title="Per-step funnel (last 30 days)"><BarChart3 size={14} /> Funnel</button>
           <button onClick={() => setSettingsOpen(true)} style={btn('ghost')} title="Pages & frequency"><SlidersHorizontal size={14} /> Pages &amp; frequency</button>
           <button onClick={save} disabled={saving} style={btn('ghost')}><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
           <button onClick={publish} disabled={saving} style={btn('primary')}><Rocket size={14} /> Publish</button>
@@ -319,6 +383,49 @@ export const JourneyEditor: React.FC<{ journeyId: string; campaigns: CampaignLit
           </div>
         )}
       </div>
+
+      {/* Floating step-funnel summary (bottom-center) — reads the drop-off across stages at a glance. */}
+      {showFunnel && (
+        <div style={{ ...floatCard, position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', maxWidth: 'min(680px, calc(100% - 320px))', zIndex: 5, padding: '10px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: funnel && funnel.nodes.length ? 8 : 0 }}>
+            <BarChart3 size={13} style={{ color: 'var(--accent, #6366f1)' }} />
+            <strong style={{ fontSize: 12 }}>Step funnel</strong>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>last {funnel?.windowDays ?? 30} days · by popup node</span>
+          </div>
+          {funnelLoading && !funnel ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>
+          ) : !funnel || funnel.nodes.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Add popup nodes to see a step funnel.</div>
+          ) : funnel.totals.impressions === 0 ? (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 420 }}>
+              No step events yet. Publish the journey and collect traffic — events are attributed per node going forward. (Views recorded before this release aren't node-tagged.)
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'stretch', gap: 4, overflowX: 'auto' }}>
+              {funnel.nodes.map((n, i) => (
+                <React.Fragment key={n.nodeId}>
+                  {i > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 52, color: n.stepRetention != null && n.stepRetention < 0.5 ? '#d97706' : 'var(--text-muted)' }}>
+                      <TrendingDown size={12} />
+                      <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
+                        {n.stepRetention != null ? `${Math.round(n.stepRetention * 100)}%` : '—'}
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ minWidth: 88, textAlign: 'center', padding: '6px 8px', borderRadius: 8, background: 'var(--bg-raised, rgba(99,102,241,0.06))', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Step {i + 1}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 96 }} title={n.campaignName ?? undefined}>
+                      {n.campaignName || 'Popup'}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono, monospace)', lineHeight: 1.2 }}>{fmt(n.impressions)}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>impressions</div>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
