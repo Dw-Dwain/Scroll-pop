@@ -320,6 +320,200 @@ function TeamTab() {
   );
 }
 
+// ── Affiliate links (per-site) ───────────────────────────────────────────────
+// Multiple named affiliate links per site, saved to sites.affiliate_links. Surfaced in the
+// campaign designer as a picker that pre-fills element hrefs (X-close ad link / CTA buttons).
+
+type AffiliateLink = { id: string; label: string; url: string; clickTracker?: string };
+
+type SiteWithLinks = { id: string; name: string; domain: string; affiliateLinks?: AffiliateLink[] };
+
+function uid(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  // RFC4122 v4 fallback (the API validates `id` as a uuid).
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+const isHttpUrl = (u: string): boolean => {
+  try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:'; }
+  catch { return false; }
+};
+
+function AffiliateLinksSection({ showToast }: { showToast: (msg: string) => void }) {
+  const { data: sitesData, isLoading, refetch } = useList({ resource: 'sites' });
+  const sites = (sitesData?.data ?? []) as unknown as SiteWithLinks[];
+  const { mutateAsync: customMutate } = useCustomMutation();
+
+  // Editable drafts keyed by site id. Seeded from the server; user edits live here until Save.
+  const [drafts, setDrafts] = React.useState<Record<string, AffiliateLink[]>>({});
+  const [savingId, setSavingId] = React.useState<string | null>(null);
+
+  // Seed/refresh drafts from the server. Only (re)seed sites we aren't already editing so a
+  // background refetch never clobbers in-progress edits.
+  React.useEffect(() => {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      for (const s of sites) {
+        if (!(s.id in next)) next[s.id] = (s.affiliateLinks ?? []).map((l) => ({ ...l }));
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sitesData]);
+
+  const serverLinks = (siteId: string): AffiliateLink[] =>
+    sites.find((s) => s.id === siteId)?.affiliateLinks ?? [];
+
+  // Canonical form for change detection — fixed key order so JSONB (which doesn't preserve key
+  // order on round-trip) can't make a just-saved list look dirty, and trim so whitespace-only
+  // edits don't either.
+  const canon = (arr: AffiliateLink[] = []): string =>
+    JSON.stringify(arr.map((l) => ({ id: l.id, label: (l.label ?? '').trim(), url: (l.url ?? '').trim(), clickTracker: (l.clickTracker ?? '').trim() })));
+
+  const isDirty = (siteId: string): boolean =>
+    canon(drafts[siteId]) !== canon(serverLinks(siteId));
+
+  const updateRow = (siteId: string, linkId: string, patch: Partial<AffiliateLink>) => {
+    setDrafts((d) => ({
+      ...d,
+      [siteId]: (d[siteId] ?? []).map((l) => (l.id === linkId ? { ...l, ...patch } : l)),
+    }));
+  };
+  const addRow = (siteId: string) => {
+    setDrafts((d) => ({ ...d, [siteId]: [...(d[siteId] ?? []), { id: uid(), label: '', url: '' }] }));
+  };
+  const removeRow = (siteId: string, linkId: string) => {
+    setDrafts((d) => ({ ...d, [siteId]: (d[siteId] ?? []).filter((l) => l.id !== linkId) }));
+  };
+
+  const saveSite = async (siteId: string) => {
+    const links = (drafts[siteId] ?? [])
+      .map((l) => ({
+        id: l.id,
+        label: l.label.trim(),
+        url: l.url.trim(),
+        ...(l.clickTracker?.trim() ? { clickTracker: l.clickTracker.trim() } : {}),
+      }))
+      .filter((l) => l.label || l.url); // drop fully-empty rows
+    // Validate before hitting the API (mirrors the server-side schema).
+    for (const l of links) {
+      if (!l.label) { showToast('Every affiliate link needs a label.'); return; }
+      if (!isHttpUrl(l.url)) { showToast(`"${l.label || 'Link'}" needs a valid http(s) URL.`); return; }
+      if (l.clickTracker && !isHttpUrl(l.clickTracker)) { showToast(`Click tracker for "${l.label}" must be a valid http(s) URL.`); return; }
+    }
+    setSavingId(siteId);
+    try {
+      await customMutate({ url: `${getApiBase()}/sites/${siteId}`, method: 'patch', values: { affiliateLinks: links } });
+      setDrafts((d) => ({ ...d, [siteId]: links.map((l) => ({ ...l })) }));
+      await refetch();
+      showToast('Affiliate links saved.');
+    } catch {
+      showToast("Couldn't save affiliate links.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <SectionCard
+      title="Affiliate links"
+      subtitle="Saved affiliate links per site. Pick them in the campaign designer to auto-fill the X-close ad link and CTA buttons — no more pasting URLs each time."
+    >
+      {isLoading && sites.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>Loading sites…</div>
+      ) : sites.length === 0 ? (
+        <div style={{ padding: '20px 0', textAlign: 'center' }}>
+          <Globe size={28} style={{ color: 'var(--text-muted)', marginBottom: 8 }} />
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>No sites registered yet.</div>
+          <a href="/sites" style={{ fontSize: 13, color: 'var(--accent-300)' }}>Register a site to add affiliate links →</a>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {sites.map((site) => {
+            const links = drafts[site.id] ?? [];
+            const dirty = isDirty(site.id);
+            return (
+              <div key={site.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Globe size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{site.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{site.domain}</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    style={{ marginLeft: 'auto', gap: 5, opacity: dirty ? 1 : 0.5 }}
+                    disabled={!dirty || savingId === site.id}
+                    onClick={() => saveSite(site.id)}
+                  >
+                    <Save size={12} />
+                    {savingId === site.id ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+
+                {links.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 0 10px' }}>
+                    No affiliate links yet for this site.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
+                    {links.map((link) => (
+                      <div key={link.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', background: 'var(--bg-raised, var(--bg-overlay))', borderRadius: 6 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            className="input"
+                            placeholder="Label (e.g. Amazon)"
+                            value={link.label}
+                            maxLength={80}
+                            onChange={(e) => updateRow(site.id, link.id, { label: e.target.value })}
+                            style={{ width: 160, flexShrink: 0 }}
+                          />
+                          <input
+                            className="input"
+                            type="url"
+                            placeholder="https://affiliate-link.com/…?tag=…"
+                            value={link.url}
+                            onChange={(e) => updateRow(site.id, link.id, { url: e.target.value })}
+                            style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                          />
+                          <button type="button" className="btn btn-icon btn-sm" title="Remove link" onClick={() => removeRow(site.id, link.id)}>
+                            <Trash2 size={13} style={{ color: 'var(--status-error)' }} />
+                          </button>
+                        </div>
+                        <input
+                          className="input"
+                          type="url"
+                          placeholder="Click tracker / redirect URL (optional)"
+                          value={link.clickTracker ?? ''}
+                          onChange={(e) => updateRow(site.id, link.id, { clickTracker: e.target.value })}
+                          style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button type="button" className="btn btn-secondary btn-sm" style={{ gap: 5 }} onClick={() => addRow(site.id)}>
+                  <UserPlus size={12} /> Add link
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Zap size={14} style={{ color: 'var(--accent-500)', flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          In the campaign designer, enabling an affiliate button (or the X-close ad link) shows a picker of this site&rsquo;s saved links.
+        </span>
+      </div>
+    </SectionCard>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────
 
 export const Settings: React.FC = () => {
@@ -720,44 +914,8 @@ export const Settings: React.FC = () => {
                 </div>
               </SectionCard>
 
-              {/* Affiliate Networks */}
-              <SectionCard title="Affiliate Networks" subtitle="Saved affiliate links to reuse across campaigns and ad slots.">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <FieldRow label="Affiliate Base URL" hint="Default CTA URL pre-filled in new campaigns.">
-                    <input
-                      className="input"
-                      type="url"
-                      placeholder="https://affiliate.example.com"
-                      value={(settings.affiliateLink as string) ?? ''}
-                      onChange={(e) => setSettings({ ...settings, affiliateLink: e.target.value })}
-                    />
-                  </FieldRow>
-                  <FieldRow label="Amazon Associates Link" hint="Your Amazon affiliate link or storefront (e.g. https://amzn.to/… or ?tag=yourtag-20).">
-                    <input
-                      className="input"
-                      type="url"
-                      placeholder="https://www.amazon.com/?tag=yourtag-20"
-                      value={(settings.amazonAffiliate as string) ?? ''}
-                      onChange={(e) => setSettings({ ...settings, amazonAffiliate: e.target.value })}
-                    />
-                  </FieldRow>
-                  <FieldRow label="Rakuten Affiliate Link" hint="Your Rakuten Advertising deep link or publisher URL.">
-                    <input
-                      className="input"
-                      type="url"
-                      placeholder="https://click.linksynergy.com/…"
-                      value={(settings.rakutenAffiliate as string) ?? ''}
-                      onChange={(e) => setSettings({ ...settings, rakutenAffiliate: e.target.value })}
-                    />
-                  </FieldRow>
-                </div>
-                <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Zap size={14} style={{ color: 'var(--accent-500)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    These links can be selected when adding affiliate slots in the campaign designer. Deeper auto-wiring (auto-tagging product URLs) is coming soon.
-                  </span>
-                </div>
-              </SectionCard>
+              {/* Affiliate links — per-site, server-backed (replaces the old localStorage stub). */}
+              <AffiliateLinksSection showToast={showToast} />
 
               {/* Visitor Privacy / Consent */}
               <SectionCard title="Visitor Privacy" subtitle="Consent controls for the analytics your popups collect.">

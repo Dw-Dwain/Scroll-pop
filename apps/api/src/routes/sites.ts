@@ -4,7 +4,7 @@ import { db } from '../db/client.js';
 import { sites, campaigns, events, tenants } from '../db/schema.js';
 import { eq, and, isNull, sql, gte } from 'drizzle-orm';
 import { isPublicUrl } from '../lib/url-guard.js';
-import { PLAN_LIMITS } from '@scrollpop/shared';
+import { PLAN_LIMITS, AffiliateLinkSchema } from '@scrollpop/shared';
 
 const CreateSiteBody = z.object({
   name: z.string().min(1).max(100),
@@ -20,6 +20,9 @@ const UpdateSiteBody = z.object({
   customDomain: z.string().max(253).optional(),
   // Assign the site to an agency client workspace (null = agency-level / unassign).
   clientId: z.string().uuid().nullable().optional(),
+  // Per-site saved affiliate links (replaces the whole list when present). Each URL is validated
+  // http(s) by AffiliateLinkSchema; the snippet additionally renders them through safeHref.
+  affiliateLinks: z.array(AffiliateLinkSchema).max(100).optional(),
 });
 
 export const siteRoutes: FastifyPluginAsync = async (fastify) => {
@@ -163,6 +166,7 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
           ? { customDomain: body.customDomain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null }
           : {}),
         ...(body.clientId !== undefined ? { clientId: body.clientId } : {}),
+        ...(body.affiliateLinks !== undefined ? { affiliateLinks: body.affiliateLinks } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(sites.id, request.params.id), eq(sites.tenantId, request.tenantId)))

@@ -278,6 +278,10 @@ export const sites = pgTable(
     customDomain: text('custom_domain'),
     // Agency multi-client: the client workspace this site belongs to (NULL = agency-level).
     clientId: uuid('client_id'),
+    // Saved affiliate links for this site: [{ id, label, url, clickTracker? }]. Managed in
+    // Settings, surfaced as a picker in the campaign designer that pre-fills element hrefs
+    // (X-close ad link / CTA buttons). See @scrollpop/shared AffiliateLinkSchema.
+    affiliateLinks: jsonb('affiliate_links').notNull().default([]),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

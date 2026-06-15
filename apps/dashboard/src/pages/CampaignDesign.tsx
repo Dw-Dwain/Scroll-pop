@@ -8,7 +8,7 @@ import Canvas from '../components/campaign-designer/Canvas';
 import SidebarRight from '../components/campaign-designer/SidebarRight';
 import InteractivePreview from '../components/campaign-designer/InteractivePreview';
 
-import { Campaign, CampaignElement, CampaignStep, ElementType, CampaignStepConfig, CanvasPosition } from '../components/campaign-designer/types';
+import { Campaign, CampaignElement, CampaignStep, ElementType, CampaignStepConfig, CanvasPosition, AffiliateLink } from '../components/campaign-designer/types';
 import { usePlan } from '../hooks/usePlan';
 
 interface CampaignDesignProps {
@@ -443,6 +443,15 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
       .map((c) => ({ id: c.id, name: c.name })),
     [campaignsListData, campaignId],
   );
+  // Saved affiliate links for THIS campaign's site — surfaced in the inspector as a picker that
+  // pre-fills element hrefs (X-close ad link / CTA buttons). Site list is small and cached.
+  const { data: sitesListData } = useList({ resource: 'sites' });
+  const campaignSiteId = (campaignData?.data as { siteId?: string } | undefined)?.siteId;
+  const affiliateLinks = React.useMemo<AffiliateLink[]>(() => {
+    const site = ((sitesListData?.data ?? []) as Array<{ id: string; affiliateLinks?: AffiliateLink[] }>)
+      .find((s) => s.id === campaignSiteId);
+    return site?.affiliateLinks ?? [];
+  }, [sitesListData, campaignSiteId]);
   const apiUrl = useApiUrl();
   // A/B variant editing: when ?variant=<id> is present this builder edits that variant's design
   // (loaded from / saved to /variants/:id) instead of the campaign's base design. Triggers/
@@ -961,6 +970,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
           stepConfig={campaign.steps[activeStep]}
           selectedElementId={selectedElementId}
           activeStep={activeStep}
+          affiliateLinks={affiliateLinks}
           onUpdateStepConfig={handleUpdateStepConfig}
           onUpdateElement={handleUpdateElement}
           onDeleteElement={handleRemoveElement}

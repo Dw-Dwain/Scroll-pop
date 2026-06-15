@@ -9,8 +9,36 @@ import {
   Layout,
   CornerDownRight,
 } from 'lucide-react';
-import { CampaignElement, CampaignStepConfig, PopupType, CanvasPosition } from './types';
+import { AffiliateLink, CampaignElement, CampaignStepConfig, PopupType, CanvasPosition } from './types';
 import { CreativePicker } from './CreativePicker';
+
+// Picker of the site's saved affiliate links (Settings → Affiliate links). Selecting one writes
+// its URL into the element's href. Renders nothing when the site has no saved links.
+function AffiliateLinkPicker({
+  links, currentHref, onPick,
+}: {
+  links: AffiliateLink[];
+  currentHref: string;
+  onPick: (url: string) => void;
+}) {
+  if (!links.length) return null;
+  const matched = links.find((l) => l.url === currentHref);
+  return (
+    <select
+      className="w-full text-xs p-2 border border-zinc-200 rounded bg-zinc-50/50 focus:bg-white focus:outline-none font-sans"
+      value={matched?.id ?? ''}
+      onChange={(e) => {
+        const link = links.find((l) => l.id === e.target.value);
+        if (link) onPick(link.url);
+      }}
+    >
+      <option value="">★ Use a saved affiliate link…</option>
+      {links.map((l) => (
+        <option key={l.id} value={l.id}>{l.label}</option>
+      ))}
+    </select>
+  );
+}
 
 // Commit-on-blur number input — prevents mid-type clamping (e.g. typing "500" into "200" becoming "2005000")
 function NumInput({
@@ -51,6 +79,8 @@ interface SidebarRightProps {
   stepConfig: CampaignStepConfig;
   selectedElementId: string | null;
   activeStep?: 'teaser' | 'main' | 'success';
+  /** Saved affiliate links for this campaign's site (Settings → Affiliate links). */
+  affiliateLinks?: AffiliateLink[];
   onUpdateStepConfig: (key: string, value: unknown) => void;
   onUpdateElement: (id: string, keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
   onDeleteElement: (id: string) => void;
@@ -67,12 +97,14 @@ export default function SidebarRight({
   stepConfig,
   selectedElementId,
   activeStep,
+  affiliateLinks = [],
   onUpdateStepConfig,
   onUpdateElement,
   onDeleteElement,
 }: SidebarRightProps) {
   const elements = stepConfig.elements;
   const activeElement = elements.find((el: CampaignElement) => el.id === selectedElementId);
+  const currentHref = (activeElement?.href ?? (activeElement?.extraProps?.href as string) ?? '') as string;
 
   return (
     <div
@@ -133,6 +165,7 @@ export default function SidebarRight({
                   value={activeElement.href ?? (activeElement.extraProps?.href as string) ?? ''}
                   onChange={(e) => onUpdateElement(activeElement.id, 'href', e.target.value)}
                 />
+                <AffiliateLinkPicker links={affiliateLinks} currentHref={currentHref} onPick={(url) => onUpdateElement(activeElement.id, 'href', url)} />
                 <div className="text-[9px] text-zinc-400 leading-relaxed">
                   Makes the whole image clickable — opens in a new tab and is tracked as a click.
                 </div>
@@ -170,6 +203,7 @@ export default function SidebarRight({
                 value={activeElement.href ?? (activeElement.extraProps?.href as string) ?? ''}
                 onChange={(e) => onUpdateElement(activeElement.id, 'href', e.target.value)}
               />
+              <AffiliateLinkPicker links={affiliateLinks} currentHref={currentHref} onPick={(url) => onUpdateElement(activeElement.id, 'href', url)} />
               <div className="text-[9px] text-zinc-400 leading-relaxed">
                 Opens in a new tab when clicked.
               </div>
@@ -185,10 +219,16 @@ export default function SidebarRight({
                   type="checkbox"
                   className="mt-0.5 shrink-0"
                   checked={(activeElement.extraProps as { adClose?: boolean } | undefined)?.adClose === true}
-                  onChange={(e) => onUpdateElement(activeElement.id, 'extraProps', {
-                    ...(activeElement.extraProps || {}),
-                    adClose: e.target.checked,
-                  })}
+                  onChange={(e) => {
+                    const enabling = e.target.checked;
+                    // On enable, if there's no link yet and the site has saved affiliate links,
+                    // pre-fill the first one so the operator isn't staring at an empty field.
+                    const prefill = enabling && !currentHref && affiliateLinks.length > 0;
+                    onUpdateElement(activeElement.id, {
+                      extraProps: { ...(activeElement.extraProps || {}), adClose: enabling },
+                      ...(prefill ? { href: affiliateLinks[0]!.url } : {}),
+                    });
+                  }}
                 />
                 <span className="text-[11px] text-zinc-600 leading-snug">
                   <span className="font-semibold text-zinc-800">Open an affiliate ad before closing</span><br />
@@ -207,6 +247,7 @@ export default function SidebarRight({
                     value={activeElement.href ?? (activeElement.extraProps?.href as string) ?? ''}
                     onChange={(e) => onUpdateElement(activeElement.id, 'href', e.target.value)}
                   />
+                  <AffiliateLinkPicker links={affiliateLinks} currentHref={currentHref} onPick={(url) => onUpdateElement(activeElement.id, 'href', url)} />
                 </div>
               )}
             </div>
