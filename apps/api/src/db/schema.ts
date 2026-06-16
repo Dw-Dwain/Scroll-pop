@@ -52,7 +52,10 @@ export const frequencyEnum = pgEnum('frequency', [
 ]);
 
 export const eventTypeEnum = pgEnum('event_type', [
-  'impression', 'view', 'click', 'dismiss', 'conversion',
+  // `close_ad_click` = the X-close affiliate redirect, split from genuine `click` so it doesn't
+  // inflate Clicks/CTR. Added to the live enum via the ensure-* bootstrap (see index.ts) since
+  // ALTER TYPE ADD VALUE can't be a normal Drizzle column migration.
+  'impression', 'view', 'click', 'close_ad_click', 'dismiss', 'conversion',
   'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
   'email_capture', 'sms_capture', 'discount_redeemed',
   'checkout_started', 'purchase_completed', 'trigger_fired', 'trigger_blocked',

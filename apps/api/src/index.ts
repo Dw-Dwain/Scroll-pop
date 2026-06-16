@@ -978,7 +978,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '20'; // v20: sites.affiliate_links column (per-site saved affiliate links)
+  const SCHEMA_VERSION = '21'; // v21: close_ad_click added to event_type enum (X-close affiliate redirect)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
@@ -1042,6 +1042,15 @@ async function bootstrap() {
   if (schemaAlreadyRan) {
     app.log.info('[schema] ensure-* scripts skipped (already ran this version)');
   } else {
+    // Ensure the close_ad_click event_type enum value exists (X-close affiliate redirect, split
+    // from genuine 'click'). ADD VALUE IF NOT EXISTS is idempotent; without it the API silently
+    // drops every close_ad_click event at insert (invalid enum value caught by the ingest try/catch).
+    try {
+      await systemDb.execute(drizzleSql.raw("ALTER TYPE event_type ADD VALUE IF NOT EXISTS 'close_ad_click'"));
+      app.log.info('[schema] close_ad_click event_type value ensured');
+    } catch (err) {
+      app.log.error({ err }, '[schema] failed to ensure close_ad_click enum value (continuing)');
+    }
     // Ensure notifications schema (migration 0006).
     await ensureNotificationsSchema(app.log);
     // Ensure admin_audit_log schema (migration 0007).
