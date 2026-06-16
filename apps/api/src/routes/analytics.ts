@@ -53,6 +53,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const counts = Object.fromEntries(rows.map((r) => [r.eventType, r.count]));
     const impressions = counts['impression'] ?? 0;
     const clicks = counts['click'] ?? 0;
+    // X-close affiliate redirects — tracked separately so they don't inflate clicks/CTR.
+    const adCloseClicks = counts['close_ad_click'] ?? 0;
 
     // CTR on UNIQUE visitors (distinct clickers / distinct people who saw it). A clicker necessarily
     // saw the popup, so this is bounded ≤100%. Raw click EVENTS can exceed impressions — one popup
@@ -74,6 +76,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         impressions,
         views: counts['view'] ?? 0,
         clicks,
+        adCloseClicks,
         dismissals: counts['dismiss'] ?? 0,
         conversions: counts['conversion'] ?? 0,
         uniqueVisitors: reach,
@@ -127,6 +130,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         impressions: sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
         views: sql<number>`count(*) filter (where ${events.eventType}::text = 'view')::int`,
         clicks: sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        adCloseClicks: sql<number>`count(*) filter (where ${events.eventType}::text = 'close_ad_click')::int`,
         conversions: sql<number>`count(*) filter (where ${events.eventType}::text = 'conversion')::int`,
         // Unique-visitor counts for a bounded CTR (see /analytics/overview for the why).
         reach: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
@@ -141,6 +145,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       impressions: r.impressions,
       views: r.views,
       clicks: r.clicks,
+      adCloseClicks: r.adCloseClicks,
       conversions: r.conversions,
       uniqueVisitors: r.reach,
       ctr: r.reach > 0 ? parseFloat(Math.min(r.clickers / r.reach, 1).toFixed(4)) : 0,

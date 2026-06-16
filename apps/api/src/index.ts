@@ -434,7 +434,7 @@ async function bootstrap() {
   // The Cloudflare Worker already throttles edge traffic; this is the direct-API guard.
   // ── Event field validation helpers ───────────────────────────────────────────
   const ALLOWED_EVENT_TYPES = new Set([
-    'impression', 'view', 'click', 'dismiss', 'conversion',
+    'impression', 'view', 'click', 'close_ad_click', 'dismiss', 'conversion',
     'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
     'email_capture', 'sms_capture', 'discount_redeemed',
     'checkout_started', 'purchase_completed', 'trigger_fired', 'trigger_blocked',
