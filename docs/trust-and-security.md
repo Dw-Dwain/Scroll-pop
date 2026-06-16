@@ -1,7 +1,7 @@
 # ScrollPop Trust & Security
 
 > **Status:** Public-facing trust-portal content (draft). Last reviewed: 2026-06-13.
-> Publish this as `trust.scrollpop.io` (mirror of competitors' trust portals, e.g. Justuno's
+> Publish this as `trust.scrollpop.online` (mirror of competitors' trust portals, e.g. Justuno's
 > `trust.justuno.com`). Items marked **(in progress)** must not be presented as completed
 > certifications until a signed report/certificate exists. Legal/security to approve before publish.
 
@@ -135,7 +135,7 @@ We hold ourselves to enterprise security standards and are formalizing them thro
 
 ## 8. Reporting a vulnerability
 
-We welcome reports from security researchers. Email **security@scrollpop.io** with details and
+We welcome reports from security researchers. Email **security@scrollpop.online** with details and
 reproduction steps. We aim to acknowledge within [SLA] business days. Please do not publicly
 disclose until we have confirmed a fix. [Add safe-harbor language and scope before publish.]
 
@@ -143,6 +143,6 @@ disclose until we have confirmed a fix. [Add safe-harbor language and scope befo
 
 ## 9. Contact
 
-- Security & trust questions: **security@scrollpop.io**
-- Privacy / DPA requests: **privacy@scrollpop.io**
-- Status page: [status.scrollpop.io — TODO]
+- Security & trust questions: **security@scrollpop.online**
+- Privacy / DPA requests: **privacy@scrollpop.online**
+- Status page: [status.scrollpop.online — TODO]
