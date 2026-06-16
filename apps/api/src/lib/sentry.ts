@@ -34,6 +34,45 @@ function parseDsn(dsn: string): ParsedDsn | null {
   }
 }
 
+/** Drop the query string (everything from the first `?`) from a URL-ish string. */
+export function stripUrlQuery(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const i = value.indexOf('?');
+  return i === -1 ? value : value.slice(0, i);
+}
+
+interface SentryEventLike {
+  user?: unknown;
+  request?: { url?: unknown; cookies?: unknown; query_string?: unknown };
+  extra?: { url?: unknown; [k: string]: unknown };
+}
+
+/**
+ * Japan APPI data-minimization (defense-in-depth). Strip re-identifiable personal
+ * data from the event before it is POSTed to Sentry: delete `user`, the request
+ * cookies and query string, and strip query strings from `request.url` and from the
+ * `extra.url` we attach in the error handler (Fastify's `request.url` carries the
+ * query string). Mutates and returns the event.
+ *
+ * TODO(APPI/manual): the authoritative IP fix is the Sentry project toggle
+ * "Prevent Storing of IP Addresses" — the client IP is attached server-side and ONLY
+ * that dashboard toggle removes it. This scrub is defense-in-depth only.
+ */
+export function scrubSentryEvent<T extends SentryEventLike>(event: T): T {
+  delete event.user;
+  const req = event.request;
+  if (req && typeof req === 'object') {
+    delete req.cookies;
+    delete req.query_string;
+    if (typeof req.url === 'string') req.url = stripUrlQuery(req.url);
+  }
+  const extra = event.extra;
+  if (extra && typeof extra === 'object' && typeof extra.url === 'string') {
+    extra.url = stripUrlQuery(extra.url);
+  }
+  return event;
+}
+
 const rawDsn = process.env['SENTRY_DSN'];
 const dsn = rawDsn ? parseDsn(rawDsn) : null;
 const environment = process.env['NODE_ENV'] ?? 'development';
@@ -73,6 +112,10 @@ export async function captureException(
       // raw stack as extra so the trace is still visible in the Sentry issue.
       extra: { ...(extra ?? {}), stack: e.stack ?? null },
     };
+
+    // Japan APPI data-minimization: strip PII (notably the query string the error
+    // handler attaches via `extra.url = request.url`) before the event leaves the box.
+    scrubSentryEvent(event);
 
     const envelopeHeader = JSON.stringify({ event_id: eventId, sent_at: now, dsn: rawDsn });
     const itemHeader = JSON.stringify({ type: 'event' });

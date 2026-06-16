@@ -11,6 +11,7 @@
 
 import * as Sentry from '@sentry/cloudflare';
 import snippetCode from './p.txt';
+import { scrubSentryEvent } from './sentry-scrub';
 
 export interface Env {
   SCROLLPOP_CONFIG?: KVNamespace;
@@ -48,6 +49,12 @@ export default Sentry.withSentry(
   (env: Env) => ({
     dsn: env.SENTRY_DSN ?? '',
     tracesSampleRate: 0,
+    // Japan APPI data-minimization — keep re-identifiable PII out of the event.
+    // TODO(APPI/manual): the authoritative IP fix is the Sentry project toggle
+    // "Prevent Storing of IP Addresses"; sendDefaultPii:false + beforeSend below are
+    // defense-in-depth only (IP is attached server-side).
+    sendDefaultPii: false,
+    beforeSend: (event) => scrubSentryEvent(event),
   }),
 {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
