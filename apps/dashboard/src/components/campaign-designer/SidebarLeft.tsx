@@ -229,7 +229,7 @@ const getDefaultTriggers = (): CampaignTriggers => ({
   timeDelaySeconds: 5,
   pageTargeting: '*',
   deviceTargeting: 'all' as const,
-  geoTargeting: 'All Countries',
+  geoTargeting: 'JP', // TEMP: Japan default while geo is locked to JP/IN (see geo block below)
   frequencyCapDays: 1,
   newVisitorOnly: false,
   sessionPageCount: 0,
@@ -1801,7 +1801,7 @@ export default function SidebarLeft({
                     ['GB', '🇬🇧 UK'], ['AU', '🇦🇺 Australia'], ['DE', '🇩🇪 Germany'],
                     ['FR', '🇫🇷 France'], ['IN', '🇮🇳 India'], ['BR', '🇧🇷 Brazil'],
                   ];
-                  const raw = campaign.triggers.geoTargeting || 'All Countries';
+                  const raw = campaign.triggers.geoTargeting || 'JP';
                   const selected = (raw === 'All Countries' || !raw)
                     ? []
                     : raw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -1812,18 +1812,29 @@ export default function SidebarLeft({
                     commit(selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]);
                   const chip = (active: boolean) =>
                     `text-[11px] font-medium px-2 py-1.5 rounded-md border cursor-pointer transition-colors ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`;
+                  // TEMP geo lock: only Japan + India are selectable for now, and Japan is the
+                  // default (see getDefaultTriggers + CampaignDesign load defaults). "All Worldwide
+                  // Markets" and every other country are shown but disabled so they can't be picked.
+                  // Re-enable a country later by adding its code here (e.g. add 'US'); use
+                  // [...COUNTRIES.map(([c]) => c)] to unlock everything again.
+                  const GEO_ENABLED = ['JP', 'IN'];
+                  const lockCls = (enabled: boolean) => (enabled ? '' : ' opacity-40 cursor-not-allowed hover:bg-zinc-800');
                   return (
                     <div className="space-y-1.5">
-                      <button type="button" onClick={() => commit([])} className={`w-full ${chip(isAll)}`}>
+                      <button type="button" disabled onClick={() => commit([])} className={`w-full ${chip(isAll)}${lockCls(false)}`}>
                         🌍 All Worldwide Markets
                       </button>
                       <div className="grid grid-cols-3 gap-1.5">
-                        {COUNTRIES.map(([code, label]) => (
-                          <button key={code} type="button" onClick={() => toggle(code)} className={chip(selected.includes(code))}>
-                            {label}
-                          </button>
-                        ))}
+                        {COUNTRIES.map(([code, label]) => {
+                          const enabled = GEO_ENABLED.includes(code);
+                          return (
+                            <button key={code} type="button" disabled={!enabled} onClick={() => toggle(code)} className={`${chip(selected.includes(code))}${lockCls(enabled)}`}>
+                              {label}
+                            </button>
+                          );
+                        })}
                       </div>
+                      <p className="text-[10px] text-zinc-500 pt-0.5">Only Japan and India are available right now.</p>
                       {!isAll && (
                         <p className="text-[10px] text-zinc-500 pt-0.5">
                           Shows only to visitors in: <span className="text-zinc-300 font-medium">{selected.join(', ')}</span>
