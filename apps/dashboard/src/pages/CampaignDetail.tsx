@@ -443,6 +443,11 @@ function TriggersTargetingPanel({
   const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 5, display: 'block' };
   const sectionTitle: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 };
   const GEO = ['All Countries', 'US', 'GB', 'CA', 'AU', 'DE', 'FR', 'IN', 'BR', 'JP', 'SG'];
+  // TEMP geo lock: only Japan is selectable for now — every other option (incl. "All
+  // Countries" = worldwide) is shown but disabled so it can't be picked. This is UI-only;
+  // saved config / publish logic is unchanged. To re-enable a country later, add its code
+  // here (e.g. ['JP', 'US']); set to [...GEO] to unlock everything again.
+  const GEO_ENABLED = ['JP'];
 
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 12 }}>
@@ -498,8 +503,15 @@ function TriggersTargetingPanel({
           <div style={{ marginTop: 10 }}>
             <label style={labelStyle}>Country</label>
             <select className="input" value={s.geoTargeting} onChange={e => set('geoTargeting', e.target.value)} style={{ width: '100%', fontSize: 12 }}>
-              {GEO.map(g => <option key={g} value={g}>{g}</option>)}
+              {GEO.map(g => (
+                <option key={g} value={g} disabled={!GEO_ENABLED.includes(g)}>
+                  {GEO_ENABLED.includes(g) ? g : `${g} (coming soon)`}
+                </option>
+              ))}
             </select>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '5px 0 0' }}>
+              Only Japan is available right now.
+            </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0 0' }}>
             <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>New visitors only</span>
