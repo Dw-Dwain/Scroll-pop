@@ -623,13 +623,15 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
   const isSpinWheel = designKind === 'spin_wheel';
 
   const stats = React.useMemo(() => {
-    let impressions = 0, views = 0, clicks = 0;
+    let impressions = 0, views = 0, clicks = 0, adCloseClicks = 0;
     for (const row of analytics) {
       if (row.eventType === 'impression') impressions += row.count;
       if (row.eventType === 'view') views += row.count;
       if (row.eventType === 'click') clicks += row.count;
+      // X-close affiliate redirects — counted separately so CTR reflects genuine CTA interest.
+      if (row.eventType === 'close_ad_click') adCloseClicks += row.count;
     }
-    return { impressions, views, clicks, ctr: impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00' };
+    return { impressions, views, clicks, adCloseClicks, ctr: impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00' };
   }, [analytics]);
 
   // Build preview campaign only when design + triggers are loaded
@@ -709,8 +711,9 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
         {[
           { label: 'Impressions', value: stats.impressions.toLocaleString(), icon: Eye,               color: 'var(--data-1)',       desc: 'Times this popup was shown to a visitor.' },
           { label: 'Views',       value: stats.views.toLocaleString(),       icon: Megaphone,         color: 'var(--status-success)', desc: 'Popups that stayed on screen long enough to be seen (~1s+).' },
-          { label: 'Clicks',      value: stats.clicks.toLocaleString(),      icon: MousePointerClick, color: 'var(--data-3)',       desc: 'Clicks on the CTA / affiliate link inside the popup.' },
-          { label: 'CTR',         value: `${stats.ctr}%`,                    icon: Percent,           color: 'var(--accent-300)',   desc: 'Click-through rate — clicks divided by impressions.' },
+          { label: 'Clicks',      value: stats.clicks.toLocaleString(),      icon: MousePointerClick, color: 'var(--data-3)',       desc: 'Genuine clicks on the CTA inside the popup (X-close ad redirects are counted separately).' },
+          { label: 'Ad-Close Clicks', value: stats.adCloseClicks.toLocaleString(), icon: MousePointer2, color: 'var(--data-4)',   desc: 'Visitors who hit the ✕ when it’s wired to an affiliate link — a redirect, not CTA interest.' },
+          { label: 'CTR',         value: `${stats.ctr}%`,                    icon: Percent,           color: 'var(--accent-300)',   desc: 'Click-through rate — genuine CTA clicks ÷ impressions (excludes X-close redirects).' },
         ].map(({ label, value, icon: Icon, color, desc }) => (
           <div key={label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>

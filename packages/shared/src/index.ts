@@ -8,7 +8,10 @@ export const Platform = z.enum(['wordpress', 'shopify', 'html', 'donorbox', 'gof
 export const CampaignStatus = z.enum(['draft', 'active', 'paused', 'archived']);
 export const DesignKind = z.enum(['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'floating_bubble', 'notification_toast', 'corner_popup', 'gamified_overlay', 'inline_form']);
 export const EventType = z.enum([
-  'impression', 'view', 'click', 'dismiss', 'conversion',
+  // `click` = a genuine CTA/affiliate click. `close_ad_click` = the X-close button firing its
+  // wired affiliate redirect — tracked separately so it does NOT inflate Clicks/CTR (almost
+  // everyone closes a popup, so counting it as a click made CTR ~= the dismiss rate).
+  'impression', 'view', 'click', 'close_ad_click', 'dismiss', 'conversion',
   'popup_close', 'popup_submit', 'popup_expand', 'popup_minimize',
   'email_capture', 'sms_capture', 'discount_redeemed',
   'checkout_started', 'purchase_completed', 'trigger_fired', 'trigger_blocked',

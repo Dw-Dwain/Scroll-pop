@@ -13,6 +13,7 @@ type CampaignStat = {
   impressions: number;
   views: number;
   clicks: number;
+  adCloseClicks?: number; // X-close affiliate redirects — kept out of clicks/CTR
   conversions: number;
   ctr: number;
 };
@@ -109,7 +110,7 @@ const FUNNEL_GLOSSARY: Record<string, string> = {
   'Trigger Fired': 'A trigger condition was met (scroll %, dwell, inactivity, exit-intent, click).',
   'Popup Shown': 'The popup actually rendered on the page — one impression.',
   'Popup Viewed': 'It stayed on screen long enough to be seen (~1 second+).',
-  'CTA Clicked': 'The visitor clicked the call-to-action / affiliate link inside the popup.',
+  'CTA Clicked': 'The visitor clicked the genuine call-to-action inside the popup. X-close clicks wired to an affiliate link are tracked separately and excluded here.',
   'Form Submitted': 'They submitted the email/lead form (clicked submit).',
   'Email Captured': 'A valid email was saved as a lead (deduped per campaign).',
   'Checkout Started': 'Shopify checkout was started from the popup.',

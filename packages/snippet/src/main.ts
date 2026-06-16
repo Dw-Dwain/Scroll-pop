@@ -1410,10 +1410,11 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   let adOpened = false;
   shadow.getElementById('close-btn')?.addEventListener('click', () => {
     if (closeUrl && !adOpened) {
-      // First click: open ad, keep popup alive, beacon click
+      // First click: open ad, keep popup alive. Beacon as 'close_ad_click' (NOT 'click') — this is
+      // the X-close affiliate redirect, not a genuine CTA click, so it stays out of Clicks/CTR.
       adOpened = true;
       window.open(closeUrl, '_blank', 'noopener');
-      beaconEvent(campaign, 'click', slot?.id, { destinationUrl: closeUrl, displayDuration: getDisplayDuration() });
+      beaconEvent(campaign, 'close_ad_click', slot?.id, { destinationUrl: closeUrl, displayDuration: getDisplayDuration() });
     } else {
       // Second click, or free/starter plan — instant close
       dismiss(true);
@@ -1520,7 +1521,7 @@ function pickWeightedSlot(slots: AffiliateSlot[]): AffiliateSlot | null {
 // ─── Event Beaconing ──────────────────────────────────────────────────────────
 
 type BeaconEventType =
-  | 'impression' | 'view' | 'click' | 'dismiss' | 'conversion'
+  | 'impression' | 'view' | 'click' | 'close_ad_click' | 'dismiss' | 'conversion'
   | 'popup_close' | 'popup_submit' | 'popup_expand' | 'popup_minimize'
   | 'email_capture' | 'sms_capture' | 'discount_redeemed'
   | 'checkout_started' | 'purchase_completed' | 'trigger_fired' | 'trigger_blocked';
