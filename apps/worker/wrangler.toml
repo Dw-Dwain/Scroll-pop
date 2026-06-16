@@ -49,11 +49,18 @@ id = "00a5652f5e9d435bbd1ada64fe089088"
 #   REDIS_TOKEN      — Upstash Redis token     (wrangler secret put REDIS_TOKEN)
 #   SENTRY_DSN       — Sentry DSN              (wrangler secret put SENTRY_DSN)
 #
-# To set for production:
-#   pnpm wrangler secret put REDIS_URL --env production
-#   pnpm wrangler secret put REDIS_TOKEN --env production
-#   pnpm wrangler secret put SENTRY_DSN --env production
+# To set for production — the worker DEPLOYS as `scrollpop-worker` via `--env=""`
+# (see the CI job + the `deploy` npm script), so secrets MUST target that same env.
+# Using `--env production` instead creates a STRAY `scrollpop-worker-production`
+# worker and puts the secret on the wrong target — the LIVE worker keeps its old
+# value. Always use `--env=""` (or no --env):
+#   pnpm wrangler secret put REDIS_URL --env=""
+#   pnpm wrangler secret put REDIS_TOKEN --env=""
+#   pnpm wrangler secret put SENTRY_DSN --env=""
 
+# NOTE: CI deploys with `--env=""` (the top-level config above), NOT this env, so
+# this block is not the live deploy target. Kept for reference only — never set
+# live secrets with `--env production` (they land on a stray worker, not prod).
 [env.production]
 vars = { ENVIRONMENT = "production", API_ORIGIN = "https://scrollpop-api.fly.dev" }
 

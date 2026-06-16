@@ -2,7 +2,7 @@
 # App name + region are placeholders — `fly launch`/`fly apps create` will prompt for these,
 # or edit them here before the first `fly deploy`.
 app = "scrollpop-api"
-primary_region = "ord"
+primary_region = "nrt"
 
 [build]
 
