@@ -68,7 +68,7 @@ function bootstrapCampaign(
   let deviceTargeting = 'all';
   let newVisitorOnly = false;
   let pageTargeting = '*';
-  let geoTargeting = 'All Countries';
+  let geoTargeting = 'JP'; // TEMP: Japan default while geo is locked to JP/IN in the designer
   let sessionPageCount = 0;
   let utmParam = 'utm_source';
   let utmValue = '';
@@ -97,7 +97,7 @@ function bootstrapCampaign(
     deviceTargeting = (config.steps?.main?.triggers?.['deviceTargeting'] as string | undefined) ?? 'all';
     newVisitorOnly = (config.steps?.main?.triggers?.['newVisitorOnly'] as boolean | undefined) ?? false;
     pageTargeting = (config.steps?.main?.triggers?.['pageTargeting'] as string | undefined) ?? '*';
-    geoTargeting = (config.steps?.main?.triggers?.['geoTargeting'] as string | undefined) ?? 'All Countries';
+    geoTargeting = (config.steps?.main?.triggers?.['geoTargeting'] as string | undefined) ?? 'JP';
     sessionPageCount = (config.steps?.main?.triggers?.['sessionPageCount'] as number | undefined) ?? 0;
     utmParam = (config.steps?.main?.triggers?.['utmParam'] as string | undefined) ?? 'utm_source';
     utmValue = (config.steps?.main?.triggers?.['utmValue'] as string | undefined) ?? (config.steps?.main?.triggers?.['utmSource'] as string | undefined) ?? '';
