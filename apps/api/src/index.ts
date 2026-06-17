@@ -84,6 +84,12 @@ export const redis = process.env['REDIS_URL']?.startsWith('redis://')
     });
 
 async function bootstrap() {
+  // Security (S9): warn loudly if the Worker-trust secret is missing in production. isFromWorker()
+  // already fails closed when it's unset (nobody is wrongly trusted), but a missing secret means the
+  // edge Worker's forwarded IP/country/revenue are all dropped — surface it so ops notice.
+  if (!isDev && !process.env['INTERNAL_SECRET']) {
+    console.error('[security] INTERNAL_SECRET is not set in production — Worker-forwarded IP/country/revenue will be ignored. Set it.');
+  }
   // CORS
   const allowedOrigins = [
     process.env['DASHBOARD_URL'],
@@ -448,6 +454,9 @@ async function bootstrap() {
   // tenant over its limit would require thousands of distinct IPs, each capped here AND by the
   // global 500/min IP limit. Tune if a legitimate high-traffic single-egress customer trips it.
   const IMPRESSION_PER_IP_PER_MIN = 120;
+  // Per-(campaign, IP) cap on email_capture/min (S6). It's exempt from the origin gate (so leads
+  // save on custom domains) but triggers outbound email + ESP writes, so cap it tightly per IP.
+  const EMAIL_CAPTURE_PER_IP_PER_MIN = 10;
 
   function sanitizeEventUrl(url: unknown): string | null {
     if (typeof url !== 'string' || url.length > 2048) return null;
@@ -457,12 +466,42 @@ async function bootstrap() {
     } catch { return null; }
   }
 
+  // Bound a free-text id/label stored on an event: reject empty/oversized, else keep as-is (S13).
+  function clampStr(v: unknown, max: number): string | null {
+    return typeof v === 'string' && v.length > 0 && v.length <= max ? v : null;
+  }
+
+  // Bound the client-supplied `metadata` JSONB so a forged event can't bloat the events table with
+  // huge/deeply-nested junk: drop non-objects, cap key count and serialized size (S13).
+  function safeMetadata(m: unknown): Record<string, unknown> {
+    if (!m || typeof m !== 'object' || Array.isArray(m)) return {};
+    try {
+      if (Object.keys(m as object).length > 50) return {};
+      if (JSON.stringify(m).length > 8192) return {};
+    } catch { return {}; }
+    return m as Record<string, unknown>;
+  }
+
+  // True only if the request carries a valid INTERNAL_SECRET (proving it came from our edge
+  // Worker). FAILS CLOSED: if INTERNAL_SECRET is unset/empty, return false for everyone rather than
+  // letting `undefined === undefined` match — a missing secret would otherwise let any direct,
+  // unauthenticated caller spoof the trusted-Worker headers (forge country/revenue, rotate the
+  // forwarded IP to evade the flood gate). Constant-time compare over equal-length buffers (S9).
+  function isFromWorker(req: { headers: Record<string, unknown> }): boolean {
+    const secret = process.env['INTERNAL_SECRET'];
+    if (!secret) return false;
+    const provided = req.headers['x-internal-secret'];
+    if (typeof provided !== 'string' || provided.length !== secret.length) return false;
+    try { return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret)); }
+    catch { return false; }
+  }
+
   // Resolve the real client IP. Only trust the forwarded CF-Connecting-IP header when the
   // request actually came from our Worker (proven by INTERNAL_SECRET) — otherwise a direct
   // caller to the public API could spoof the header to evade per-IP limits. Falls back to the
   // unspoofable socket IP for direct callers.
   function realClientIp(req: { headers: Record<string, unknown>; ip: string }): string {
-    const fromWorker = req.headers['x-internal-secret'] === process.env['INTERNAL_SECRET'];
+    const fromWorker = isFromWorker(req);
     if (fromWorker) {
       const fwd = req.headers['x-cf-connecting-ip'];
       if (typeof fwd === 'string' && fwd) return fwd;
@@ -664,6 +703,18 @@ async function bootstrap() {
     } catch { return memImpressionWithinIpQuota(campaignId, ip); }
   }
 
+  // Per-(campaign, IP) flood gate for email_capture (S6) — tighter than impressions since legit
+  // users submit once. Best-effort: when Redis is down the 500/min route limit still applies.
+  async function emailCaptureWithinIpQuota(campaignId: string, ip: string): Promise<boolean> {
+    if (!redis) return true;
+    try {
+      const k = `sp_ec_gate:${campaignId}:${ip}`;
+      const n = await redis.incr(k);
+      if (n === 1) await redis.expire(k, 60);
+      return typeof n !== 'number' || n <= EMAIL_CAPTURE_PER_IP_PER_MIN;
+    } catch { return true; }
+  }
+
   app.post<{ Body: { events?: any[] } }>('/e', {
     config: {
       rateLimit: {
@@ -682,7 +733,7 @@ async function bootstrap() {
     const clientIp = realClientIp(request as any);
     // Only the Cloudflare Worker (proven by INTERNAL_SECRET) is trusted to supply the
     // visitor's country — a direct caller could otherwise forge geo analytics (P2-3).
-    const fromWorker = request.headers['x-internal-secret'] === process.env['INTERNAL_SECRET'];
+    const fromWorker = isFromWorker(request as any);
     const payload = request.body;
     if (payload && Array.isArray(payload.events)) {
       for (const rawEvt of payload.events) {
@@ -717,11 +768,13 @@ async function bootstrap() {
           const campaign = await resolveCampaignMeta(campaignId);
 
           if (campaign) {
-            // Origin gate: drop impressions/conversions whose page origin doesn't match the
-            // campaign's own site. Blocks cross-tenant analytics poisoning + quota-burn from
-            // forged events (the campaign UUID is public in the served config). Fails open.
-            if ((eventType === 'impression' || eventType === 'conversion') &&
-                !eventOriginAllowed(safePageUrl, campaign)) {
+            // Origin gate now applies to ALL analytic event types (impression / conversion / click /
+            // close_ad_click / view / dismiss). The campaign UUID is public in the served config, so
+            // an attacker could otherwise forge unlimited clicks/views to poison a competitor's
+            // analytics + fire their outbound webhooks (S5). `email_capture` stays exempt (leads must
+            // save on custom/storefront domains not in the known-domain list — CTO-AUDIT P0-3); it
+            // gets its own per-IP flood gate (S6). Still fails open when no domain is known.
+            if (eventType !== 'email_capture' && !eventOriginAllowed(safePageUrl, campaign)) {
               continue;
             }
 
@@ -731,23 +784,29 @@ async function bootstrap() {
               continue;
             }
 
+            // email_capture is exempt from the origin gate but triggers outbound email + ESP/lead
+            // writes — cap it per IP so it can't email-bomb a victim through the operator's sender
+            // or poison the lead list (S6). Drops only the abusable side effects, not the event row.
+            const emailCaptureFlooded = eventType === 'email_capture' &&
+              !(await emailCaptureWithinIpQuota(campaignId, clientIp));
+
             await db.insert(events).values({
               tenantId: campaign.tenantId,
               siteId: campaign.siteId,
               campaignId,
               eventType,
-              affiliateSlotId: affiliateSlotId || null,
+              affiliateSlotId: clampStr(affiliateSlotId, 100),
               visitorId: safeVisitorId,
               sessionId: safeSessionId,
               device: safeDevice,
               pageUrl: safePageUrl,
               referrer: safeReferrer,
               country: fromWorker ? (country || null) : null,
-              metadata: metadata ?? meta ?? {},
+              metadata: safeMetadata(metadata ?? meta),
               scrollDepthPct: safeScrollDepth,
-              trafficSource: trafficSource || null,
-              abVariantId: abVariantId || null,
-              shopifyOrderId: shopifyOrderId || null,
+              trafficSource: clampStr(trafficSource, 100),
+              abVariantId: clampStr(abVariantId, 100),
+              shopifyOrderId: clampStr(shopifyOrderId, 100),
               revenueCents: safeRevenueCents,
             });
 
@@ -782,7 +841,7 @@ async function bootstrap() {
             // known-domain list. Previously leads only saved on `conversion`, which the origin gate
             // dropped on those domains — so lead capture silently failed. Best-effort — never break
             // ingest. CTO-AUDIT P0-3.
-            if (eventType === 'conversion' || eventType === 'email_capture') {
+            if ((eventType === 'conversion' || eventType === 'email_capture') && !emailCaptureFlooded) {
               const md = (metadata ?? meta ?? {}) as Record<string, unknown>;
               const leadEmail = extractLeadEmail(md);
               if (leadEmail) {
@@ -803,7 +862,7 @@ async function bootstrap() {
 
             // Email auto-responder: on email_capture, send the operator-configured reply
             // if enabled. Best-effort — never fail the ingest. P2-13.
-            if (eventType === 'email_capture' && emailEnabled()) {
+            if (eventType === 'email_capture' && !emailCaptureFlooded && emailEnabled()) {
               void (async () => {
                 try {
                   const cam = await db.query.campaigns.findFirst({
@@ -833,7 +892,7 @@ async function bootstrap() {
 
             // ESP sync: on email_capture, forward lead to Klaviyo / Mailchimp if configured.
             // P1-8 (Klaviyo) + P1-9 (Mailchimp). Best-effort — never blocks ingest.
-            if (eventType === 'email_capture') {
+            if (eventType === 'email_capture' && !emailCaptureFlooded) {
               void (async () => {
                 try {
                   const md5 = (metadata ?? meta ?? {}) as Record<string, unknown>;
