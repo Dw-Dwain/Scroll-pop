@@ -27,3 +27,8 @@ e2e/.last-run.json
 
 # Generated lint report
 apps/dashboard/lint-report.json
+
+# Local dev/debug scripts + preview scratch — never commit (security audit S8): these have held a
+# fixed localtunnel subdomain, local dev DB creds, and committed GitHub token fragments.
+scratch/
+.preview/contributing.html
