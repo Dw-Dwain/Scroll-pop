@@ -720,7 +720,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
         {/* Top countries */}
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Top Countries</div>
-          {(breakdown?.['countries'] as Array<{ country: string; count: number }> | undefined)?.length ?? 0 > 0 ? (
+          {(((breakdown?.['countries'] as Array<{ country: string; count: number }> | undefined)?.length) ?? 0) > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
                 {(breakdown!['countries'] as Array<{ country: string; count: number }>).slice(0, 6).map((c, i) => (
