@@ -513,6 +513,10 @@ function preloadCampaignImages(campaign: CampaignConfig): void {
 function registerCampaignTriggers(campaign: CampaignConfig): void {
   let fired = false;
   let triggerBeaconed = false;
+  // Block telemetry is also once-per-load (B1): a multi-trigger campaign re-enters fire() per
+  // trigger, and a still-blocked display would emit trigger_blocked N times while trigger_fired is
+  // emitted once — making "Blocked" exceed "Triggered" in the Journeys diagnose funnel.
+  let blockBeaconed = false;
 
   // fire() is called by a trigger with its metadata so we can beacon it
   const fire = (triggerMeta?: { triggerType: string; scrollPct?: number }) => {
@@ -534,15 +538,15 @@ function registerCampaignTriggers(campaign: CampaignConfig): void {
 
     if (!checkFrequencyCap(campaign.id, campaign.frequency)) {
       // Real block telemetry (Journeys diagnose): the trigger fired but display was suppressed
-      // by the frequency cap. This is the one block reason decided client-side.
-      beaconEvent(campaign, 'trigger_blocked', undefined, { reason: 'frequency_cap' });
+      // by the frequency cap. Emitted once per load (B1).
+      if (!blockBeaconed) { blockBeaconed = true; beaconEvent(campaign, 'trigger_blocked', undefined, { reason: 'frequency_cap' }); }
       return;
     }
     // One popup at a time: don't stack over a popup that's already on screen. The trigger is
     // one-shot, so this campaign just won't show on this page (keeps multiple campaigns/journeys
     // on one page from overlapping).
     if (_spVisible) {
-      beaconEvent(campaign, 'trigger_blocked', undefined, { reason: 'popup_open' });
+      if (!blockBeaconed) { blockBeaconed = true; beaconEvent(campaign, 'trigger_blocked', undefined, { reason: 'popup_open' }); }
       return;
     }
     fired = true;
