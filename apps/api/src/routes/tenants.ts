@@ -4,9 +4,11 @@ import { db } from '../db/client.js';
 import { tenants } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 
+// NOTE: `plan` is deliberately NOT updatable here — it is owned exclusively by the Stripe webhook
+// and the super-admin route. Accepting it let any member self-elevate to a paid tier for free,
+// bypassing Stripe (S2). Keep it out of this body.
 const UpdateTenantBody = z.object({
   name: z.string().min(1).max(100).optional(),
-  plan: z.enum(['free', 'starter', 'growth', 'scale', 'agency']).optional(),
 });
 
 export const tenantRoutes: FastifyPluginAsync = async (fastify) => {
@@ -23,7 +25,8 @@ export const tenantRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: [tenant] }); // Refine's useList expects an array
   });
 
-  // PATCH /api/v1/tenants/:id
+  // PATCH /api/v1/tenants/:id — only ever mutates the CALLER'S OWN tenant (request.tenantId), never
+  // the client-supplied :id. Keying the WHERE on params.id was a cross-tenant IDOR (S2).
   fastify.patch<{ Params: { id: string } }>('/tenants/:id', async (request, reply) => {
     const body = UpdateTenantBody.parse(request.body);
 
@@ -31,10 +34,9 @@ export const tenantRoutes: FastifyPluginAsync = async (fastify) => {
       .update(tenants)
       .set({
         ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.plan !== undefined ? { plan: body.plan } : {}),
         updatedAt: new Date(),
       })
-      .where(eq(tenants.id, request.params.id))
+      .where(eq(tenants.id, request.tenantId))
       .returning();
 
     if (!updated) {
