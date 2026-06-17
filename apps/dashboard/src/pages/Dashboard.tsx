@@ -259,10 +259,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       spark: spark('views'),
     },
     {
-      // "Clicks" = unique people who clicked (distinct clickers), not raw click events — so it can't
-      // exceed reach and pairs sensibly with the unique-visitor CTR. Falls back to raw until /overview loads.
+      // "Clicks" = total genuine CTA click events (X-close/affiliate redirects are tracked separately
+      // as close_ad_click and excluded). Matches the Analytics page + the "Events over time" chart
+      // below so the number is identical everywhere. CTR (next tile) is the bounded unique-clicker rate.
       label: 'Clicks',
-      value: overview?.uniqueClicks ?? overview?.clicks ?? currClks,
+      value: overview?.clicks ?? currClks,
       delta: pctDelta(currClks, prevClks),
       color: 'var(--data-3)',
       spark: spark('clicks'),

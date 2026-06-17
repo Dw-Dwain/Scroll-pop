@@ -189,6 +189,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
           campaignId: events.campaignId,
           impressions: sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
           clicks: sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+          // Unique-visitor counts for the bounded CTR used on every other surface (clickers ÷ reach).
+          reach: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
+          clickers: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
         })
         .from(events)
         .where(
@@ -205,8 +208,10 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         campaignId: r.campaignId,
         impressions: r.impressions,
         clicks: r.clicks,
-        // Clamp ≤100% — raw click events can exceed impressions (multi-click per popup view).
-        ctr: r.impressions > 0 ? parseFloat(Math.min(r.clicks / r.impressions, 1).toFixed(4)) : 0,
+        // Bounded unique-clicker CTR (distinct clickers ÷ distinct reach) — identical to
+        // /analytics/overview + /analytics/campaigns so every surface shows the SAME CTR (was raw
+        // clicks/impressions here, which read higher for multi-click campaigns).
+        ctr: r.reach > 0 ? parseFloat(Math.min(r.clickers / r.reach, 1).toFixed(4)) : 0,
       }));
 
       return reply.send({ data: withCtr });
@@ -339,6 +344,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         campaignId:     events.campaignId,
         impressions:    sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
         clicks:         sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        reach:          sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
+        clickers:       sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
         emailCaptures:  sql<number>`count(*) filter (where ${events.eventType}::text = 'email_capture')::int`,
         checkouts:      sql<number>`count(*) filter (where ${events.eventType}::text = 'checkout_started')::int`,
         purchases:      sql<number>`count(*) filter (where ${events.eventType}::text = 'purchase_completed')::int`,
@@ -369,7 +376,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       purchases:        r.purchases,
       revenueCents:     r.revenueCents,
       revenueDollars:   +(r.revenueCents / 100).toFixed(2),
-      ctr:              r.impressions > 0 ? +(Math.min(r.clicks / r.impressions, 1) * 100).toFixed(2) : 0,
+      // Bounded unique-clicker CTR (clickers ÷ reach) ×100 — matches every other surface (was raw
+      // clicks/impressions here, which read higher for multi-click campaigns). Kept on the 0–100 scale.
+      ctr:              r.reach > 0 ? +(Math.min(r.clickers / r.reach, 1) * 100).toFixed(2) : 0,
       conversionRate:   r.impressions > 0 ? +(r.purchases / r.impressions * 100).toFixed(2) : 0,
       revenuePerPopup:  r.impressions > 0 ? +(r.revenueCents / r.impressions / 100).toFixed(4) : 0,
     })).sort((a, b) => b.revenueCents - a.revenueCents);
