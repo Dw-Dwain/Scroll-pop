@@ -163,7 +163,7 @@ APPI mechanism — consent, equivalent-protection, or supplementary measures.]
 termination, ScrollPop shall delete or return Personal Data within **[30] days**, except where
 retention is required by law.
 
-9.2 Analytics/event data is retained for **[retention period]** and then deleted or irreversibly
+9.2 Analytics/event data is retained for **13 months** and then deleted or irreversibly
 anonymized/aggregated.
 
 ---
