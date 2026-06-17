@@ -498,6 +498,19 @@ export const shopifyWebhookRoutes: FastifyPluginAsync = async (fastify) => {
       reply.code(401).send({ error: 'Invalid HMAC' });
       return false;
     }
+
+    // S11: replay window. The HMAC proves authenticity but not freshness — a captured valid webhook
+    // can be replayed (Shopify also legitimately retries). Reject when Shopify's own
+    // X-Shopify-Triggered-At is present and older than 5 minutes, so an old captured webhook (e.g.
+    // an uninstall/redact) can't be re-fired later. Lenient if the header is absent.
+    const triggeredAt = request.headers['x-shopify-triggered-at'] as string | undefined;
+    if (triggeredAt) {
+      const age = Date.now() - Date.parse(triggeredAt);
+      if (!Number.isNaN(age) && age > 5 * 60_000) {
+        reply.code(401).send({ error: 'Stale webhook (replay window exceeded)' });
+        return false;
+      }
+    }
     return true;
   }
 
@@ -623,6 +636,22 @@ export const shopifyWebhookRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!lastInteraction) {
         request.log.info({ shop }, 'orders/paid: no recent popup interaction found for attribution');
+        return reply.code(200).send({ received: true });
+      }
+
+      // S4: idempotency. Shopify retries orders/paid, and a captured valid body can be replayed —
+      // both would insert duplicate revenue. Skip if this order is already recorded (app-level dedup
+      // on the existing shopify_order_id column; no DB migration needed).
+      const alreadyRecorded = await db.query.events.findFirst({
+        where: and(
+          eq(events.siteId, installation.siteId),
+          eq(events.eventType, 'purchase_completed'),
+          eq(events.shopifyOrderId, shopifyOrderId),
+        ),
+        columns: { ts: true },
+      });
+      if (alreadyRecorded) {
+        request.log.info({ shop, shopifyOrderId }, 'orders/paid: duplicate order, skipping (idempotency)');
         return reply.code(200).send({ received: true });
       }
 
