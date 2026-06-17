@@ -48,7 +48,7 @@ interface ConsentBannerConfig {
     const policyText = escapeHtml(cfg.policyText || 'Privacy Policy');
     const policyLink =
       policyHref && policyHref !== '#'
-        ? `<a href="${policyHref}" target="_blank" rel="noopener" style="color:${accent};text-decoration:underline;margin-left:6px;">${policyText}</a>`
+        ? `<a href="${escapeHtml(policyHref)}" target="_blank" rel="noopener" style="color:${accent};text-decoration:underline;margin-left:6px;">${policyText}</a>`
         : '';
 
     const host = document.createElement('div');
