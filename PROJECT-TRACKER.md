@@ -157,17 +157,18 @@ CI's `deploy-worker`/`deploy-dashboard` jobs were **failing** (not skipping) bec
 ### ⚠️ Open follow-ups
 | ID | Status | Item |
 |---|---|---|
-| FU-1 | ⬜ **Deprioritized** | **`requireConsent` site-settings toggle** (EU GDPR opt-in). **Owner confirmed targeting Japan + USA, not EU** — and a geo include-list (US+JP) excludes EU visitors anyway, keeping GDPR out of scope. Revisit only if EU markets are added. |
+| FU-1 | 🔜 **Queued — next session (C1)** | **EU/UK opt-in consent by DEFAULT.** Owner **REVERSED** the prior "don't target EU" stance on **Jun 17 2026**: build a geo-gated consent gate — the snippet's `requireConsent` (`packages/snippet/src/main.ts:205`, currently defaults false) keyed off the edge country so **EEA/UK** visitors get a **prior opt-in** (no persistent visitor-ID, no beacons until consent — ePrivacy Art.5(3)/GDPR Art.6); US/JP traffic unaffected. Supersedes the old deprioritized site-settings-toggle scope. |
 | FU-2 | ⬜ | **Snippet size pass** — bundle at **9.94 KB / 10 KB** (~60 bytes headroom). `console.*` is already dropped at build, so the easy win is gone; a real reduction needs an element-style-builder refactor. Do before adding more snippet logic. |
 | FU-3 | ⬜ | **`deploy-marketing` CI job** — scrollpop.online (`site-plan/`) is the only artifact still deployed by hand; add it to CI so the GPC copy + future content auto-publish. |
-| FU-4 | ⬜ | **Legal review** — privacy policy, Terms, DPA, default consent posture by privacy counsel. Scope now narrows to **CCPA (US) + APPI (Japan)** incl. cross-border transfer to US ESPs (EU deferred with FU-1). |
+| FU-4 | 🔜 **Queued — next session (C2/C3)** | **Legal docs** — (C2) rewrite the privacy policy to **Fly.io / Tokyo** with the corrected sub-processor list (drop Neon/Render/Singapore — wrong post-migration) for legal sign-off; (C3) fill `docs/dpa.md` + document the **APPI/SCC** cross-border transfer basis per sub-processor. EU is **back in scope** alongside CCPA (US) + APPI (Japan) now that C1 adds an EU opt-in gate. |
 | FU-5 | ✅ Done | Manual snippet verify (`verify-snippet` + "Test connection") — shipped `2b94812`. |
 
 ### ⚖️ Legal / Compliance posture (current code behavior — NOT legal advice)
 - **US / California (CCPA/CPRA):** opt-out model; snippet honors **GPC**. ✅ Aligned.
-- **EU / UK (GDPR / ePrivacy):** requires **prior explicit opt-in**. **Strategy (owner decision): don't target EU.** Setting geo to an include-list (e.g. US + JP) means the popup never fires for EU visitors → no EU data processed → GDPR out of scope for the campaign. The `requireConsent` opt-in gate (FU-1) is only needed if EU markets are added later.
-- **Japan (APPI + anti-spam):** lighter than GDPR — needs a clear privacy notice stating purpose, processors, and overseas transfer; marketing email is opt-in (the consent checkbox covers this).
+- **EU / UK (GDPR / ePrivacy):** requires **prior explicit opt-in**. **UPDATED Jun 17 2026 — owner now wants EU opt-in consent by DEFAULT (C1, queued next session).** The earlier "don't target EU / geo-exclude" strategy is **superseded**: ScrollPop will ship a geo-gated `requireConsent` so EU/UK visitors get a prior opt-in gate (no visitor-ID/beacons until consent) rather than relying on geo exclusion. See FU-1.
+- **Japan (APPI + anti-spam):** lighter than GDPR — needs a clear privacy notice stating purpose, processors, and overseas transfer; marketing email is opt-in (the consent checkbox covers this). **Note: first-party data now resides in Tokyo (`nrt`) as of the Jun 17 migration** — privacy notice must say so (C2).
 - **Email marketing (all regions):** the new consent checkbox provides explicit opt-in; CAN-SPAM still needs an unsubscribe path.
+- **Data retention:** events/analytics are **uniformly purged at 13 months** (the enforced behavior). **C4 (queued, DOCS ONLY):** the privacy/legal pages currently state "90 days free / 24 months paid," which does **not** match the enforced 13-month purge — owner chose to **align the docs to what's enforced**, not build a new tiered schedule.
 - **Responsibility split:** ScrollPop is the data **processor** (provides GPC, consent hooks, DPA); the operator is the **controller** (must wire a CMP, set `requireConsent` for EU, publish a privacy policy, honor deletion/DSAR).
 - **Action:** have counsel review the docs + default posture (FU-4) before scaling EU traffic.
 
