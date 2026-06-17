@@ -18,10 +18,13 @@ const TAG_LEN = 16;
 function getKey(): Buffer | null {
   const b64 = process.env['SHOPIFY_ENCRYPTION_KEY'];
   if (!b64) {
-    // In production a missing key must be a hard failure — silently storing OAuth tokens
-    // and ESP/webhook secrets as plaintext is a data-at-rest breach waiting to happen (M-3).
-    if (process.env['NODE_ENV'] === 'production') {
-      throw new Error('SHOPIFY_ENCRYPTION_KEY is required in production — refusing to store secrets as plaintext');
+    // A missing key must be a hard failure ANYWHERE except explicit local dev/test — silently
+    // storing OAuth tokens + ESP/webhook secrets as plaintext is a data-at-rest breach (M-3, S10).
+    // The old `=== 'production'` check failed OPEN when NODE_ENV was unset/misconfigured, so a
+    // misdeployed prod instance would store plaintext. Fail closed unless explicitly dev/test.
+    const env = process.env['NODE_ENV'];
+    if (env !== 'development' && env !== 'test') {
+      throw new Error('SHOPIFY_ENCRYPTION_KEY is required — refusing to store secrets as plaintext (set NODE_ENV=development to bypass locally)');
     }
     return null;
   }

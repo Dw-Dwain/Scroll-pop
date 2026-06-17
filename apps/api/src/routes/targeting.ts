@@ -131,6 +131,22 @@ export const targetingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{ Params: { id: string } }>('/targeting/:id', async (request, reply) => {
     const body = UpdateTargetingBody.parse(request.body);
 
+    // S12: validate a url_regex pattern on update too. POST/PUT validate it, but PATCH previously
+    // wrote body.value straight through — letting an operator store a ReDoS pattern (contained today
+    // by the snippet's isSafeRegex backstop, but the storage gate should match). Look up the rule's
+    // kind (tenant-scoped) and validate when a url_regex rule's value is being changed.
+    if (body.value !== undefined) {
+      const [existing] = await db
+        .select({ kind: targetingRules.kind })
+        .from(targetingRules)
+        .where(and(eq(targetingRules.id, request.params.id), eq(targetingRules.tenantId, request.tenantId)))
+        .limit(1);
+      if (existing?.kind === 'url_regex') {
+        const err = validateRegexPattern((body.value as Record<string, unknown>)['pattern']);
+        if (err) return reply.code(400).send({ error: { code: 'INVALID_REGEX', message: err } });
+      }
+    }
+
     const [updated] = await db
       .update(targetingRules)
       .set({
