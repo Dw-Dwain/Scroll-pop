@@ -204,6 +204,19 @@ let _spVisible = false;
 let _skipTracking = false;
 let _requireConsent = false; // strict per-tenant opt-in (set from config)
 
+// EEA + UK (ISO-3166 alpha-2). Visitors here get opt-in-by-default consent: no analytics,
+// no persistent visitor id, and no event beacons until consent is explicitly granted —
+// regardless of the tenant's requireConsent flag (ePrivacy Art.5(3) / GDPR Art.6). The
+// country comes from the edge (config.geo.country, derived from CF-IPCountry). Unknown geo is
+// treated as non-EEA (opt-out default), matching prior behavior for the rest of the world.
+const EEA_UK = new Set([
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT',
+  'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB',
+]);
+function consentRequiredByGeo(): boolean {
+  return !!visitorCountry && EEA_UK.has(visitorCountry.toUpperCase());
+}
+
 // ─── Exclusion Guards ─────────────────────────────────────────────────────────
 // Evaluates if we should skip analytics tracking (but still show popups)
 function evaluateSkipTracking(): void {
@@ -225,12 +238,13 @@ function evaluateSkipTracking(): void {
   // Consent gate (GDPR/ePrivacy): the host site or its CMP can deny analytics by
   // setting window.__sp_consent = false (or Google Consent Mode analytics_storage
   // = 'denied'). When denied we still render popups but record no analytics and
-  // never persist a visitor id. EU/UK customers should wire this to their CMP.
-  // When the tenant requires strict opt-in (_requireConsent), the default is to skip
-  // until consent is explicitly granted.
+  // never persist a visitor id. EU/UK customers may also wire this to their own CMP.
+  // Opt-in (skip until consent is explicitly granted) is the default when EITHER the
+  // tenant requires it (_requireConsent) OR the visitor is in the EEA/UK (geo gate).
   const w = window as any;
   const cm = w.gtag_consent?.analytics_storage ?? w.__sp_consent_mode;
-  if (w.__sp_consent === false || cm === 'denied' || (_requireConsent && w.__sp_consent !== true && cm !== 'granted')) {
+  const optInRequired = _requireConsent || consentRequiredByGeo();
+  if (w.__sp_consent === false || cm === 'denied' || (optInRequired && w.__sp_consent !== true && cm !== 'granted')) {
     _skipTracking = true;
   }
 }
@@ -243,7 +257,13 @@ function evaluateSkipTracking(): void {
 // Honors Global Privacy Control as an automatic opt-out (never shows the bar).
 const CONSENT_CHOICE_KEY = '__sp_consent_choice';
 function initConsent(cfg: SiteConfig): void {
-  const banner = cfg.consentBanner;
+  let banner = cfg.consentBanner;
+  // EEA/UK opt-in: those visitors default to no tracking, so they need a path to grant
+  // consent even when the tenant didn't configure a bar. Synthesize a default one (its copy
+  // falls back to the built-in strings in consent.js).
+  if (!banner?.enabled && consentRequiredByGeo()) {
+    banner = { ...banner, enabled: true };
+  }
   if (!banner?.enabled) return;
 
   const apply = (granted: boolean): void => {
@@ -338,9 +358,12 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
     activeSiteId = config.siteId;
     sitePlan = config.plan || 'free';
     visitorCountry = config.geo?.country || '';
-    // Strict opt-in: popups still render, but record no analytics until consent is
-    // granted. Re-evaluate now that we know the tenant's requireConsent setting.
-    if (config.requireConsent) { _requireConsent = true; evaluateSkipTracking(); }
+    // Strict opt-in: popups still render, but record no analytics until consent is granted.
+    // Required either by the tenant (config.requireConsent) or by the visitor's geo (EEA/UK).
+    // Re-evaluate now that BOTH the tenant flag and the visitor country are known — the
+    // boot-time evaluate ran before geo was available.
+    if (config.requireConsent) _requireConsent = true;
+    evaluateSkipTracking();
     // Cookie-consent bar: apply a returning visitor's stored choice, or show the banner.
     initConsent(config);
     console.log('[ScrollPop] Config loaded successfully:', config);
