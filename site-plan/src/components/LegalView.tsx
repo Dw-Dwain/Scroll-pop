@@ -6,7 +6,7 @@ interface LegalViewProps {
 }
 
 const LAST_UPDATED: Record<string, string> = {
-  'privacy-policy': 'May 1, 2026',
+  'privacy-policy': 'June 17, 2026',
   'terms': 'May 1, 2026',
   'security': 'May 1, 2026',
 };
@@ -60,13 +60,13 @@ function PrivacyPolicy() {
       </Section>
 
       <Section title="4. Cookies">
-        <p>ScrollPop sets no third-party tracking cookies on your visitors. The snippet uses first-party <code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">localStorage</code> on your own site for frequency-capping and an anonymous visitor identifier. A visitor's IP address is read at the edge (Cloudflare) to derive an approximate country and is <strong className="font-medium text-neutral-800">not stored</strong>. The snippet honours the browser Do-Not-Track signal and a host-site consent signal (<code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">window.__sp_consent = false</code> or Google Consent Mode <code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">analytics_storage: 'denied'</code>), which disables analytics and the visitor identifier while still allowing popups to display.</p>
+        <p>ScrollPop sets no third-party tracking cookies on your visitors. The snippet uses first-party <code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">localStorage</code> on your own site for frequency-capping and an anonymous visitor identifier. A visitor's IP address is read at the edge (Cloudflare) to derive an approximate country and is <strong className="font-medium text-neutral-800">not stored</strong>. The snippet honours the Global Privacy Control signal and a host-site consent signal (<code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">window.__sp_consent = false</code> or Google Consent Mode <code className="font-mono text-xs bg-neutral-100 px-1 py-0.5 rounded">analytics_storage: 'denied'</code>), which disables analytics and the visitor identifier while still allowing popups to display. For visitors in the EEA and the UK, analytics and the visitor identifier are off by default and activate only after the visitor explicitly grants consent.</p>
         <p>Our marketing site (scrollpop.online) may use functional cookies for session management. You can opt out via your browser settings.</p>
       </Section>
 
       <Section title="5. Data Retention">
         <p>Account data is retained for the duration of your subscription plus 90 days after cancellation, after which it is deleted. You may request immediate deletion at any time by emailing <a href="mailto:privacy@scrollpop.online" className="text-[#C05621] underline">privacy@scrollpop.online</a>.</p>
-        <p>Analytics event data (impressions, clicks, conversions) is retained for 24 months by default. You can purge it from the dashboard at any time under Settings → Data.</p>
+        <p>Analytics event data (impressions, clicks, conversions) is retained for 13 months on every plan, after which it is automatically and permanently purged. You can also purge it from the dashboard at any time under Settings → Data.</p>
       </Section>
 
       <Section title="6. GDPR & CCPA Rights">
