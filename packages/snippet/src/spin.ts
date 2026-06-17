@@ -43,6 +43,18 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // Validate a CSS color (hex / `transparent` / numeric rgb[a]); else fall back. Mirrors
+  // sanitize.ts safeCssColor — spin.ts is a standalone chunk so it can't import it. This is the
+  // ONLY barrier between a malicious tenant color and a <style> breakout (stored XSS), so every
+  // color interpolated into the shadow <style> MUST go through it.
+  function safeCssColor(val: unknown, fallback: string): string {
+    if (typeof val !== 'string') return fallback;
+    if (/^#[0-9A-Fa-f]{3,8}$/.test(val)) return val;
+    if (val === 'transparent') return val;
+    if (/^rgba?\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?\s*(?:,\s*[\d.]+%?\s*)?\)$/.test(val)) return val;
+    return fallback;
+  }
+
   function pickWeighted(slices: SpinSlice[]): number {
     const total = slices.reduce((s, sl) => s + (sl.weight ?? 1), 0);
     let r = Math.random() * total;
@@ -111,8 +123,9 @@
       { label: '5% OFF', color: '#10b981' },
       { label: '15% OFF', color: '#3b82f6' },
     ];
-    const bg = cfg.backgroundColor || '#ffffff';
-    const accent = cfg.accentColor || '#6366f1';
+    const bg = safeCssColor(cfg.backgroundColor, '#ffffff');
+    const accent = safeCssColor(cfg.accentColor, '#6366f1');
+    const text = safeCssColor(cfg.textColor, '#111827');
     const spinMs = Math.max(1000, Math.min(8000, cfg.spinDurationMs ?? 4000));
 
     shadow.innerHTML = `
@@ -126,7 +139,7 @@
 .close-btn{position:absolute;top:12px;right:14px;background:none;border:none;cursor:pointer;
   font-size:18px;color:#9ca3af;padding:4px 8px;border-radius:4px;}
 .close-btn:hover{background:rgba(0,0,0,.06);}
-h2{font-size:22px;font-weight:700;margin:0 0 6px;color:${cfg.textColor || '#111827'};}
+h2{font-size:22px;font-weight:700;margin:0 0 6px;color:${text};}
 p{font-size:14px;color:#6b7280;margin:0 0 20px;}
 .wheel-wrap{position:relative;display:inline-block;margin-bottom:20px;}
 .pointer{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
