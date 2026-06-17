@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { sites, campaigns, events, tenants } from '../db/schema.js';
 import { eq, and, isNull, sql, gte } from 'drizzle-orm';
-import { isPublicUrl } from '../lib/url-guard.js';
+import { isPublicUrl, safePublicFetch } from '../lib/url-guard.js';
 import { PLAN_LIMITS, AffiliateLinkSchema } from '@scrollpop/shared';
 
 const CreateSiteBody = z.object({
@@ -306,10 +306,12 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
 
     let wpResponse: { public_key?: string; enabled?: boolean; plugin?: string; version?: string } = {};
     try {
-      const res = await fetch(statusUrl, {
+      // safePublicFetch follows redirects (apex→www, http→https) re-checking the SSRF guard on
+      // every hop, so a WP site that redirects still verifies while a redirect can never reach an
+      // internal host.
+      const res = await safePublicFetch(statusUrl, {
         signal: AbortSignal.timeout(8000),
         headers: { Accept: 'application/json' },
-        redirect: 'error', // a redirect could bounce the request to an internal host
       });
       if (!res.ok) {
         return reply.code(422).send({
@@ -391,37 +393,50 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
     const shopHost = site.shopifyShop
       ? (site.shopifyShop.includes('.') ? site.shopifyShop : `${site.shopifyShop}.myshopify.com`)
       : null;
-    const base = `https://${shopHost ?? site.domain}`.replace(/\/$/, '');
 
-    // SSRF guard (H-3): refuse to fetch a domain that resolves to a private/internal address.
-    if (!(await isPublicUrl(base))) {
-      return reply.code(422).send({ error: { code: 'UNREACHABLE', message: 'Site domain must be a public address.', url: base } });
+    // Storefront URLs to check, most-likely-first: the custom/storefront domain, the stored
+    // domain, then the Shopify shop host. `safePublicFetch` follows redirects with a per-hop SSRF
+    // re-check, so a Shopify store on a custom primary domain (whose *.myshopify.com 301s to the
+    // storefront) and apex→www / http→https redirects verify correctly instead of failing on the
+    // redirect. The SSRF guard (H-3) is preserved — each hop must resolve to a public address.
+    const toHost = (d: string) => d.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const candidates = [...new Set(
+      [site.customDomain, site.domain, shopHost]
+        .filter((d): d is string => !!d)
+        .map((d) => `https://${toHost(d)}`),
+    )];
+
+    if (candidates.length === 0) {
+      return reply.code(422).send({ error: { code: 'UNREACHABLE', message: 'No domain on record for this site.' } });
     }
 
-    let html = '';
-    try {
-      const res = await fetch(base, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'ScrollPop-Verify/1.0' }, redirect: 'error' });
-      if (!res.ok) {
-        return reply.code(422).send({ error: { code: 'UNREACHABLE', message: `Site returned HTTP ${res.status} at ${base}.`, url: base } });
+    let lastError = '';
+    for (const base of candidates) {
+      try {
+        const res = await safePublicFetch(base, {
+          signal: AbortSignal.timeout(8000),
+          headers: { 'User-Agent': 'ScrollPop-Verify/1.0' },
+        });
+        if (!res.ok) { lastError = `${base} returned HTTP ${res.status}.`; continue; }
+        const html = await res.text();
+        if (site.publicKey && html.includes(site.publicKey)) {
+          const [updated] = await db.update(sites)
+            .set({ verifiedAt: new Date(), updatedAt: new Date() })
+            .where(eq(sites.id, site.id)).returning();
+          return reply.send({ data: { verified: true, verifiedAt: updated?.verifiedAt, message: 'Snippet detected — site verified!' } });
+        }
+        lastError = `Snippet (this site's public key) not found at ${base}.`;
+      } catch (err: any) {
+        lastError = `Could not reach ${base}. ${err?.message ?? ''}`.trim();
       }
-      html = await res.text();
-    } catch (err: any) {
-      return reply.code(422).send({ error: { code: 'UNREACHABLE', message: `Could not reach ${base}. Is the site live and publicly accessible?`, detail: err?.message, url: base } });
     }
 
-    if (!site.publicKey || !html.includes(site.publicKey)) {
-      return reply.code(422).send({
-        error: {
-          code: 'SNIPPET_NOT_FOUND',
-          message: 'ScrollPop snippet not found in the page HTML. Confirm the embed (with this site\'s public key) is pasted in your theme and loads on the storefront, then retry. Note: snippets injected via a tag manager may not be detectable here.',
-        },
-      });
-    }
-
-    const [updated] = await db.update(sites)
-      .set({ verifiedAt: new Date(), updatedAt: new Date() })
-      .where(eq(sites.id, site.id)).returning();
-    return reply.send({ data: { verified: true, verifiedAt: updated?.verifiedAt, message: 'Snippet detected — site verified!' } });
+    return reply.code(422).send({
+      error: {
+        code: /not found/i.test(lastError) ? 'SNIPPET_NOT_FOUND' : 'UNREACHABLE',
+        message: `${lastError} Confirm the embed (with this site's public key) is live on your storefront, then retry. Note: snippets injected via a tag manager may not be detectable here.`,
+      },
+    });
   });
 
   // PATCH /api/v1/sites/:id/wordpress-url — store the WP site URL override

@@ -38,3 +38,37 @@ export async function isPublicUrl(rawUrl: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Fetch a URL, following redirects ONE HOP AT A TIME and re-running `isPublicUrl` on every
+ * hop. This keeps the SSRF protection that `redirect: 'error'` provided (a 3xx can never
+ * bounce the request to a private/internal address) WITHOUT breaking verification for sites
+ * that legitimately redirect — e.g. a Shopify store on a custom primary domain (whose
+ * `*.myshopify.com` 301s to the storefront), or apex→www / http→https.
+ *
+ * Throws if a hop resolves to a non-public address or the redirect chain exceeds `maxHops`.
+ * A 3xx response without a `Location` header is returned as-is (there's nothing to follow).
+ */
+export async function safePublicFetch(
+  startUrl: string,
+  init: RequestInit = {},
+  maxHops = 5,
+): Promise<Response> {
+  let url = startUrl;
+  for (let hop = 0; hop <= maxHops; hop++) {
+    if (!(await isPublicUrl(url))) {
+      throw new Error(`Refusing to fetch non-public address: ${url}`);
+    }
+    // `redirect: 'manual'` so we inspect each hop ourselves instead of letting fetch follow
+    // (which would skip the per-hop SSRF re-check).
+    const res = await fetch(url, { ...init, redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      if (!location) return res; // 3xx without a Location — nothing to follow; hand it back
+      url = new URL(location, url).toString(); // resolve relative redirects against the current URL
+      continue;
+    }
+    return res;
+  }
+  throw new Error(`Too many redirects (>${maxHops}) starting from ${startUrl}`);
+}
