@@ -87,10 +87,11 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/analytics/campaigns/:id — campaign-level daily breakdown
-  fastify.get<{ Params: { id: string } }>(
+  fastify.get<{ Params: { id: string }; Querystring: { days?: string } }>(
     '/analytics/campaigns/:id',
     async (request, reply) => {
-      const since = daysAgo(30);
+      const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
+      const since = daysAgo(days);
 
       const rows = await db
         .select({
@@ -109,7 +110,30 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         .groupBy(sql`date_trunc('day', ${events.ts})`, events.eventType)
         .orderBy(sql`date_trunc('day', ${events.ts})`);
 
-      return reply.send({ data: rows });
+      // Bounded unique-clicker CTR (distinct clickers ÷ distinct reach), computed identically to
+      // /analytics/overview + /analytics/campaigns so Campaign Detail shows the SAME CTR as the
+      // Dashboard and Analytics pages. (The old client-side raw clicks÷impressions could exceed
+      // 100% and disagreed with the other two views.)
+      const [uniq] = await db
+        .select({
+          reach:    sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
+          clickers: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
+        })
+        .from(events)
+        .where(
+          and(
+            eq(events.tenantId, request.tenantId),
+            eq(events.campaignId, request.params.id),
+            gte(events.ts, since)
+          )
+        );
+      const reach = uniq?.reach ?? 0;
+      const ctr = reach > 0 ? Math.min((uniq?.clickers ?? 0) / reach, 1) : 0;
+
+      return reply.send({
+        data: rows,
+        meta: { uniqueVisitors: reach, uniqueClicks: uniq?.clickers ?? 0, ctr: parseFloat(ctr.toFixed(4)) },
+      });
     }
   );
 

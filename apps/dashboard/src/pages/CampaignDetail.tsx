@@ -577,9 +577,11 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
   const { data: campaignData, isLoading: isCampaignLoading } = useOne({ resource: 'campaigns', id: campaignId });
   const { data: sitesData } = useList({ resource: 'sites' });
   const apiUrl = useApiUrl();
+  // Analytics window selector (7/30/90d) — mirrors the Analytics page so the two can be matched.
+  const [range, setRange] = React.useState<'7d' | '30d' | '90d'>('30d');
 
   const { data: analyticsRes, isLoading: analyticsLoading } = useCustom({
-    url: `${apiUrl}/analytics/campaigns/${campaignId}`, method: 'get',
+    url: `${apiUrl}/analytics/campaigns/${campaignId}?days=${range.replace('d', '')}`, method: 'get',
   });
   const { data: triggersRes, refetch: refetchTriggers } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'get' });
   const { data: targetingRes, refetch: refetchTargeting } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'get' });
@@ -602,6 +604,12 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
   // Wrap in useMemo so hook deps receive a stable reference instead of a new array/null on every render
   const analytics = React.useMemo(
     () => (analyticsRes as ApiResult<Array<{ eventType: string; count: number }>>)?.data ?? [],
+    [analyticsRes],
+  );
+  // Bounded unique-clicker CTR from the API (same formula the Dashboard + Analytics pages use),
+  // so all three views agree. Falls back to 0 until the response lands.
+  const analyticsMeta = React.useMemo(
+    () => (analyticsRes as { meta?: { ctr?: number; uniqueVisitors?: number; uniqueClicks?: number } } | undefined)?.meta,
     [analyticsRes],
   );
   const triggers: RuleItem[] = React.useMemo(
@@ -631,8 +639,11 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
       // X-close affiliate redirects — counted separately so CTR reflects genuine CTA interest.
       if (row.eventType === 'close_ad_click') adCloseClicks += row.count;
     }
-    return { impressions, views, clicks, adCloseClicks, ctr: impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0.00' };
-  }, [analytics]);
+    // CTR = bounded unique-clicker ÷ unique-reach from the API (matches Dashboard + Analytics).
+    // The old raw clicks÷impressions ratio could exceed 100% and disagreed with the other views.
+    const ctr = analyticsMeta?.ctr != null ? (analyticsMeta.ctr * 100).toFixed(2) : '0.00';
+    return { impressions, views, clicks, adCloseClicks, ctr };
+  }, [analytics, analyticsMeta]);
 
   // Build preview campaign only when design + triggers are loaded
   const previewCampaign = React.useMemo<Campaign | null>(() => {
@@ -706,6 +717,26 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
         </div>
       </div>
 
+      {/* Analytics range selector — match whatever window you're viewing on the Analytics page. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginBottom: 12 }}>
+        {(['7d', '30d', '90d'] as const).map((r) => (
+          <button
+            key={r}
+            onClick={() => setRange(r)}
+            className="btn btn-sm"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              background: range === r ? 'var(--bg-raised)' : 'transparent',
+              border: `1px solid ${range === r ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+              color: range === r ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontSize: 11,
+            }}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+
       {/* KPI tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
         {[
@@ -713,7 +744,7 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
           { label: 'Views',       value: stats.views.toLocaleString(),       icon: Megaphone,         color: 'var(--status-success)', desc: 'Popups that stayed on screen long enough to be seen (~1s+).' },
           { label: 'Clicks',      value: stats.clicks.toLocaleString(),      icon: MousePointerClick, color: 'var(--data-3)',       desc: 'Genuine clicks on the CTA inside the popup (X-close ad redirects are counted separately).' },
           { label: 'Ad-Close Clicks', value: stats.adCloseClicks.toLocaleString(), icon: MousePointer2, color: 'var(--data-4)',   desc: 'Visitors who hit the ✕ when it’s wired to an affiliate link — a redirect, not CTA interest.' },
-          { label: 'CTR',         value: `${stats.ctr}%`,                    icon: Percent,           color: 'var(--accent-300)',   desc: 'Click-through rate — genuine CTA clicks ÷ impressions (excludes X-close redirects).' },
+          { label: 'CTR',         value: `${stats.ctr}%`,                    icon: Percent,           color: 'var(--accent-300)',   desc: 'Click-through rate — unique clickers ÷ unique reach (bounded ≤100%; matches Dashboard & Analytics).' },
         ].map(({ label, value, icon: Icon, color, desc }) => (
           <div key={label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
