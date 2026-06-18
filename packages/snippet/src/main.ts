@@ -1439,10 +1439,12 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     }
     // Close on this same click — whether or not an ad fired (no-ad / free / starter just close).
     // viaAd=true when an ad fired so the close is exempt from rage suppression (re-shows stay alive).
+    // Do NOT clear the frequency cap on close: the cap (`_sp_<id>` ts/count + `_sp_session_<id>`) is
+    // written when the popup SHOWS, and wiping it here defeats once_per_day / once_per_visitor /
+    // recurrence / convert-suppression — the popup would re-open on the next load. Closing the popup
+    // must never reset how often it's allowed to show. (Removed the old SR-11 cap-clear, which only
+    // ever made sense as an adClose re-engagement hack and broke operator frequency settings.)
     dismiss(true, !!closeUrl);
-    sessionStorage.removeItem(`_sp_session_${campaign.id}`);
-    // SR-11: must match the key written by setFrequencyCap (`_sp_${id}`) so the cap is actually cleared.
-    try { localStorage.removeItem(`_sp_${campaign.id}`); } catch {}
   });
   // An explicit "no thanks" dismiss-text link still closes, but clicking/tapping the dark backdrop
   // does NOT (intentional: the popup is X-only, so a stray tap outside — common on mobile — can't
