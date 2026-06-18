@@ -2,7 +2,7 @@ import React from 'react';
 import {
   ArrowLeft, Eye, Globe, Megaphone, MousePointerClick, Percent, Radar, Sliders,
   Activity, Play, Disc3, Ticket, Plus, Trash2, Copy, Check, RefreshCw, X,
-  Target, Save, Clock, MousePointer2,
+  Target, Save, Clock, MousePointer2, LineChart,
 } from 'lucide-react';
 import { useApiUrl, useCustom, useCustomMutation, useList, useOne } from '@refinedev/core';
 import { ABPanel } from '../components/ABPanel';
@@ -572,16 +572,107 @@ const BLOCK_REASON_LABELS: Record<string, string> = {
   unknown: 'Other',
 };
 
+// ── Per-campaign traffic trend chart ─────────────────────────────────────────
+// Renders the dense, zero-filled `series` returned by /analytics/campaigns/:id. It MOVES with the
+// 24h / 7d / 30d / 90d selector: hourly buckets for the 24-hour view, daily buckets otherwise.
+type TrendPoint = { bucket: string; impressions: number; views: number; clicks: number; conversions: number };
+function CampaignTrendChart({ series, granularity }: { series: TrendPoint[]; granularity: 'hour' | 'day' }) {
+  const W = 900, H = 200, pad = { t: 24, r: 12, b: 28, l: 44 };
+  const w = W - pad.l - pad.r;
+  const h = H - pad.t - pad.b;
+  const n = series.length;
+
+  const impPts  = series.map((d) => d.impressions);
+  const viewPts = series.map((d) => d.views);
+  const clkPts  = series.map((d) => d.clicks);
+  const cvPts   = series.map((d) => d.conversions);
+  const maxVal = Math.max(...impPts, ...viewPts, ...clkPts, ...cvPts, 1);
+
+  const xAt = (i: number) => pad.l + (n <= 1 ? w / 2 : (i / (n - 1)) * w);
+  const yAt = (v: number) => pad.t + h - (v / maxVal) * h;
+
+  const toPath = (pts: number[], fill = false): string => {
+    if (pts.length < 2) return '';
+    const cs = pts.map((v, i) => ({ x: xAt(i), y: yAt(v) }));
+    const lp = `M ${cs.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' L ')}`;
+    if (fill) return `${lp} L ${cs[cs.length - 1]!.x.toFixed(1)},${pad.t + h} L ${cs[0]!.x.toFixed(1)},${pad.t + h} Z`;
+    return lp;
+  };
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({ val: Math.round(maxVal * f), y: pad.t + h - f * h }));
+
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const fmt = (iso: string): string => {
+    if (granularity === 'hour') {
+      // `iso` is a UTC hour boundary (…T14:00:00Z); show it in the operator's local time.
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    const d = new Date(iso + 'T00:00:00Z');
+    return `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  };
+  // ~7–8 evenly spaced x labels so they don't overlap on the wider windows.
+  const every = Math.max(1, Math.ceil(n / (granularity === 'hour' ? 8 : 7)));
+  const hasData = series.some((d) => d.impressions || d.views || d.clicks || d.conversions);
+
+  const legend = [
+    { label: 'Impressions', color: 'var(--data-1)' },
+    { label: 'Views',       color: 'var(--data-2)' },
+    { label: 'Clicks',      color: 'var(--data-3)' },
+    { label: 'Conversions', color: 'var(--data-5)' },
+  ];
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
+      {yTicks.map((t, ti) => (
+        <g key={ti}>
+          <line x1={pad.l} y1={t.y} x2={W - pad.r} y2={t.y} stroke="var(--border-subtle)" strokeWidth={0.5} />
+          <text x={pad.l - 6} y={t.y + 3} textAnchor="end" fontSize={8} fill="var(--text-muted)">
+            {t.val >= 1000 ? `${(t.val / 1000).toFixed(t.val >= 10000 ? 0 : 1)}k` : t.val}
+          </text>
+        </g>
+      ))}
+      {hasData ? (
+        <>
+          {impPts.length > 1 && (
+            <>
+              <path d={toPath(impPts, true)} fill="rgba(99,102,241,0.06)" />
+              <path d={toPath(impPts)} fill="none" stroke="var(--data-1)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+            </>
+          )}
+          {viewPts.length > 1 && <path d={toPath(viewPts)} fill="none" stroke="var(--data-2)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />}
+          {clkPts.length > 1 && <path d={toPath(clkPts)} fill="none" stroke="var(--data-3)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3,2" />}
+          {cvPts.length > 1 && <path d={toPath(cvPts)} fill="none" stroke="var(--data-5)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3,2" />}
+        </>
+      ) : (
+        <text x={pad.l + w / 2} y={pad.t + h / 2} textAnchor="middle" fontSize={11} fill="var(--text-muted)">
+          No traffic in this window yet.
+        </text>
+      )}
+      {series.map((d, i) => (i % every === 0 || i === n - 1) ? (
+        <text key={d.bucket} x={xAt(i)} y={H - 4} textAnchor="middle" fontSize={8} fill="var(--text-muted)">{fmt(d.bucket)}</text>
+      ) : null)}
+      {legend.map((l, i) => (
+        <g key={l.label} transform={`translate(${pad.l + i * 110}, ${pad.t - 14})`}>
+          <rect x={0} y={-4} width={10} height={2} rx={1} fill={l.color} />
+          <text x={14} y={0} fontSize={9} fill="var(--text-muted)">{l.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNavigate }) => {
   const { data: campaignData, isLoading: isCampaignLoading } = useOne({ resource: 'campaigns', id: campaignId });
   const { data: sitesData } = useList({ resource: 'sites' });
   const apiUrl = useApiUrl();
-  // Analytics window selector (7/30/90d) — mirrors the Analytics page so the two can be matched.
-  const [range, setRange] = React.useState<'7d' | '30d' | '90d'>('30d');
+  // Analytics window selector. 24h → hourly buckets (last 24 hours); 7/30/90d → daily buckets,
+  // mirroring the Analytics page so the two can be matched.
+  const [range, setRange] = React.useState<'24h' | '7d' | '30d' | '90d'>('30d');
 
-  const { data: analyticsRes, isLoading: analyticsLoading } = useCustom({
-    url: `${apiUrl}/analytics/campaigns/${campaignId}?days=${range.replace('d', '')}`, method: 'get',
+  const analyticsQuery = range === '24h' ? 'hours=24' : `days=${range.replace('d', '')}`;
+  const { data: analyticsRes, isFetching: analyticsFetching } = useCustom({
+    url: `${apiUrl}/analytics/campaigns/${campaignId}?${analyticsQuery}`, method: 'get',
   });
   const { data: triggersRes, refetch: refetchTriggers } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/triggers`, method: 'get' });
   const { data: targetingRes, refetch: refetchTargeting } = useCustom({ url: `${apiUrl}/campaigns/${campaignId}/targeting`, method: 'get' });
@@ -607,11 +698,16 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
     [analyticsRes],
   );
   // Bounded unique-clicker CTR from the API (same formula the Dashboard + Analytics pages use),
-  // so all three views agree. Falls back to 0 until the response lands.
+  // so all three views agree. Falls back to 0 until the response lands. `series` is the dense,
+  // zero-filled time-series the trend chart draws; `granularity` tells it hour vs day labels.
   const analyticsMeta = React.useMemo(
-    () => (analyticsRes as { meta?: { ctr?: number; uniqueVisitors?: number; uniqueClicks?: number } } | undefined)?.meta,
+    () => (analyticsRes as {
+      meta?: { ctr?: number; uniqueVisitors?: number; uniqueClicks?: number; granularity?: 'hour' | 'day'; series?: TrendPoint[] };
+    } | undefined)?.meta,
     [analyticsRes],
   );
+  const series: TrendPoint[] = React.useMemo(() => analyticsMeta?.series ?? [], [analyticsMeta]);
+  const granularity: 'hour' | 'day' = analyticsMeta?.granularity ?? 'day';
   const triggers: RuleItem[] = React.useMemo(
     () => (triggersRes as ApiResult<RuleItem[]>)?.data ?? [],
     [triggersRes],
@@ -652,7 +748,9 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
     return buildPreviewCampaign(campaignId, campaign.name, design, mappedTriggers);
   }, [campaign, design, triggers, frequency, campaignId]);
 
-  if (isCampaignLoading || analyticsLoading) {
+  // Only gate the whole page on the campaign record. Analytics refetches (on every range switch)
+  // update the KPIs + chart in place instead of blanking the page, so the graph visibly moves.
+  if (isCampaignLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, color: 'var(--text-muted)', fontSize: 13 }}>
         Loading campaign data…
@@ -717,9 +815,9 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
         </div>
       </div>
 
-      {/* Analytics range selector — match whatever window you're viewing on the Analytics page. */}
+      {/* Analytics range selector — 24h shows hourly traffic; 7/30/90d match the Analytics page. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginBottom: 12 }}>
-        {(['7d', '30d', '90d'] as const).map((r) => (
+        {(['24h', '7d', '30d', '90d'] as const).map((r) => (
           <button
             key={r}
             onClick={() => setRange(r)}
@@ -757,6 +855,25 @@ export const CampaignDetail: React.FC<CampaignDetailProps> = ({ campaignId, onNa
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.45 }}>{desc}</div>
           </div>
         ))}
+      </div>
+
+      {/* Traffic trend — moves with the 24h / 7d / 30d / 90d selector above. */}
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <LineChart size={13} style={{ color: 'var(--data-1)' }} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Traffic Trend</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {range === '24h' ? 'Hourly · last 24 hours' : `Daily · last ${range.replace('d', '')} days`}
+            </span>
+          </div>
+          {analyticsFetching && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
+              <RefreshCw size={11} className="spin" /> Updating…
+            </span>
+          )}
+        </div>
+        <CampaignTrendChart series={series} granularity={granularity} />
       </div>
 
       {/* Spin wheel config + triggers/targeting (spin_wheel only — it has no design editor) */}
