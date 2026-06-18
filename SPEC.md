@@ -384,7 +384,7 @@ Two files produced by the build:
 </script>
 ```
 
-**`p.js`** (main bundle, ~8-10 KB gzipped, loaded async):
+**`p.js`** (main bundle, ~12 KB gzipped, loaded async):
 1. Fetches `https://edge.scrollpop.io/c/{PUBLIC_KEY}` for site config
 2. Evaluates targeting rules against current page
 3. Selects eligible campaigns
@@ -588,7 +588,7 @@ packages:
 1. `lint` — all packages (currently a no-op placeholder; typecheck is the real gate)
 2. `typecheck` — TypeScript strict mode, all packages
 3. `test` — Vitest unit tests
-4. `snippet-size-check` — fail if `packages/snippet/dist/p.js` gzipped > 10240 bytes
+4. `snippet-size-check` — fail if `packages/snippet/dist/p.js` gzipped > 12288 bytes (lazy chunks have their own caps)
 5. `no-history-manipulation` — AST check: fail if snippet source contains
    `history.pushState`, `history.replaceState`, `onpopstate`, `popstate`
 

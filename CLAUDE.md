@@ -2,7 +2,7 @@
 
 ## What This Is
 A multi-tenant SaaS popup/overlay platform. Operators build scroll-triggered, affiliate-monetized
-popup campaigns through an admin dashboard. A lightweight JS snippet (~10 KB gzipped) runs on
+popup campaigns through an admin dashboard. A lightweight JS snippet (~12 KB gzipped) runs on
 customer sites (WordPress, Shopify, raw HTML, donation platforms) and renders popups inside a
 Shadow DOM without touching browser history.
 
@@ -14,7 +14,7 @@ scrollpop/
 │   ├── dashboard/    # React 19 admin SPA (Vite + Refine + shadcn/ui)
 │   └── worker/       # Cloudflare Worker (config API + event ingest)
 ├── packages/
-│   ├── snippet/      # Vanilla TS browser snippet (~10 KB gzipped)
+│   ├── snippet/      # Vanilla TS browser snippet (~12 KB gzipped)
 │   ├── wp-plugin/    # WordPress PHP plugin (thin, injects snippet)
 │   └── shared/       # Shared TypeScript types + validation schemas (Zod)
 ├── docs/             # Public docs site

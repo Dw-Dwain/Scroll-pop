@@ -17,7 +17,7 @@
 
 | Environment | Dashboard | API | Database |
 |-------------|-----------|-----|----------|
-| **Production** | dashboard.scrollpop.online | scrollpop-api.fly.dev | Neon `main` branch |
+| **Production** | dashboard.scrollpop.online | scrollpop-api.fly.dev | Fly Postgres — Tokyo/`nrt` (`scrollpop-db-nrt`, TimescaleDB) |
 
 ---
 
@@ -41,11 +41,13 @@ git push -u origin HEAD     # → push your branch
 
 Check CI at: **https://github.com/Dw-Dwain/Scroll-pop/actions**
 
-All 4 required checks must be green:
+All required checks must be green:
 - ✅ Lint
 - ✅ Typecheck
 - ✅ Unit Tests
 - ✅ No history.* / popstate in snippet
+- ✅ Snippet Size Budgets (core ≤ 12 KB gzipped + lazy-chunk caps)
+- ✅ Migration Safety
 
 ### 3. Test Locally
 
@@ -67,15 +69,18 @@ When testing is complete:
 
 ### 5. Apply database migrations to production ⚠️ MANDATORY when a PR adds one
 
-If a merged PR adds a migration under `apps/api/drizzle/migrations/` and you
-don't apply it to the Neon production DB, the new API code queries
-columns/enums that don't exist and **every affected request 500s** (the
-snippet's config endpoint returns 502 → no popups, no events, empty
-analytics). This exact outage happened on June 2 2026 (`column
+Fly's `release_command` runs `drizzle-kit migrate` automatically before each
+deploy (see "Database migrations — safety rules" below), so a merged migration
+normally applies itself. If you ever need to apply one **by hand** and don't,
+the new API code queries columns/enums that don't exist and **every affected
+request 500s** (the snippet's config endpoint returns 502 → no popups, no
+events, empty analytics). This exact outage happened on June 2 2026 (`column
 "interval_days" does not exist`, migration `0005` never applied to prod).
 
-After merging a migration, run its SQL in the **Neon SQL Editor → production
-branch**. Notes:
+To apply manually, connect to the **Fly production DB** (`scrollpop-db-nrt`,
+Tokyo) — `fly proxy 15432:5432 -a scrollpop-db-nrt`, then `psql` to
+`localhost:15432` (see `infra/db/RLS-ENABLEMENT-RUNBOOK.md`) — and run its SQL.
+Notes:
 - Our migrations use `IF NOT EXISTS` / `ADD VALUE IF NOT EXISTS`, so re-running
   is safe/idempotent.
 - **Postgres gotcha:** you cannot *use* a new enum value in the same transaction
@@ -155,7 +160,7 @@ git push
 # → CI runs → on merge to main → scrollpop.online updates in ~2 min
 ```
 
-### Neon partition maintenance — now automatic ✅
+### Postgres partition maintenance — now automatic ✅
 
 The `events` table is month-partitioned. The API **auto-creates the current +
 next month's partition on every boot** (`apps/api/src/db/ensure-partitions.ts`),
@@ -199,7 +204,7 @@ install flow with a one-click public key copy button.
 
 ---
 
-## Neon DB — monthly partition maintenance (automated)
+## Fly Postgres — monthly partition maintenance (automated)
 
 The `events` table is partitioned by calendar month (`events_YYYY_MM`). PostgreSQL
 **does not auto-create partitions** — historically, inserts for a month with no
@@ -230,7 +235,7 @@ CREATE TABLE IF NOT EXISTS events_2026_07 PARTITION OF events
 | **Typecheck** | TypeScript errors across all packages |
 | **Unit Tests** | Vitest unit test failures |
 | **No history.* / popstate** | Banned browser navigation APIs in snippet (CLAUDE.md rule #1) |
-| **Snippet Size Check** | Hard CI gate ensuring snippet stays ≤ 10 KB gzipped |
+| **Snippet Size Check** | Hard CI gate ensuring core snippet stays ≤ 12 KB gzipped (12288 B); lazy chunks have their own caps |
 
 ---
 
@@ -367,7 +372,7 @@ pnpm --filter snippet build
 # ⚠️ Measure size the SAME WAY CI does — the gzip CLI, NOT node's zlib.
 # node's zlib.gzipSync over-reports vs `gzip -c` by ~90 bytes and will make you
 # think you're over the gate when CI passes. CI uses: gzip -c <bundle> | wc -c
-gzip -c packages/snippet/dist/p.js | wc -c   # must be ≤ 10240
+gzip -c packages/snippet/dist/p.js | wc -c   # must be ≤ 12288
 
 # Recent history
 git log --oneline -15

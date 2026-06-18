@@ -35,7 +35,7 @@ Run unit tests for each route."
 ### Step 4 — Snippet runtime
 ```
 "Build packages/snippet/src/main.ts into a production bundle using esbuild.
-Target: p.js ≤ 10 KB gzipped. The CI size check must pass.
+Target: core p.js ≤ 12 KB gzipped (12288 B). The CI size check must pass.
 Run the no-history-manipulation CI check — it must pass."
 ```
 
@@ -108,7 +108,7 @@ pnpm db:studio
 # Run all tests
 pnpm test
 
-# Check snippet size (MUST be <10 KB gzipped)
+# Check snippet size (core MUST be ≤ 12 KB gzipped / 12288 B)
 gzip -c packages/snippet/dist/p.js | wc -c
 
 # Check for banned APIs in snippet
@@ -135,7 +135,7 @@ grep -rE "history\.pushState|history\.replaceState|onpopstate|addEventListener.*
 
 ## When You're Stuck
 
-1. **Snippet over 10 KB?** Look for unused code, large string templates. Move CSS to a separate
+1. **Snippet over 12 KB?** Look for unused code, large string templates. Move CSS to a separate
    injection; use terser for aggressive minification.
 
 2. **RLS policy blocking a query?** Make sure the Fastify plugin is setting the correct
