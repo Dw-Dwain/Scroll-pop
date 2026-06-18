@@ -260,6 +260,55 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: withCtr });
   });
 
+  // GET /api/v1/analytics/campaigns/daily — per-campaign dense time-series for the selected window,
+  // returned for ALL of the tenant's campaigns in ONE grouped query. Powers the Dashboard's
+  // per-campaign performance board (a daily-clicks sparkline + inline chart per campaign) without an
+  // N+1 of /campaigns/:id calls on every 15s poll. ?hours=24 → hourly buckets, ?days=N → daily.
+  // (Static `daily` segment is matched before the `:id` param route by find-my-way.)
+  fastify.get<{ Querystring: { days?: string; hours?: string; clientId?: string } }>('/analytics/campaigns/daily', async (request, reply) => {
+    const win = parseWindow(request.query);
+    const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
+    // Exclude soft-deleted campaigns (events purged within 24h) — matches /analytics/campaigns.
+    const notDeleted = sql`${events.campaignId} NOT IN (SELECT id FROM campaigns WHERE tenant_id = ${request.tenantId}::uuid AND deleted_at IS NOT NULL)`;
+    const bk = bucketKeyExpr(win.hourly);
+
+    const rows = await db
+      .select({
+        campaignId:  events.campaignId,
+        bucket:      bk,
+        impressions: sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        views:       sql<number>`count(*) filter (where ${events.eventType}::text = 'view')::int`,
+        clicks:      sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        conversions: sql<number>`count(*) filter (where ${events.eventType}::text = 'conversion')::int`,
+      })
+      .from(events)
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, win.since), notDeleted, clientFilter))
+      .groupBy(events.campaignId, bk)
+      .orderBy(events.campaignId, bk);
+
+    // Zero-fill each campaign across the same dense buckets so every sparkline lines up in time.
+    const buckets = denseBuckets(win.since, win.hourly);
+    const byCampaign: Record<string, Record<string, { impressions: number; views: number; clicks: number; conversions: number }>> = {};
+    for (const r of rows) {
+      if (!r.campaignId) continue;
+      (byCampaign[r.campaignId] ??= {})[r.bucket] = {
+        impressions: r.impressions, views: r.views, clicks: r.clicks, conversions: r.conversions,
+      };
+    }
+    const series: Record<string, Array<{ bucket: string; impressions: number; views: number; clicks: number; conversions: number }>> = {};
+    for (const [cid, byBucket] of Object.entries(byCampaign)) {
+      series[cid] = buckets.map((b) => ({
+        bucket: b,
+        impressions: byBucket[b]?.impressions ?? 0,
+        views:       byBucket[b]?.views        ?? 0,
+        clicks:      byBucket[b]?.clicks       ?? 0,
+        conversions: byBucket[b]?.conversions  ?? 0,
+      }));
+    }
+
+    return reply.send({ data: { granularity: win.hourly ? 'hour' : 'day', period: win.period, series } });
+  });
+
   // GET /api/v1/analytics/sites/:id — site-level: campaigns ranked by CTR
   fastify.get<{ Params: { id: string } }>(
     '/analytics/sites/:id',

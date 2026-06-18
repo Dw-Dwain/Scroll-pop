@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
+import { Eye, ArrowUpRight, TrendingUp, TrendingDown, Plus, Globe, CheckCircle2, Circle, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 import { useList, useCustom, useApiUrl } from '@refinedev/core';
 import { useActiveClient } from '../hooks/useClients';
 
@@ -13,6 +13,15 @@ type CampaignStatRow = { campaignId: string; impressions: number; views: number;
 type RecentEvent = { eventType?: string; campaignId?: string; ts?: string; domain?: string };
 type DailyRow = { day: string; impressions: number; views: number; clicks: number; conversions: number };
 type OverviewData = { impressions: number; views: number; clicks: number; conversions: number; ctr?: number; uniqueVisitors?: number; uniqueClicks?: number };
+// Per-campaign dense series point from /analytics/campaigns/daily.
+type SeriesPt = { bucket: string; impressions: number; views: number; clicks: number; conversions: number };
+// One row of the Campaign performance board: window totals + the daily-clicks trend.
+type BoardRow = {
+  campaignId: string; name: string; status: string;
+  impressions: number; views: number; clicks: number; conversions: number; ctr: number;
+  clicksSpark: number[];
+  fullSeries: Array<{ day: string; impressions: number; views: number; clicks: number }>;
+};
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
   if (!data.length) return null;
@@ -175,6 +184,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     method: 'get',
     queryOptions: liveOpts,
   });
+  // Per-campaign daily/hourly series for the performance board's sparklines (one query, all campaigns).
+  const { data: campaignDailyResult } = useCustom({
+    url: `${apiUrl}/analytics/campaigns/daily?${windowQ}${clientParam}`,
+    method: 'get',
+    queryOptions: liveOpts,
+  });
 
   const overview = (overviewResult as { data?: OverviewData } | undefined)?.data ?? null;
   const recentEvents: RecentEvent[] = React.useMemo(
@@ -218,17 +233,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     return map;
   }, [statsResult]);
 
-  const topCampaigns = React.useMemo(() => {
-    const list: CampaignStatRow[] = Array.isArray((statsResult as { data?: CampaignStatRow[] } | undefined)?.data)
-      ? (statsResult as { data: CampaignStatRow[] }).data : [];
-    return list
-      .sort((a, b) => (b.impressions ?? 0) - (a.impressions ?? 0))
-      .slice(0, 5)
-      .map((s) => {
-        const c = (campaignsData?.data as ApiCampaign[] | undefined)?.find((x) => x.id === s.campaignId);
-        return { ...s, name: c?.name ?? `Campaign ${s.campaignId?.slice(0, 8)}`, status: c?.status ?? 'draft' };
-      });
-  }, [statsResult, campaignsData]);
+  // Rows for the Campaign performance board: every campaign + its window totals + daily-clicks series.
+  const boardGranularity: 'hour' | 'day' =
+    (campaignDailyResult as { data?: { granularity?: 'hour' | 'day' } } | undefined)?.data?.granularity ?? 'day';
+  const boardRows = React.useMemo<BoardRow[]>(() => {
+    const series = (campaignDailyResult as { data?: { series?: Record<string, SeriesPt[]> } } | undefined)?.data?.series ?? {};
+    const camps = (campaignsData?.data as ApiCampaign[] | undefined) ?? [];
+    return camps.map((c) => {
+      const s = campaignStats[c.id];
+      const full = (series[c.id] ?? []).map((p) => ({ day: p.bucket, impressions: p.impressions, views: p.views, clicks: p.clicks }));
+      return {
+        campaignId: c.id,
+        name: c.name ?? `Campaign ${c.id.slice(0, 8)}`,
+        status: c.status ?? 'draft',
+        impressions: s?.impressions ?? 0,
+        views: s?.views ?? 0,
+        clicks: s?.clicks ?? 0,
+        conversions: s?.conversions ?? 0,
+        ctr: s?.ctr ?? 0,
+        clicksSpark: full.map((p) => p.clicks),
+        fullSeries: full,
+      };
+    });
+  }, [campaignDailyResult, campaignsData, campaignStats]);
 
   const recentEventsList = React.useMemo(() => {
     const list = Array.isArray(recentEvents) ? recentEvents.slice(0, 10) : [];
@@ -462,95 +489,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, marginBottom: 24 }}>
-        {/* Events over time — live area chart (EventsAreaChart, driven by /analytics/daily) */}
-        <div style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 8,
-          padding: 20,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              Events over time
-            </h3>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              {trendGranularity === 'hour' ? 'Hourly' : 'Daily'} · {windowLabel}
-            </span>
-          </div>
-          <EventsAreaChart daily={trendSeries} granularity={trendGranularity} />
+      {/* Events over time — full-width live area chart (EventsAreaChart, driven by /analytics/daily) */}
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: 20,
+        marginBottom: 24,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Events over time
+          </h3>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            {trendGranularity === 'hour' ? 'Hourly' : 'Daily'} · {windowLabel}
+          </span>
         </div>
-
-        {/* Top campaigns leaderboard */}
-        <div style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 8,
-          padding: 20,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              Top campaigns
-            </h3>
-            <button
-              onClick={() => onNavigate('/campaigns')}
-              className="btn btn-ghost btn-sm"
-              style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-300)', fontSize: 11 }}
-            >
-              View all <ArrowUpRight size={12} />
-            </button>
-          </div>
-
-          {topCampaigns.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-              No campaign data yet
-            </div>
-          ) : (
-            <div>
-              {topCampaigns.map((c, i: number) => (
-                <button
-                  key={c.campaignId}
-                  onClick={() => onNavigate(`/campaigns/detail/${c.campaignId}`)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    width: '100%',
-                    padding: '8px 0',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    borderBottom: i < topCampaigns.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', width: 14, textAlign: 'right' }}>
-                    {i + 1}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {c.name}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {(c.impressions ?? 0).toLocaleString()} impr.
-                    </div>
-                  </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--data-3)' }}>
-                    {((c.ctr ?? 0) * 100).toFixed(1)}%
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={() => onNavigate('/campaigns')}
-            style={{ width: '100%', marginTop: 12, fontSize: 12, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
-          >
-            View all campaigns
-          </button>
-        </div>
+        <EventsAreaChart daily={trendSeries} granularity={trendGranularity} />
       </div>
+
+      {/* Campaign performance board — per-campaign clicks (daily) + drill-down, all in one place */}
+      <CampaignPerformanceBoard rows={boardRows} granularity={boardGranularity} windowLabel={windowLabel} onNavigate={onNavigate} />
 
       {/* Bottom row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -750,5 +709,135 @@ function EventsAreaChart({ daily, granularity = 'day' }: {
         </g>
       ))}
     </svg>
+  );
+}
+
+// ── Campaign performance board ────────────────────────────────────────────────
+// One place to review every campaign: window totals (impr/views/clicks/CTR/conv) + a daily-clicks
+// sparkline per row, sortable, with an inline drill-down chart on row click. This is what Jon asked
+// for — "how many clicks in a campaign on a daily basis" — without leaving the Dashboard.
+type BoardSortCol = 'impressions' | 'views' | 'clicks' | 'ctr' | 'conversions';
+function CampaignPerformanceBoard({ rows, granularity, windowLabel, onNavigate }: {
+  rows: BoardRow[];
+  granularity: 'hour' | 'day';
+  windowLabel: string;
+  onNavigate: (path: string) => void;
+}) {
+  const [sortCol, setSortCol] = React.useState<BoardSortCol>('clicks');
+  const [sortAsc, setSortAsc] = React.useState(false);
+  const [expanded, setExpanded] = React.useState<string | null>(null);
+
+  const sorted = React.useMemo(
+    () => [...rows].sort((a, b) => (sortAsc ? a[sortCol] - b[sortCol] : b[sortCol] - a[sortCol])),
+    [rows, sortCol, sortAsc],
+  );
+
+  const toggle = (col: BoardSortCol) => {
+    if (sortCol === col) setSortAsc((v) => !v);
+    else { setSortCol(col); setSortAsc(false); }
+  };
+
+  const numCols: Array<{ key: BoardSortCol; label: string; color?: string; bold?: boolean }> = [
+    { key: 'impressions', label: 'Impr.' },
+    { key: 'views',       label: 'Views',  color: 'var(--data-2)' },
+    { key: 'clicks',      label: 'Clicks', color: 'var(--data-3)', bold: true },
+    { key: 'ctr',         label: 'CTR' },
+    { key: 'conversions', label: 'Conv.',  color: 'var(--data-4)' },
+  ];
+
+  const headCell: React.CSSProperties = {
+    padding: '8px 10px', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)',
+    textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Campaign performance
+          </h3>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '3px 0 0' }}>
+            Clicks per campaign on a {granularity === 'hour' ? 'hourly' : 'daily'} basis · {windowLabel} · click a row for the full chart
+          </p>
+        </div>
+        <button onClick={() => onNavigate('/analytics')} className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-300)', fontSize: 11, flexShrink: 0 }}>
+          Full analytics <ArrowUpRight size={12} />
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>No campaigns yet.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <th style={{ ...headCell, textAlign: 'left' }}>Campaign</th>
+                <th style={{ ...headCell, textAlign: 'left' }}>Clicks trend</th>
+                {numCols.map((c) => (
+                  <th key={c.key} onClick={() => toggle(c.key)} style={{ ...headCell, textAlign: 'right', cursor: 'pointer' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end' }}>
+                      {c.label}
+                      {sortCol === c.key
+                        ? (sortAsc ? <ChevronUp size={10} /> : <ChevronDown size={10} />)
+                        : <ChevronUp size={10} style={{ opacity: 0.25 }} />}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row) => {
+                const isOpen = expanded === row.campaignId;
+                return (
+                  <React.Fragment key={row.campaignId}>
+                    <tr
+                      onClick={() => setExpanded(isOpen ? null : row.campaignId)}
+                      style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', background: isOpen ? 'var(--bg-raised)' : 'transparent' }}
+                    >
+                      <td style={{ padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: row.status === 'active' ? 'var(--status-success)' : row.status === 'paused' ? 'var(--text-muted)' : 'var(--border-default)' }} />
+                          <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>{row.name}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '6px 10px' }}>
+                        {row.clicksSpark.some((v) => v > 0)
+                          ? <Sparkline data={row.clicksSpark} color="var(--data-3)" />
+                          : <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>—</span>}
+                      </td>
+                      {numCols.map((c) => (
+                        <td key={c.key} style={{ textAlign: 'right', padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 12, color: c.color ?? 'var(--text-secondary)', fontWeight: c.bold ? 600 : 400 }}>
+                          {c.key === 'ctr' ? `${(row.ctr * 100).toFixed(2)}%` : row[c.key].toLocaleString()}
+                        </td>
+                      ))}
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={2 + numCols.length} style={{ padding: '6px 10px 16px', background: 'var(--bg-raised)' }}>
+                          {row.fullSeries.some((p) => p.impressions || p.views || p.clicks)
+                            ? <EventsAreaChart daily={row.fullSeries} granularity={granularity} />
+                            : <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No traffic in this window yet.</div>}
+                          <div style={{ textAlign: 'right', marginTop: 8 }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onNavigate(`/campaigns/detail/${row.campaignId}`); }}
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: 11, gap: 4 }}
+                            >
+                              Open campaign <ArrowUpRight size={11} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
