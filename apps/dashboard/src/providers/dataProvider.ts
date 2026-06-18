@@ -158,8 +158,13 @@ export const createDataProvider = (getToken: () => Promise<string | null>): Data
       const res = await fetchWithAuth(resolvedUrl, options);
       if (res.status === 401) return { data: null as unknown as TData };
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const body = await res.json() as { data: TData };
-      return { data: (body.data ?? body) as TData };
+      const body = await res.json() as { data?: TData; meta?: unknown };
+      // Preserve `meta` alongside `data`. Several analytics endpoints return their CTR, unique
+      // counts, and the dense trend `series` in `meta`; silently dropping it here is what made the
+      // campaign trend chart render empty and the CTR read 0.00% even though the data was present.
+      const out: { data: TData; meta?: unknown } = { data: (body.data ?? body) as TData };
+      if (body.meta !== undefined) out.meta = body.meta;
+      return out;
     },
 
     getApiUrl: () => getApiBase(),

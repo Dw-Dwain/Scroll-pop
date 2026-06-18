@@ -58,6 +58,7 @@ function KpiCard({
   label,
   value,
   delta,
+  deltaLabel,
   suffix = '',
   color,
   spark,
@@ -66,6 +67,7 @@ function KpiCard({
   label: string;
   value: number;
   delta: string;
+  deltaLabel: string;
   suffix?: string;
   color: string;
   spark: number[];
@@ -122,7 +124,7 @@ function KpiCard({
           <span style={{ fontSize: 11, color: delta === '—' ? 'var(--text-muted)' : positive ? 'var(--status-success)' : 'var(--status-error)' }}>
             {delta}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>vs last 30d</span>
+          {deltaLabel && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{deltaLabel}</span>}
         </div>
       </div>
     </button>
@@ -134,9 +136,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { data: campaignsData } = useList({ resource: 'campaigns' });
   const apiUrl = useApiUrl();
 
-  // "Events over time" chart range. Only 7d/30d — the daily endpoint returns 60d,
-  // so 90d isn't available here (the Analytics page has the full range picker).
-  const [chartRange, setChartRange] = React.useState<'7d' | '30d'>('30d');
+  // Portfolio window — drives the KPI counts, the leaderboard, and the events chart together.
+  // 24h → hourly buckets; 7d/30d → daily. (The Analytics page has the full picker incl. 90d.)
+  const [range, setRange] = React.useState<'24h' | '7d' | '30d'>('30d');
+  const windowDays = range === '7d' ? 7 : 30;
+  const windowQ = range === '24h' ? 'hours=24' : `days=${windowDays}`;
+  const windowLabel = range === '24h' ? 'last 24 hours' : `last ${windowDays} days`;
 
   // Real-time auto-refresh: poll analytics every 15s so new events surface without a
   // manual reload. Polling pauses automatically while the tab is hidden (default
@@ -145,18 +150,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const liveOpts = { refetchInterval: LIVE_MS, refetchOnWindowFocus: true } as const;
 
   // Agency client scoping: scope the client-aware analytics calls to the active client.
-  // These useCustom calls have no explicit queryKey, so Refine derives it from the URL —
-  // appending `?clientId=…` is enough to trigger a refetch when the operator switches client.
+  // These useCustom calls have no explicit queryKey, so Refine derives it from the URL — the
+  // window query + `&clientId=…` are enough to refetch when the range or active client changes.
   const { activeClientId } = useActiveClient();
-  const cq = activeClientId ? `?clientId=${activeClientId}` : '';
+  const clientParam = activeClientId ? `&clientId=${activeClientId}` : '';
 
   const { data: overviewResult, isLoading } = useCustom({
-    url: `${apiUrl}/analytics/overview${cq}`,
+    url: `${apiUrl}/analytics/overview?${windowQ}${clientParam}`,
     method: 'get',
     queryOptions: liveOpts,
   });
   const { data: statsResult } = useCustom({
-    url: `${apiUrl}/analytics/campaigns${cq}`,
+    url: `${apiUrl}/analytics/campaigns?${windowQ}${clientParam}`,
     method: 'get',
     queryOptions: liveOpts,
   });
@@ -166,7 +171,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     queryOptions: liveOpts,
   });
   const { data: dailyResult } = useCustom({
-    url: `${apiUrl}/analytics/daily${cq}`,
+    url: `${apiUrl}/analytics/daily?${windowQ}${clientParam}`,
     method: 'get',
     queryOptions: liveOpts,
   });
@@ -177,16 +182,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     [recentEventsResult],
   );
 
-  // Per-day data: last 60 days split into current 30 and previous 30
+  // Per-day data: last 60 days split into current 30 and previous 30 (for deltas + sparklines).
   const dailyAll: DailyRow[] =
     (dailyResult as { data?: { daily?: DailyRow[] } } | undefined)?.data?.daily ?? [];
   const prev30 = dailyAll.slice(0, 30);
   const curr30 = dailyAll.slice(30);
-  // Data for the "Events over time" chart, sliced to the selected range.
-  const chartDaily = chartRange === '7d' ? curr30.slice(-7) : curr30;
+  // Windowed dense series for the "Events over time" chart — moves with the range (24h hourly / N-day).
+  const trendSeries: DailyRow[] =
+    (dailyResult as { data?: { series?: DailyRow[] } } | undefined)?.data?.series ?? [];
+  const trendGranularity: 'hour' | 'day' =
+    (dailyResult as { data?: { granularity?: 'hour' | 'day' } } | undefined)?.data?.granularity ?? 'day';
 
-  const sumMetric = (arr: typeof curr30, key: 'impressions' | 'views' | 'clicks') =>
+  const sumMetric = (arr: DailyRow[], key: 'impressions' | 'views' | 'clicks') =>
     arr.reduce((s, d) => s + (d[key] ?? 0), 0);
+
+  // Delta comparison window: 30d → vs prev 30d; 7d → vs the 7 days before; 24h → no daily comparison.
+  const deltaCurr = range === '7d' ? curr30.slice(-7) : range === '30d' ? curr30 : [];
+  const deltaPrev = range === '7d' ? curr30.slice(-14, -7) : range === '30d' ? prev30 : [];
+  const deltaLabel = range === '24h' ? '' : range === '7d' ? 'vs prev 7d' : 'vs last 30d';
 
   const pctDelta = (curr: number, prev: number) => {
     if (prev === 0) return curr > 0 ? '+100%' : '—';
@@ -232,12 +245,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     });
   }, [recentEvents, campaignsData]);
 
-  const currImpr  = sumMetric(curr30, 'impressions');
-  const currViews = sumMetric(curr30, 'views');
-  const currClks  = sumMetric(curr30, 'clicks');
-  const prevImpr  = sumMetric(prev30, 'impressions');
-  const prevViews = sumMetric(prev30, 'views');
-  const prevClks  = sumMetric(prev30, 'clicks');
+  const currImpr  = sumMetric(deltaCurr, 'impressions');
+  const currViews = sumMetric(deltaCurr, 'views');
+  const currClks  = sumMetric(deltaCurr, 'clicks');
+  const prevImpr  = sumMetric(deltaPrev, 'impressions');
+  const prevViews = sumMetric(deltaPrev, 'views');
+  const prevClks  = sumMetric(deltaPrev, 'clicks');
   // Clamp the client-side fallback CTR ≤100% (raw click events can exceed impressions — multi-click
   // per popup view; the server CTR is unique-visitor based). Only used until /overview loads.
   const prevCtr   = prevImpr > 0 ? Math.min(prevClks / prevImpr, 1) * 100 : 0;
@@ -310,14 +323,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             Dashboard
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-            Portfolio performance — last 30 days
+            Portfolio performance — {windowLabel}
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
               <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-success)' }} />
               Live
             </span>
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* Portfolio window — drives the KPIs, leaderboard, and events chart together. */}
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginRight: 4 }}>
+            {(['24h', '7d', '30d'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className="btn btn-sm"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  background: range === r ? 'var(--bg-raised)' : 'transparent',
+                  border: `1px solid ${range === r ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+                  color: range === r ? 'var(--text-primary)' : 'var(--text-muted)',
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
           <button className="btn btn-secondary" onClick={() => onNavigate('/sites')}>
             {sitesData?.data?.length ?? 0} sites
           </button>
@@ -425,7 +457,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
           {kpis.map((k) => (
-            <KpiCard key={k.label} {...k} onClick={() => onNavigate('/analytics')} />
+            <KpiCard key={k.label} {...k} deltaLabel={deltaLabel} onClick={() => onNavigate('/analytics')} />
           ))}
         </div>
       )}
@@ -443,25 +475,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             <h3 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               Events over time
             </h3>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {(['7d','30d'] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setChartRange(r)}
-                  className="btn btn-ghost btn-sm"
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    background: chartRange === r ? 'var(--bg-raised)' : 'transparent',
-                    color: chartRange === r ? 'var(--text-primary)' : 'var(--text-muted)',
-                  }}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              {trendGranularity === 'hour' ? 'Hourly' : 'Daily'} · {windowLabel}
+            </span>
           </div>
-          <EventsAreaChart daily={chartDaily} />
+          <EventsAreaChart daily={trendSeries} granularity={trendGranularity} />
         </div>
 
         {/* Top campaigns leaderboard */}
@@ -653,9 +671,15 @@ function fmtDay(iso: string) {
   return `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}`;
 }
 
-function EventsAreaChart({ daily }: {
+function EventsAreaChart({ daily, granularity = 'day' }: {
   daily: Array<{ day: string; impressions: number; views: number; clicks: number }>;
+  granularity?: 'hour' | 'day';
 }) {
+  // Format an x-axis label: hourly buckets (…T14:00:00Z) → local HH:MM; daily → "Jun 18".
+  const fmtLabel = (iso: string) =>
+    granularity === 'hour'
+      ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+      : fmtDay(iso);
   const W = 600, H = 140;
   const pad = { t: 16, r: 8, b: 20, l: 8 };
   const w = W - pad.l - pad.r;
@@ -684,12 +708,9 @@ function EventsAreaChart({ daily }: {
     return `M ${coords.join(' L ')}`;
   };
 
-  // Always label the first day, last day, and key intervals in between
-  const xLabels = daily.map((d, i) => {
-    if (i === 0 || i === days - 1) return fmtDay(d.day);
-    if (i % 7 === 0 && i < days - 4) return fmtDay(d.day);
-    return '';
-  });
+  // ~6 evenly spaced labels (first, last, and intervals between) across whatever window is selected.
+  const every = Math.max(1, Math.ceil(days / 6));
+  const xLabels = daily.map((d, i) => (i === 0 || i === days - 1 || i % every === 0) ? fmtLabel(d.day) : '');
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
