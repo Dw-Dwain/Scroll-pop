@@ -18,6 +18,43 @@ const clientEventFilter = (clientId: string | undefined, tenantId: string) =>
     ? sql`${events.campaignId} IN (SELECT c.id FROM campaigns c JOIN sites s ON s.id = c.site_id WHERE s.client_id = ${clientId}::uuid AND c.tenant_id = ${tenantId}::uuid)`
     : undefined;
 
+// Time-window parser shared by every aggregate endpoint. `?hours=1..48` selects an HOURLY rolling
+// window (the 24-hour view); otherwise `?days=1..90` (default 30) selects a DAILY window. Centralising
+// this is what makes the 24h option behave identically on every surface (Dashboard, Analytics, detail).
+type Win = { since: Date; hourly: boolean; period: string };
+const parseWindow = (q: { days?: string; hours?: string }): Win => {
+  if (q.hours != null) {
+    const hours = Math.min(Math.max(parseInt(q.hours, 10) || 24, 1), 48);
+    return { since: hoursAgo(hours), hourly: true, period: `${hours}h` };
+  }
+  const days = Math.min(Math.max(parseInt(q.days ?? '30', 10) || 30, 1), 90);
+  return { since: daysAgo(days), hourly: false, period: `${days}d` };
+};
+
+// UTC bucket-key expression for dense trend series — must match the JS keys denseBuckets() builds
+// (hourly → 2026-06-18T14:00:00Z, daily → 2026-06-18). Truncating in UTC keeps keys deterministic
+// regardless of DB session timezone.
+const bucketKeyExpr = (hourly: boolean) =>
+  hourly
+    ? sql<string>`to_char(date_trunc('hour', ${events.ts} at time zone 'UTC'), 'YYYY-MM-DD"T"HH24:00:00"Z"')`
+    : sql<string>`to_char(date_trunc('day', ${events.ts} at time zone 'UTC'), 'YYYY-MM-DD')`;
+
+// Dense, zero-filled bucket keys from the start of the window's first hour/day → now (UTC), so a
+// trend chart renders a continuous line even on quiet hours/days.
+const denseBuckets = (since: Date, hourly: boolean): string[] => {
+  const buckets: string[] = [];
+  if (hourly) {
+    const cur = new Date(since); cur.setUTCMinutes(0, 0, 0);
+    const end = new Date();      end.setUTCMinutes(0, 0, 0);
+    for (; cur <= end; cur.setUTCHours(cur.getUTCHours() + 1)) buckets.push(cur.toISOString().slice(0, 13) + ':00:00Z');
+  } else {
+    const cur = new Date(since); cur.setUTCHours(0, 0, 0, 0);
+    const end = new Date();      end.setUTCHours(0, 0, 0, 0);
+    for (; cur <= end; cur.setUTCDate(cur.getUTCDate() + 1)) buckets.push(cur.toISOString().slice(0, 10));
+  }
+  return buckets;
+};
+
 export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/analytics/reset — permanently delete THIS tenant's analytics events (impressions,
   // clicks, conversions, etc.). Campaign configs, sites, and leads are untouched. Owner/admin only
@@ -36,10 +73,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/analytics/overview — tenant-level stats
-  // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/overview', async (request, reply) => {
-    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
-    const since = daysAgo(days);
+  // Query param: ?days=7|30|90 (default 30) OR ?hours=24 (last-24h view)
+  fastify.get<{ Querystring: { days?: string; hours?: string; clientId?: string } }>('/analytics/overview', async (request, reply) => {
+    const { since, period } = parseWindow(request.query);
     const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     const rows = await db
@@ -73,7 +109,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({
       data: {
-        period: `${days}d`,
+        period,
         impressions,
         views: counts['view'] ?? 0,
         clicks,
@@ -185,10 +221,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // GET /api/v1/analytics/campaigns — all tenant campaigns, aggregated stats
-  // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/campaigns', async (request, reply) => {
-    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
-    const since = daysAgo(days);
+  // Query param: ?days=7|30|90 (default 30) OR ?hours=24 (last-24h view)
+  fastify.get<{ Querystring: { days?: string; hours?: string; clientId?: string } }>('/analytics/campaigns', async (request, reply) => {
+    const { since } = parseWindow(request.query);
     const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     // Exclude soft-deleted campaigns so their lingering events (purged within 24h) don't show
@@ -265,8 +300,11 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GET /api/v1/analytics/daily — per-day breakdown for last 60d (current + previous 30d windows)
-  fastify.get<{ Querystring: { clientId?: string } }>('/analytics/daily', async (request, reply) => {
+  // GET /api/v1/analytics/daily — trend data for the tenant-wide charts.
+  //  • `daily`: fixed 60-day array (current + previous 30d) — drives the Dashboard deltas/sparklines.
+  //  • `series` + `granularity`: a dense, zero-filled series for the SELECTED window, so the trend
+  //    chart moves with the range picker — ?hours=24 → hourly buckets, ?days=7|30|90 → daily buckets.
+  fastify.get<{ Querystring: { clientId?: string; days?: string; hours?: string } }>('/analytics/daily', async (request, reply) => {
     const now = new Date();
     const since60 = new Date(now);
     since60.setDate(now.getDate() - 60);
@@ -303,14 +341,36 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       };
     });
 
-    return reply.send({ data: { daily } });
+    // Windowed dense series for the trend chart (respects ?hours / ?days). `day` carries the bucket
+    // key (ISO hour for hourly, date for daily) so the existing chart components keep reading `.day`.
+    const win = parseWindow(request.query);
+    const bk = bucketKeyExpr(win.hourly);
+    const seriesRows = await db
+      .select({ bucket: bk, eventType: events.eventType, count: sql<number>`count(*)::int` })
+      .from(events)
+      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, win.since), clientFilter))
+      .groupBy(bk, events.eventType)
+      .orderBy(bk);
+    const byBucket: Record<string, Record<string, number>> = {};
+    for (const r of seriesRows) (byBucket[r.bucket] ??= {})[r.eventType] = r.count;
+    const series = denseBuckets(win.since, win.hourly).map((b) => {
+      const d = byBucket[b] ?? {};
+      return {
+        day: b,
+        impressions: d['impression'] ?? 0,
+        views:       d['view']        ?? 0,
+        clicks:      d['click']       ?? 0,
+        conversions: d['conversion']  ?? 0,
+      };
+    });
+
+    return reply.send({ data: { daily, series, granularity: win.hourly ? 'hour' : 'day' } });
   });
 
   // GET /api/v1/analytics/breakdown — device/country/referrer/trigger/unique breakdown
-  // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/breakdown', async (request, reply) => {
-    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
-    const since = daysAgo(days);
+  // Query param: ?days=7|30|90 (default 30) OR ?hours=24 (last-24h view)
+  fastify.get<{ Querystring: { days?: string; hours?: string; clientId?: string } }>('/analytics/breakdown', async (request, reply) => {
+    const { since } = parseWindow(request.query);
     const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     const [deviceRows, countryRows, triggerRows, uniqueRow] = await Promise.all([
@@ -379,10 +439,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/analytics/revenue — revenue dashboard per campaign
-  // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string; clientId?: string } }>('/analytics/revenue', async (request, reply) => {
-    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
-    const since = daysAgo(days);
+  // Query param: ?days=7|30|90 (default 30) OR ?hours=24 (last-24h view)
+  fastify.get<{ Querystring: { days?: string; hours?: string; clientId?: string } }>('/analytics/revenue', async (request, reply) => {
+    const { since, period } = parseWindow(request.query);
     const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
     // Per-campaign revenue + funnel summary
@@ -439,7 +498,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({
       data: {
-        period: `${days}d`,
+        period,
         totals: {
           revenueDollars:      +(totals.revenueCents / 100).toFixed(2),
           purchases:           totals.purchases,
@@ -452,10 +511,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/analytics/funnel — full conversion funnel step counts
-  // Query param: ?days=7|30|90 (default 30), ?campaignId=uuid (optional)
-  fastify.get<{ Querystring: { days?: string; campaignId?: string; clientId?: string } }>('/analytics/funnel', async (request, reply) => {
-    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
-    const since = daysAgo(days);
+  // Query param: ?days=7|30|90 (default 30) OR ?hours=24, plus ?campaignId=uuid (optional)
+  fastify.get<{ Querystring: { days?: string; hours?: string; campaignId?: string; clientId?: string } }>('/analytics/funnel', async (request, reply) => {
+    const { since, period } = parseWindow(request.query);
     const { campaignId, clientId } = request.query;
     const clientFilter = clientEventFilter(clientId, request.tenantId);
 
@@ -493,7 +551,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({
       data: {
-        period: `${days}d`,
+        period,
         steps: [
           { label: 'Trigger Fired',    count: row?.triggered    ?? 0, dropOffPct: 0 },
           { label: 'Popup Shown',      count: top,               dropOffPct: step(top,                      row?.triggered    ?? top) },
@@ -520,10 +578,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/v1/analytics/intelligence — Conversion Intelligence Engine
   // Returns best performers and actionable insights per dimension.
-  // Query param: ?days=7|30|90 (default 30)
-  fastify.get<{ Querystring: { days?: string } }>('/analytics/intelligence', async (request, reply) => {
-    const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
-    const since = daysAgo(days);
+  // Query param: ?days=7|30|90 (default 30) OR ?hours=24 (last-24h view)
+  fastify.get<{ Querystring: { days?: string; hours?: string } }>('/analytics/intelligence', async (request, reply) => {
+    const { since, period } = parseWindow(request.query);
     const where = and(eq(events.tenantId, request.tenantId), gte(events.ts, since));
 
     const [trafficRows, triggerRows, deviceRows, revenueRow, campaignRows] = await Promise.all([
@@ -609,7 +666,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({
       data: {
-        period: `${days}d`,
+        period,
         summary: {
           totalRevenueDollars: +((summary?.totalRevenueCents ?? 0) / 100).toFixed(2),
           totalPurchases:      summary?.totalPurchases   ?? 0,

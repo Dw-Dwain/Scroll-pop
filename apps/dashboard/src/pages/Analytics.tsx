@@ -22,8 +22,9 @@ type SortCol = 'impressions' | 'views' | 'clicks' | 'ctr' | 'conversions';
 
 // ─── SVG Chart Components ──────────────────────────────────────────────────────
 
-function TrendChart({ daily }: {
+function TrendChart({ daily, granularity = 'day' }: {
   daily: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }>;
+  granularity?: 'hour' | 'day';
 }) {
   const W = 900, H = 160, pad = { t: 24, r: 8, b: 24, l: 40 };
   const w = W - pad.l - pad.r;
@@ -54,16 +55,19 @@ function TrendChart({ daily }: {
   }));
 
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const fmtDay = (iso: string) => {
+  const fmt = (iso: string) => {
     if (!iso) return '';
-    const d = new Date(iso + 'T00:00:00');
-    return `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}`;
+    if (granularity === 'hour') {
+      // `iso` is a UTC hour boundary (…T14:00:00Z) — show it in the operator's local time.
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    const d = new Date(iso + 'T00:00:00Z');
+    return `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}`;
   };
 
-  const xLabels = daily.map((d, i) => {
-    if (i === 0 || i === days - 1 || (i % 7 === 0 && i < days - 4)) return fmtDay(d.day);
-    return '';
-  });
+  // ~8 evenly spaced labels so they don't overlap across 24h / 7d / 30d / 90d windows.
+  const every = Math.max(1, Math.ceil(days / 8));
+  const xLabels = daily.map((d, i) => (i === 0 || i === days - 1 || i % every === 0) ? fmt(d.day) : '');
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
@@ -183,11 +187,14 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   // forces a refetch when the operator switches client.
   const { activeClientId } = useActiveClient();
   const cq = activeClientId ? `&clientId=${activeClientId}` : '';
-  const [range, setRange] = React.useState<'7d' | '30d' | '90d'>('30d');
+  const [range, setRange] = React.useState<'24h' | '7d' | '30d' | '90d'>('30d');
   const [sortCol, setSortCol] = React.useState<SortCol>('impressions');
   const [sortAsc, setSortAsc] = React.useState(false);
 
+  // One window concept drives every endpoint: 24h → hourly buckets, otherwise a daily window.
   const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
+  const windowQ = range === '24h' ? 'hours=24' : `days=${days}`;
+  const windowLabel = range === '24h' ? 'last 24 hours' : `last ${days} days`;
 
   // Real-time auto-refresh: poll every 20s so new events surface without a manual
   // reload. Pauses while the tab is hidden; refreshes on window focus.
@@ -195,39 +202,39 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: overviewResult, isLoading: overviewLoading } = useCustom({
-    url: `${apiUrl}/analytics/overview?days=${days}${cq}`,
+    url: `${apiUrl}/analytics/overview?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/overview', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/overview', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: statsResult, isLoading: statsLoading } = useCustom({
-    url: `${apiUrl}/analytics/campaigns?days=${days}${cq}`,
+    url: `${apiUrl}/analytics/campaigns?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/campaigns', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/campaigns', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: dailyResult, isLoading: dailyLoading } = useCustom({
-    url: `${apiUrl}/analytics/daily${activeClientId ? `?clientId=${activeClientId}` : ''}`,
+    url: `${apiUrl}/analytics/daily?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/daily', activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/daily', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: breakdownResult } = useCustom({
-    url: `${apiUrl}/analytics/breakdown?days=${days}${cq}`,
+    url: `${apiUrl}/analytics/breakdown?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/breakdown', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/breakdown', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: revenueResult, isLoading: revenueLoading } = useCustom({
-    url: `${apiUrl}/analytics/revenue?days=${days}${cq}`,
+    url: `${apiUrl}/analytics/revenue?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/revenue', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/revenue', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: funnelResult, isLoading: funnelLoading } = useCustom({
-    url: `${apiUrl}/analytics/funnel?days=${days}${cq}`,
+    url: `${apiUrl}/analytics/funnel?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/funnel', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/funnel', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
   const { data: intelligenceResult } = useCustom({
-    url: `${apiUrl}/analytics/intelligence?days=${days}${cq}`,
+    url: `${apiUrl}/analytics/intelligence?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/intelligence', days, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/intelligence', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
   });
 
   // ── Data extraction ────────────────────────────────────────────────────────
@@ -262,6 +269,12 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
     (dailyResult as ApiWrap<{ daily?: Array<{ day: string; impressions: number; views: number; clicks: number; conversions: number }> }>)?.data?.daily ?? [];
   const curr30 = dailyAll.slice(30);
   const prev30 = dailyAll.slice(0, 30);
+  // Windowed dense series for the trend chart — moves with the range picker (24h hourly / N-day daily).
+  type SeriesPoint = { day: string; impressions: number; views: number; clicks: number; conversions: number };
+  const trendSeries: SeriesPoint[] =
+    (dailyResult as ApiWrap<{ series?: SeriesPoint[] }>)?.data?.series ?? [];
+  const trendGranularity: 'hour' | 'day' =
+    (dailyResult as ApiWrap<{ granularity?: 'hour' | 'day' }>)?.data?.granularity ?? 'day';
 
   const sum = (arr: typeof curr30, key: 'impressions' | 'views' | 'clicks' | 'conversions') =>
     arr.reduce((s, d) => s + (d[key] ?? 0), 0);
@@ -361,7 +374,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {(['7d', '30d', '90d'] as const).map((r) => (
+          {(['24h', '7d', '30d', '90d'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
@@ -391,7 +404,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
             Conversion Intelligence
           </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>— last {days} days</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>— {windowLabel}</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           {(() => {
@@ -586,9 +599,17 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 20, marginBottom: 24 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
           Trend Analysis
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>Daily traffic and conversion volume</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>
+            {trendGranularity === 'hour' ? 'Hourly' : 'Daily'} traffic and conversion volume · {windowLabel}
+          </span>
         </h3>
-        <TrendChart daily={curr30} />
+        {trendSeries.some((d) => d.impressions || d.views || d.clicks || d.conversions) ? (
+          <TrendChart daily={trendSeries} granularity={trendGranularity} />
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '36px 0' }}>
+            No traffic in this window yet.
+          </div>
+        )}
       </div>
 
       {/* Campaign breakdown table */}
