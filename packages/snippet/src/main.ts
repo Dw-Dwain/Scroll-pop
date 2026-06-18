@@ -1305,17 +1305,20 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   shadow.addEventListener('keydown', onKeydown as EventListener);
 
   // dismiss() — close the popup and minimise to the teaser badge.
-  // Beacons the 'dismiss' event exactly once.
+  // `viaAd` = closed by an adClose redirect: it's already beaconed as 'close_ad_click', and it's an
+  // intentional redirect (not an annoyed quit), so it skips the 'popup_close' beacon AND the rage
+  // guard — keeping re-shows + auto-reopen alive for ad exposure.
   let dismissed = false;
-  const dismiss = (isClose = false) => {
+  const dismiss = (isClose = false, viaAd = false) => {
     if (dismissed) return;
     dismissed = true;
     const dur = getDisplayDuration();
-    beaconEvent(campaign, isClose ? 'popup_close' : 'dismiss', slot?.id, { displayDuration: dur });
+    // Don't double-count an ad-close (already 'close_ad_click') or skew the rage-close rate.
+    if (!viaAd) beaconEvent(campaign, isClose ? 'popup_close' : 'dismiss', slot?.id, { displayDuration: dur });
     // Rage-close protection: an X-close within 3s means the visitor was annoyed. Flag it for the
     // rest of the session so checkFrequencyCap suppresses re-shows, and skip auto-reopen — don't
-    // badger someone who clearly didn't want the popup.
-    const rage = isClose && dur < 3000;
+    // badger someone who clearly didn't want the popup. An ad-close is exempt (intentional redirect).
+    const rage = isClose && dur < 3000 && !viaAd;
     if (rage) { try { sessionStorage.setItem('_sp_rg' + campaign.id, '1'); } catch { /* private mode */ } }
     if (popupCard) popupCard.style.display = 'none';
     _spVisible = false; // release the one-at-a-time slot (a blocked flow / journey step can show now)
@@ -1340,7 +1343,6 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
   const reopen = () => {
     _spVisible = true; // re-claim the slot for the re-opened popup (teaser click or auto-reopen)
-    adOpened = false; // reset the X two-step ad-trigger flow so each cycle keeps the same close logic
     if (popupCard) popupCard.style.display = 'block';
     if (overlay) overlay.style.display = 'block';
     if (teaser) teaser.style.display = 'none';
@@ -1405,18 +1407,12 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
     });
   };
 
-  // Close (X) button behavior depends on plan tier:
-  //
-  // growth | scale | agency — two-step ad-trigger flow:
-  //   1st click → opens the affiliate ad in a new tab, popup stays visible.
-  //   User closes the new tab and returns — popup is still there.
-  //   2nd click → dismisses popup and resets frequency cap.
-  //
-  // free | starter — standard instant dismiss (no ad-trigger on X).
-  // X close behaviour is per-campaign, not plan-gated:
-  //   default            → natural instant close (X fires immediately).
-  //   extraProps.adClose → two-step "ad-then-close": 1st X click opens the operator's
-  //                        affiliate link in a new tab + keeps the popup; 2nd click closes.
+  // Close (X) button behaviour is per-campaign:
+  //   default            → natural instant close (X just dismisses the popup).
+  //   extraProps.adClose → single-click "ad-then-close": ONE X click opens the operator's affiliate
+  //                        link in a new tab AND dismisses the popup in the same click. (Previously a
+  //                        two-step flow — the 1st click opened the ad and kept the popup, a 2nd click
+  //                        was needed to close. The second close has been removed.)
   const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
   const adClose = closeEl?.extraProps?.adClose === true;
   // Ad-close target priority: explicit href on the close element → the step's primary affiliate
@@ -1434,23 +1430,19 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   const rawCloseHref = adClose ? (closeEl?.href || stepAffiliateHref || slot?.click_tracker_url || slot?.product_url || '') : '';
   const safeCloseHref = rawCloseHref ? safeHref(injectMacros(rawCloseHref)) : '';
   const closeUrl = (safeCloseHref && safeCloseHref !== '#') ? safeCloseHref : null;
-  let adOpened = false;
   shadow.getElementById('close-btn')?.addEventListener('click', () => {
-    if (closeUrl && !adOpened) {
-      // First click: open ad, keep popup alive. Beacon as 'close_ad_click' (NOT 'click') — this is
-      // the X-close affiliate redirect, not a genuine CTA click, so it stays out of Clicks/CTR.
-      adOpened = true;
+    if (closeUrl) {
+      // adClose: ONE click opens the affiliate redirect in a new tab AND closes the popup (below).
+      // Beacon as 'close_ad_click' (NOT 'click') — the X-close redirect stays out of Clicks/CTR.
       window.open(closeUrl, '_blank', 'noopener');
       beaconEvent(campaign, 'close_ad_click', slot?.id, { destinationUrl: closeUrl, displayDuration: getDisplayDuration() });
-    } else {
-      // Second click, or free/starter plan — instant close
-      dismiss(true);
-      sessionStorage.removeItem(`_sp_session_${campaign.id}`);
-      // SR-11: must match the key written by setFrequencyCap (`_sp_${id}`). The old
-      // `_sp_fr_` infix never matched, so this removeItem was always a silent no-op and
-      // the frequency cap was never cleared on the two-click dismiss flow.
-      try { localStorage.removeItem(`_sp_${campaign.id}`); } catch {}
     }
+    // Close on this same click — whether or not an ad fired (no-ad / free / starter just close).
+    // viaAd=true when an ad fired so the close is exempt from rage suppression (re-shows stay alive).
+    dismiss(true, !!closeUrl);
+    sessionStorage.removeItem(`_sp_session_${campaign.id}`);
+    // SR-11: must match the key written by setFrequencyCap (`_sp_${id}`) so the cap is actually cleared.
+    try { localStorage.removeItem(`_sp_${campaign.id}`); } catch {}
   });
   // An explicit "no thanks" dismiss-text link still closes, but clicking/tapping the dark backdrop
   // does NOT (intentional: the popup is X-only, so a stray tap outside — common on mobile — can't
