@@ -9,6 +9,7 @@ import { events, campaigns } from '../db/schema.js';
 import { eq, and, gte, isNull, sql } from 'drizzle-orm';
 
 const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d; };
+const hoursAgo = (n: number) => { const d = new Date(); d.setHours(d.getHours() - n); return d; };
 
 // Agency client scoping: restrict events to campaigns whose site belongs to the given client
 // (events → campaign.site_id → site.client_id). Returns undefined when no client is active.
@@ -86,53 +87,99 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  // GET /api/v1/analytics/campaigns/:id — campaign-level daily breakdown
-  fastify.get<{ Params: { id: string }; Querystring: { days?: string } }>(
+  // GET /api/v1/analytics/campaigns/:id — campaign-level time-series breakdown.
+  // Daily buckets for ?days=7|30|90 (default 30); HOURLY buckets for ?hours=1..48 (the 24-hour
+  // view on Campaign Detail). Returns a dense, zero-filled `series` in meta (every bucket present,
+  // oldest→newest) so the trend chart renders a continuous line even on quiet days/hours, plus the
+  // sparse grouped rows in `data` (the KPI tiles sum these) and the bounded unique-clicker CTR
+  // (identical formula to /analytics/overview + /analytics/campaigns so every surface agrees).
+  fastify.get<{ Params: { id: string }; Querystring: { days?: string; hours?: string } }>(
     '/analytics/campaigns/:id',
     async (request, reply) => {
+      const hourly = request.query.hours != null;
+      const hours = Math.min(Math.max(parseInt(request.query.hours ?? '24', 10) || 24, 1), 48);
       const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 1), 90);
-      const since = daysAgo(days);
+      const since = hourly ? hoursAgo(hours) : daysAgo(days);
+      const granularity: 'hour' | 'day' = hourly ? 'hour' : 'day';
+
+      // Truncate in UTC so bucket keys are deterministic regardless of DB session timezone, and so
+      // the client can zero-fill against the same keys. Hourly → ISO hour (…T14:00:00Z); daily → date.
+      const bucketExpr = hourly
+        ? sql<string>`to_char(date_trunc('hour', ${events.ts} at time zone 'UTC'), 'YYYY-MM-DD"T"HH24:00:00"Z"')`
+        : sql<string>`to_char(date_trunc('day', ${events.ts} at time zone 'UTC'), 'YYYY-MM-DD')`;
+
+      const where = and(
+        eq(events.tenantId, request.tenantId),
+        eq(events.campaignId, request.params.id),
+        gte(events.ts, since)
+      );
 
       const rows = await db
         .select({
-          day: sql<string>`date_trunc('day', ${events.ts})::date::text`,
+          bucket: bucketExpr,
           eventType: events.eventType,
           count: sql<number>`count(*)::int`,
         })
         .from(events)
-        .where(
-          and(
-            eq(events.tenantId, request.tenantId),
-            eq(events.campaignId, request.params.id),
-            gte(events.ts, since)
-          )
-        )
-        .groupBy(sql`date_trunc('day', ${events.ts})`, events.eventType)
-        .orderBy(sql`date_trunc('day', ${events.ts})`);
+        .where(where)
+        .groupBy(bucketExpr, events.eventType)
+        .orderBy(bucketExpr);
 
-      // Bounded unique-clicker CTR (distinct clickers ÷ distinct reach), computed identically to
-      // /analytics/overview + /analytics/campaigns so Campaign Detail shows the SAME CTR as the
-      // Dashboard and Analytics pages. (The old client-side raw clicks÷impressions could exceed
-      // 100% and disagreed with the other two views.)
+      // Bounded unique-clicker CTR (distinct clickers ÷ distinct reach) over the SAME window —
+      // identical to /analytics/overview + /analytics/campaigns so Campaign Detail shows the same
+      // CTR as the Dashboard and Analytics pages. (Raw clicks÷impressions could exceed 100%.)
       const [uniq] = await db
         .select({
           reach:    sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
           clickers: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
         })
         .from(events)
-        .where(
-          and(
-            eq(events.tenantId, request.tenantId),
-            eq(events.campaignId, request.params.id),
-            gte(events.ts, since)
-          )
-        );
+        .where(where);
       const reach = uniq?.reach ?? 0;
       const ctr = reach > 0 ? Math.min((uniq?.clickers ?? 0) / reach, 1) : 0;
 
+      // Dense, zero-filled buckets from the start of the window's first day/hour → now (in UTC).
+      // Every grouped row lands in a bucket, so the chart's bars sum to the KPI totals.
+      const byBucket: Record<string, Record<string, number>> = {};
+      for (const r of rows) {
+        (byBucket[r.bucket] ??= {})[r.eventType] = r.count;
+      }
+      const buckets: string[] = [];
+      if (hourly) {
+        const cur = new Date(since); cur.setUTCMinutes(0, 0, 0);
+        const end = new Date();      end.setUTCMinutes(0, 0, 0);
+        for (; cur <= end; cur.setUTCHours(cur.getUTCHours() + 1)) {
+          buckets.push(cur.toISOString().slice(0, 13) + ':00:00Z');
+        }
+      } else {
+        const cur = new Date(since); cur.setUTCHours(0, 0, 0, 0);
+        const end = new Date();      end.setUTCHours(0, 0, 0, 0);
+        for (; cur <= end; cur.setUTCDate(cur.getUTCDate() + 1)) {
+          buckets.push(cur.toISOString().slice(0, 10));
+        }
+      }
+      const series = buckets.map((b) => {
+        const d = byBucket[b] ?? {};
+        return {
+          bucket: b,
+          impressions:   d['impression']    ?? 0,
+          views:         d['view']           ?? 0,
+          clicks:        d['click']          ?? 0,
+          conversions:   d['conversion']     ?? 0,
+          adCloseClicks: d['close_ad_click'] ?? 0,
+        };
+      });
+
       return reply.send({
         data: rows,
-        meta: { uniqueVisitors: reach, uniqueClicks: uniq?.clickers ?? 0, ctr: parseFloat(ctr.toFixed(4)) },
+        meta: {
+          granularity,
+          period: hourly ? `${hours}h` : `${days}d`,
+          uniqueVisitors: reach,
+          uniqueClicks: uniq?.clickers ?? 0,
+          ctr: parseFloat(ctr.toFixed(4)),
+          series,
+        },
       });
     }
   );
