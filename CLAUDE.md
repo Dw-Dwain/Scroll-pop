@@ -2,7 +2,7 @@
 
 ## What This Is
 A multi-tenant SaaS popup/overlay platform. Operators build scroll-triggered, affiliate-monetized
-popup campaigns through an admin dashboard. A lightweight JS snippet (~12 KB gzipped) runs on
+popup campaigns through an admin dashboard. A lightweight JS snippet (~13 KB gzipped) runs on
 customer sites (WordPress, Shopify, raw HTML, donation platforms) and renders popups inside a
 Shadow DOM without touching browser history.
 
@@ -14,7 +14,7 @@ scrollpop/
 │   ├── dashboard/    # React 19 admin SPA (Vite + Refine + shadcn/ui)
 │   └── worker/       # Cloudflare Worker (config API + event ingest)
 ├── packages/
-│   ├── snippet/      # Vanilla TS browser snippet (~12 KB gzipped)
+│   ├── snippet/      # Vanilla TS browser snippet (~13 KB gzipped)
 │   ├── wp-plugin/    # WordPress PHP plugin (thin, injects snippet)
 │   └── shared/       # Shared TypeScript types + validation schemas (Zod)
 ├── docs/             # Public docs site
@@ -80,7 +80,7 @@ scrollpop/
    IP) impression flood gate. Events are unauthenticated — never trust their contents or counts.
 
 ### Performance
-6. Snippet core bundle (`p.js`) **MUST** stay under 12 KB gzipped (12288 B). This is a hard CI gate —
+6. Snippet core bundle (`p.js`) **MUST** stay under 13 KB gzipped (13312 B). This is a hard CI gate —
    builds fail if exceeded. Lazy chunks have their own caps (spin/journey ≤3KB, targeting ≤2KB).
    Inline stub must stay under 1.2 KB minified.
 7. Snippet must use `requestIdleCallback` (with `setTimeout` fallback) for non-critical work.

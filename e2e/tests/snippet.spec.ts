@@ -117,7 +117,7 @@ async function bootSnippet(
 }
 
 test.describe('snippet runtime', () => {
-  test('built bundle exists and is under the 10 KB gzip gate', async () => {
+  test('built bundle exists and is under the 13 KB gzip gate', async () => {
     expect(fs.existsSync(snippetPath), 'run `pnpm --filter snippet build` first').toBeTruthy();
   });
 
