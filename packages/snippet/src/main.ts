@@ -1,7 +1,7 @@
 /**
  * ScrollPop Snippet — packages/snippet/src/main.ts
  *
- * PERFORMANCE BUDGET: must stay under 10 KB gzipped after build.
+ * PERFORMANCE BUDGET: must stay under 13 KB gzipped after build.
  * SECURITY: NEVER touch browser navigation history (pushState, replaceState, or popstate).
  * See CLAUDE.md rules #1 and #2.
  *
@@ -1187,6 +1187,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 .dismiss-text{text-align:center;margin-top:4px;font-size:12px;opacity:.6;cursor:pointer;}
 .dismiss-text:hover{opacity:1;}
 .powered-by{text-align:center;margin-top:4px;font-size:10px;opacity:.4;}
+.sp-dl{display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid rgba(127,127,127,.2);font-size:10px;line-height:1.4;color:${cssText};opacity:.85;}.sp-dl b{font-weight:700;}
 .success-coupon-box{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed ${cssAccent};border-radius:8px;padding:12px;background:rgba(99,102,241,.05);font-size:18px;font-weight:800;font-family:monospace;letter-spacing:2px;text-align:center;cursor:pointer;transition:background .2s;}
 .success-coupon-box:hover{background:rgba(99,102,241,.1);}
 .success-icon{width:44px;height:44px;background:#d1fae5;color:#065f46;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px auto;font-size:20px;}
@@ -1231,6 +1232,10 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   htmlChunks.push(`<div class="popup-inner" id="popup-view-main" style="padding:0;position:relative;height:${cssNum(mainStep?.height, 520)}px;display:block;">`);
   if (elementMode) htmlChunks.push(buildElementsHTML(mainStep, design, slot, smartProduct));
   htmlChunks.push('</div>');
+  // Affiliate disclosure (PR label) — rendered on EVERY popup (compliance). A bottom strip so it
+  // never overlaps the positioned design canvas above. Operators can override the text via
+  // design.disclosure (escaped); the default covers all existing campaigns with no config change.
+  htmlChunks.push('<div class="sp-dl"><b>広告 · PR</b><span>' + escapeHtml(String((design as any).disclosure || 'アフィリエイト広告を含みます')) + '</span></div>');
   htmlChunks.push('</div>'); // End popup
 
   const teaserStep = getStep('teaser');

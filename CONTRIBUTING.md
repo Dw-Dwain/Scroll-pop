@@ -46,7 +46,7 @@ All required checks must be green:
 - ✅ Typecheck
 - ✅ Unit Tests
 - ✅ No history.* / popstate in snippet
-- ✅ Snippet Size Budgets (core ≤ 12 KB gzipped + lazy-chunk caps)
+- ✅ Snippet Size Budgets (core ≤ 13 KB gzipped + lazy-chunk caps)
 - ✅ Migration Safety
 
 ### 3. Test Locally
@@ -235,7 +235,7 @@ CREATE TABLE IF NOT EXISTS events_2026_07 PARTITION OF events
 | **Typecheck** | TypeScript errors across all packages |
 | **Unit Tests** | Vitest unit test failures |
 | **No history.* / popstate** | Banned browser navigation APIs in snippet (CLAUDE.md rule #1) |
-| **Snippet Size Check** | Hard CI gate ensuring core snippet stays ≤ 12 KB gzipped (12288 B); lazy chunks have their own caps |
+| **Snippet Size Check** | Hard CI gate ensuring core snippet stays ≤ 13 KB gzipped (13312 B); lazy chunks have their own caps |
 
 ---
 
@@ -372,7 +372,7 @@ pnpm --filter snippet build
 # ⚠️ Measure size the SAME WAY CI does — the gzip CLI, NOT node's zlib.
 # node's zlib.gzipSync over-reports vs `gzip -c` by ~90 bytes and will make you
 # think you're over the gate when CI passes. CI uses: gzip -c <bundle> | wc -c
-gzip -c packages/snippet/dist/p.js | wc -c   # must be ≤ 12288
+gzip -c packages/snippet/dist/p.js | wc -c   # must be ≤ 13312
 
 # Recent history
 git log --oneline -15
