@@ -300,6 +300,9 @@ export interface SiteConfigPayload {
    *  real time, then STRIPS them before the response reaches the browser. Never sent to the snippet. */
   tenantId?: string;
   monthlyViewLimit?: number;
+  /** Internal (edge-only): true only for the Novatise org tenant. The Worker honours the grey-hat
+   *  kill switch and re-enforces the Novatise gate using this, then STRIPS it before the browser. */
+  greyHatAllowed?: boolean;
   campaigns: Array<{
     id: string;
     design: DesignConfig;

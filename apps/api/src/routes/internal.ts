@@ -6,6 +6,7 @@ import type { SiteConfigPayload } from '@scrollpop/shared';
 import crypto from 'node:crypto';
 import { redis } from '../index.js';
 import { stripJourneyStepTriggers } from '../lib/journey-config.js';
+import { isGreyHatTenant, applyGreyHatServePolicy } from '../lib/grey-hat.js';
 
 /** Group rows by their campaignId into a Map for O(1) per-campaign assembly. */
 function groupByCampaignId<T extends { campaignId: string }>(rows: T[]): Map<string, T[]> {
@@ -64,8 +65,13 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
       // Fail OPEN: if both checks fail, serve the config rather than block users.
       const tenant = await db.query.tenants.findFirst({
         where: eq(tenants.id, site.tenantId),
-        columns: { monthlyViewLimit: true, plan: true, notificationPrefs: true },
+        columns: { monthlyViewLimit: true, plan: true, notificationPrefs: true, clerkOrgId: true },
       });
+      // Grey-hat (X-close → affiliate redirect) is permitted ONLY for the Novatise org tenant.
+      // This drives the serve-side master gate (layer 4) + per-network gate (layer 3) applied to
+      // every design below, and is forwarded to the edge Worker as an internal flag for its
+      // kill-switch + defense-in-depth strip (then stripped before reaching the browser).
+      const greyHatAllowed = isGreyHatTenant(tenant?.clerkOrgId);
       // Strict per-tenant opt-in consent: when on, the snippet records no analytics
       // until the host grants consent. Stored in the tenant prefs JSONB (no migration).
       const requireConsent = !!((tenant?.notificationPrefs as Record<string, unknown> | undefined)?.['require_consent']);
@@ -158,12 +164,19 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
             const vs = (variantsByCampaign.get(campaign.id) ?? [])
               .filter((v) => v.weight > 0)
               .map((v) => ({ id: v.id, weight: v.weight, design: v.config, affiliateSlots: v.affiliateSlots }));
+            // Grey-hat master gate (layer 4, serve side): neutralise the X-close redirect in every
+            // served design + variant UNLESS this is the Novatise tenant. Isolation — no other
+            // client can receive it. Applied in place before the version hash so the cache key
+            // reflects it. The base design object is freshly spread below so the mutation is local.
+            const designObj = { ...(design.config as Record<string, unknown>), kind: design.kind };
+            applyGreyHatServePolicy(designObj, greyHatAllowed);
+            for (const v of vs) applyGreyHatServePolicy(v.design, greyHatAllowed);
             return {
               id: campaign.id,
               // Merge the top-level `kind` column into the served design object (the snippet reads
               // `campaign.design.kind`, e.g. to launch the spin wheel). It lives on the designs row,
               // not inside config JSONB, so without this it was always undefined at the edge.
-              design: { ...(design.config as Record<string, unknown>), kind: design.kind } as unknown,
+              design: designObj as unknown,
               triggers: (triggersByCampaign.get(campaign.id) ?? []).map((t) => ({ id: t.id, type: t.type, params: t.params })),
               targeting: (targetingByCampaign.get(campaign.id) ?? []).map((r) => ({ id: r.id, kind: r.kind, operator: r.operator, value: r.value })),
               frequency: {
@@ -228,6 +241,9 @@ export const internalRoutes: FastifyPluginAsync = async (fastify) => {
         // limit mid-cache. The API check above remains as defence-in-depth (cache-miss path).
         tenantId: site.tenantId,
         monthlyViewLimit: tenant?.monthlyViewLimit ?? 0,
+        // Internal (edge-only): lets the Worker honour the grey-hat kill switch and re-enforce the
+        // Novatise gate on a possibly-stale/forced KV config. Stripped before the browser response.
+        greyHatAllowed,
         campaigns: validCampaigns as SiteConfigPayload['campaigns'],
         version,
       };

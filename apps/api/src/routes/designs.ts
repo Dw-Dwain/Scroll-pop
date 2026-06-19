@@ -2,8 +2,9 @@ import type { FastifyPluginAsync } from 'fastify';
 import { AffiliateSlotSchema } from '@scrollpop/shared';
 import { z } from 'zod';
 import { db } from '../db/client.js';
-import { designs, campaigns } from '../db/schema.js';
+import { designs, campaigns, tenants } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
+import { isGreyHatTenant, stripAdClose } from '../lib/grey-hat.js';
 
 export const DESIGN_KINDS = ['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'spin_wheel'] as const;
 export type DesignKindValue = (typeof DESIGN_KINDS)[number];
@@ -78,6 +79,19 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!campaign) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    // Grey-hat write gate (layer 4, write side): the X-close → affiliate redirect (adClose) is
+    // permitted ONLY for the Novatise org tenant. For everyone else, silently neutralise it in the
+    // saved config so it never persists (the designer hides the toggle, and a template may default
+    // it on). Strip rather than reject so honest edits to such a campaign still save. The serve
+    // gate re-enforces this regardless.
+    if (body.config) {
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, request.tenantId),
+        columns: { clerkOrgId: true },
+      });
+      if (!isGreyHatTenant(tenant?.clerkOrgId)) stripAdClose(body.config);
     }
 
     const existing = await db.query.designs.findFirst({

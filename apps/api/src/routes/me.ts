@@ -8,6 +8,7 @@ import { users, tenants, tenantMembers, events } from '../db/schema.js';
 import { eq, and, isNull, not, like, gte, sql as drizzleSql } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
 import { revokeAllUserSessions } from '../lib/auth.js';
+import { isGreyHatTenant } from '../lib/grey-hat.js';
 
 export const meRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/v1/me — returns current user + tenant context
@@ -66,6 +67,10 @@ export const meRoutes: FastifyPluginAsync = async (fastify) => {
           plan: tenant.plan,
           monthlyViewLimit: tenant.monthlyViewLimit,
           usage,
+          // Grey-hat (X-close → affiliate redirect) is permitted only for the Novatise org tenant.
+          // Drives the cosmetic hide of the "ad-then-close" toggle in the designer (the real gate
+          // is server-side at write + serve). Authoritative source: the tenant's clerkOrgId.
+          greyHat: isGreyHatTenant(tenant.clerkOrgId),
         },
         role: membership.role,
       },

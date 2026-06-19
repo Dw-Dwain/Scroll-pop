@@ -13,6 +13,7 @@ import SidebarLeftDesigner from '../components/campaign-designer/SidebarLeft';
 import CanvasDesigner from '../components/campaign-designer/Canvas';
 import SidebarRightDesigner from '../components/campaign-designer/SidebarRight';
 import InteractivePreviewDesigner from '../components/campaign-designer/InteractivePreview';
+import { usePlan } from '../hooks/usePlan';
 
 // Merge OSS-inspired templates at the front so they appear first in the marketplace
 const _ALL_TEMPLATES = [...OSS_TEMPLATES, ...MASSIVE_TEMPLATES];
@@ -321,6 +322,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
     try { return JSON.parse(localStorage.getItem('campaign_template_favorites') ?? '[]'); } catch { return []; }
   });
   const [, setCustomTemplates] = React.useState<TemplatePreset[]>([]);
+
+  // Grey-hat (X-close → affiliate redirect) toggle is shown only for the Novatise org tenant.
+  const { isNovatise } = usePlan();
 
   // Advanced Visual Designer state variables
   const [campaign, setCampaign] = React.useState<Campaign | null>(null);
@@ -1046,6 +1050,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
               stepConfig={campaign.steps[activeStep]}
               selectedElementId={selectedElementId}
               activeStep={activeStep}
+              greyHatEnabled={isNovatise}
               onUpdateStepConfig={handleUpdateStepConfig}
               onUpdateElement={handleUpdateElement}
               onDeleteElement={handleRemoveElement}

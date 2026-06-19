@@ -12,6 +12,7 @@
 import * as Sentry from '@sentry/cloudflare';
 import snippetCode from './p.txt';
 import { scrubSentryEvent } from './sentry-scrub';
+import { configHasAdClose, stripAdCloseFromCampaigns } from './grey-hat';
 
 export interface Env {
   SCROLLPOP_CONFIG?: KVNamespace;
@@ -269,11 +270,43 @@ async function augmentConfig(configJson: string, request: Request, env: Env): Pr
       c['limitExceeded'] = true;
     }
   }
+
+  // 3. Grey-hat containment (the X-close → affiliate redirect, adClose). The origin already gates
+  //    this at config assembly, but the edge re-enforces it per request so it's instant + can't be
+  //    bypassed by a stale/forced KV config:
+  //      • kill switch ON      → strip from EVERY served config (global panic button, no deploy).
+  //      • config not Novatise → strip (defense-in-depth; greyHatAllowed is set true only for them).
+  //    Only read the KV kill switch when there's actually an ad-close to kill AND it's allowed —
+  //    keeps this off the hot path for the ~all configs that have neither.
+  const remaining = c['campaigns'] as unknown[] | undefined;
+  if (Array.isArray(remaining) && configHasAdClose(remaining)) {
+    const kill = c['greyHatAllowed'] === true ? await readKillSwitch(env) : true;
+    if (kill) stripAdCloseFromCampaigns(remaining);
+  }
+
   // Strip internal-only fields — never expose to the browser.
   delete c['tenantId'];
   delete c['monthlyViewLimit'];
+  delete c['greyHatAllowed'];
 
   return JSON.stringify(c);
+}
+
+// ─── Grey-hat (X-close redirect) edge containment ───────────────────────────────
+// Global kill switch: set this KV key to any truthy value to strip the X-close affiliate
+// redirect from EVERY served config instantly, with no deploy. Clear it (or set 0/false) to
+// restore. Set via: `wrangler kv key put --binding=SCROLLPOP_CONFIG killswitch:adclose 1`
+// (or the Cloudflare dashboard → Workers KV). This is the "audit landed / policy changed" button.
+const GREY_HAT_KILL_SWITCH_KEY = 'killswitch:adclose';
+
+async function readKillSwitch(env: Env): Promise<boolean> {
+  if (!env.SCROLLPOP_CONFIG) return false;
+  try {
+    const v = (await env.SCROLLPOP_CONFIG.get(GREY_HAT_KILL_SWITCH_KEY, 'text'))?.trim().toLowerCase();
+    return !!v && v !== '' && v !== '0' && v !== 'false' && v !== 'off';
+  } catch {
+    return false; // fail OPEN on a KV error — the origin gate still contains it
+  }
 }
 
 /**

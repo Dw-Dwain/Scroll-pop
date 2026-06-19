@@ -81,6 +81,9 @@ interface SidebarRightProps {
   activeStep?: 'teaser' | 'main' | 'success';
   /** Saved affiliate links for this campaign's site (Settings → Affiliate links). */
   affiliateLinks?: AffiliateLink[];
+  /** Grey-hat (X-close → affiliate redirect) is permitted only for the Novatise org tenant, so the
+   *  "ad-then-close" toggle is shown only when true. Cosmetic — the API enforces it at write + serve. */
+  greyHatEnabled?: boolean;
   onUpdateStepConfig: (key: string, value: unknown) => void;
   onUpdateElement: (id: string, keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
   onDeleteElement: (id: string) => void;
@@ -98,6 +101,7 @@ export default function SidebarRight({
   selectedElementId,
   activeStep,
   affiliateLinks = [],
+  greyHatEnabled = false,
   onUpdateStepConfig,
   onUpdateElement,
   onDeleteElement,
@@ -210,8 +214,10 @@ export default function SidebarRight({
             </div>
           )}
 
-          {/* ── Close behaviour: natural close vs ad-then-close (per-campaign opt-in) ── */}
-          {activeElement.type === 'close' && (
+          {/* ── Close behaviour: natural close vs ad-then-close (per-campaign opt-in) ──
+              Grey-hat: shown only for the Novatise org tenant. Everyone else gets a plain close,
+              enforced server-side at write + serve regardless of this UI. ── */}
+          {activeElement.type === 'close' && greyHatEnabled && (
             <div className="space-y-2.5 pt-3 border-t border-zinc-200">
               <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-widest block font-mono">✕ Close Behaviour</span>
               <label className="flex items-start gap-2 cursor-pointer">

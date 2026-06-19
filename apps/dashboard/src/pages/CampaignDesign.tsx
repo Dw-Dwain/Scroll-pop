@@ -762,7 +762,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
     handleUpdateStepConfig('elements', updated);
   };
 
-  const { canWrite } = usePlan();
+  const { canWrite, isNovatise } = usePlan();
   const handleSave = () => {
     if (!campaign) return;
     if (!canWrite) { toastMessage('View-only access — changes are disabled.'); return; }
@@ -971,6 +971,7 @@ export const CampaignDesign: React.FC<CampaignDesignProps> = ({ campaignId, onNa
           selectedElementId={selectedElementId}
           activeStep={activeStep}
           affiliateLinks={affiliateLinks}
+          greyHatEnabled={isNovatise}
           onUpdateStepConfig={handleUpdateStepConfig}
           onUpdateElement={handleUpdateElement}
           onDeleteElement={handleRemoveElement}
