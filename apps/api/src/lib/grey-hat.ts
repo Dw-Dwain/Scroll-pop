@@ -38,6 +38,16 @@ export function isGreyHatTenant(clerkOrgId: string | null | undefined): boolean 
   return clerkOrgId === NOVATISE_ORG_KEY;
 }
 
+/**
+ * Interpret a stored kill-switch KV value: ON unless empty or a falsey sentinel (0/false/off).
+ * The API (routes/grey-hat.ts) and the Worker (readKillSwitch in apps/worker/src/index.ts) MUST
+ * agree on this, or the dashboard would report a state the edge doesn't actually enforce.
+ */
+export function killSwitchValueIsEnabled(raw: string): boolean {
+  const v = raw.trim().toLowerCase();
+  return !!v && v !== '0' && v !== 'false' && v !== 'off';
+}
+
 // ─── Design-config traversal ────────────────────────────────────────────────────
 // The visual builder emits `steps` as either an object keyed by step id ({ main, success, … })
 // or an array of step objects ({ id, elements }). The snippet reads both; so do we.

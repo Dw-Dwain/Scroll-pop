@@ -4,6 +4,7 @@ import {
   RefreshCw, Eye, EyeOff, Zap, BarChart2,
   Download, Pause, Trash2, Info, Clock, Mail, Smartphone,
   Building2, Users, UserPlus, X,
+  Power, ShieldOff, ShieldCheck,
   type LucideProps,
 } from 'lucide-react';
 import { useList, useUpdate, useCustomMutation, useCustom } from '@refinedev/core';
@@ -635,8 +636,56 @@ export const Settings: React.FC = () => {
 
   // Organization identity (workspace name/slug/branding) is an Agency-tier feature.
   // meetsMinPlan('agency') is also true for super-admin / Novatise (unlimited).
-  const { meetsMinPlan } = usePlan();
+  const { meetsMinPlan, isNovatise } = usePlan();
   const canManageOrg = meetsMinPlan('agency');
+
+  // ─── Grey-hat X-close kill switch (Novatise-only) ───────────────────────────────
+  // Global panic button for the X-close → affiliate redirect. Backed by a Cloudflare KV key the
+  // edge Worker reads per request, so flipping it takes effect instantly across every Novatise site.
+  // `configured:false` means edge KV isn't wired on this environment (e.g. local dev).
+  const [killState, setKillState] = React.useState<{ enabled: boolean; configured: boolean } | null>(null);
+  const [killBusy, setKillBusy] = React.useState(false);
+  React.useEffect(() => {
+    if (!isNovatise) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await authedFetch('/grey-hat/killswitch');
+        if (!res.ok) return;
+        const body = await res.json() as { data?: { enabled?: boolean; configured?: boolean } };
+        if (!cancelled && body.data) {
+          setKillState({ enabled: !!body.data.enabled, configured: !!body.data.configured });
+        }
+      } catch { /* leave null — the card shows a loading state */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isNovatise]);
+
+  const handleToggleKillSwitch = async (next: boolean) => {
+    const msg = next
+      ? 'Engage the kill switch?\n\nThis immediately DISABLES the X-close affiliate redirect on every Novatise site. Visitors get a plain ✕ until you restore it.'
+      : 'Restore X-close redirects?\n\nThis re-enables the X-close affiliate redirect on Novatise sites that have it configured.';
+    if (!window.confirm(msg)) return;
+    setKillBusy(true);
+    try {
+      const res = await authedFetch('/grey-hat/killswitch', { method: 'POST', body: JSON.stringify({ enabled: next }) });
+      if (res.ok) {
+        const body = await res.json() as { data?: { enabled?: boolean } };
+        setKillState((s) => ({ enabled: !!body.data?.enabled, configured: s?.configured ?? true }));
+        showToast(next ? 'Kill switch engaged — X-close redirects disabled everywhere.' : 'X-close redirects restored.');
+      } else if (res.status === 403) {
+        showToast('Only a Novatise owner can change this.');
+      } else if (res.status === 503) {
+        showToast('Edge KV isn’t configured on this environment.');
+      } else {
+        showToast(`Couldn’t update the kill switch (${res.status}).`);
+      }
+    } catch {
+      showToast('Update failed — check your connection.');
+    } finally {
+      setKillBusy(false);
+    }
+  };
 
   const { data: sitesData } = useList({ resource: 'sites' });
   const sites = (sitesData?.data ?? []) as Array<{ id: string; name: string; domain: string; publicKey?: string; isActive?: boolean }>;
@@ -1501,6 +1550,48 @@ export const Settings: React.FC = () => {
           {/* ── DANGER ZONE ── */}
           {activeTab === 'danger' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Grey-hat X-close kill switch — Novatise only */}
+              {isNovatise && (
+                <div style={{ background: 'var(--bg-surface)', border: `1px solid ${killState?.enabled ? 'rgba(239,68,68,0.45)' : 'var(--border-subtle)'}`, borderRadius: 10, padding: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Power size={15} style={{ color: killState?.enabled ? 'var(--status-error)' : 'var(--text-primary)' }} />
+                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>X-Close Affiliate Redirect — Kill Switch</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--accent)', background: 'var(--accent-subtle, rgba(99,102,241,0.12))', borderRadius: 4, padding: '2px 6px' }}>Novatise</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 560 }}>
+                        Global panic button. Engaging it immediately strips the X-close affiliate redirect from <strong>every</strong> Novatise site at the edge (no deploy, no waiting) — the ✕ reverts to a plain close. Normal CTA clicks are unaffected. Use this if a network audit lands.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleKillSwitch(!killState?.enabled)}
+                      disabled={killBusy || killState === null || killState?.configured === false}
+                      className="btn btn-secondary"
+                      style={{ gap: 6, flexShrink: 0, color: killState?.enabled ? 'var(--status-success, #16a34a)' : 'var(--status-error)', borderColor: killState?.enabled ? 'rgba(22,163,74,0.35)' : 'rgba(239,68,68,0.3)', opacity: (killBusy || killState === null || killState?.configured === false) ? 0.5 : 1 }}
+                    >
+                      {killBusy
+                        ? <><RefreshCw size={13} className="spin" /> Working…</>
+                        : killState?.enabled
+                          ? <><ShieldCheck size={13} /> Restore Redirects</>
+                          : <><ShieldOff size={13} /> Kill All Redirects</>}
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-subtle)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {killState === null ? (
+                      <span style={{ color: 'var(--text-muted)' }}>Checking status…</span>
+                    ) : killState.configured === false ? (
+                      <span style={{ color: 'var(--status-warning)' }}><AlertTriangle size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Edge KV isn’t configured on this environment — the switch has no effect here.</span>
+                    ) : killState.enabled ? (
+                      <span style={{ color: 'var(--status-error)', fontWeight: 600 }}><ShieldOff size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Kill switch ACTIVE — X-close redirects are disabled on all sites.</span>
+                    ) : (
+                      <span style={{ color: 'var(--status-success, #16a34a)', fontWeight: 600 }}><ShieldCheck size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Live — X-close redirects are running on sites that have them configured.</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Export */}
               <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                 <div>

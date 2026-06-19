@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isGreyHatTenant,
+  killSwitchValueIsEnabled,
   hasAdClose,
   stripAdClose,
   applyGreyHatServePolicy,
@@ -31,6 +32,15 @@ describe('isGreyHatTenant', () => {
     expect(isGreyHatTenant('personal_user_123')).toBe(false);
     expect(isGreyHatTenant(null)).toBe(false);
     expect(isGreyHatTenant(undefined)).toBe(false);
+  });
+});
+
+describe('killSwitchValueIsEnabled (must match the Worker readKillSwitch)', () => {
+  it('treats a set/truthy value as ON', () => {
+    for (const v of ['1', 'on', 'true', 'yes', 'kill', ' 1 ']) expect(killSwitchValueIsEnabled(v)).toBe(true);
+  });
+  it('treats empty / falsey sentinels as OFF', () => {
+    for (const v of ['', '   ', '0', 'false', 'off', 'FALSE', 'Off', ' 0 ']) expect(killSwitchValueIsEnabled(v)).toBe(false);
   });
 });
 
