@@ -51,9 +51,6 @@ function _getInitials(name: string) {
 
 const PLAN_VIEWS: Record<PlanId, number> = {
   free:    1_000,
-  starter: 25_000,
-  growth:  150_000,
-  scale:   500_000,
   agency:  2_000_000,
 };
 

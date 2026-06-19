@@ -51,13 +51,13 @@ async function purgeForCampaign(tenantId: string, campaignId: string): Promise<v
 }
 
 export const variantRoutes: FastifyPluginAsync = async (fastify) => {
-  // Server-side feature gate: A/B Experiments are a Scale + Agency feature (mirrors the dashboard's
-  // meetsMinPlan('scale')). Unlimited (admin/Novatise) bypasses.
+  // Server-side feature gate: A/B Experiments are an Agency feature (mirrors the dashboard's
+  // meetsMinPlan('agency')). Unlimited (admin/Novatise) bypasses.
   fastify.addHook('preHandler', async (request, reply) => {
     if (request.isUnlimited) return;
     const t = await db.query.tenants.findFirst({ where: eq(tenants.id, request.tenantId), columns: { plan: true } });
-    if (t?.plan !== 'scale' && t?.plan !== 'agency') {
-      return reply.code(403).send({ error: { code: 'PLAN_REQUIRED', message: 'A/B Experiments are available on the Scale and Agency plans.' } });
+    if (t?.plan !== 'agency') {
+      return reply.code(403).send({ error: { code: 'PLAN_REQUIRED', message: 'A/B Experiments are available on the Agency plan.' } });
     }
   });
 

@@ -526,7 +526,7 @@ const NodeInspector: React.FC<{ node: SpNode; campaigns: CampaignLite[]; minDela
 // ── List view ─────────────────────────────────────────────────────────────────
 export const Journeys: React.FC<JourneysProps> = () => {
   const plan = usePlan();
-  const canAccess = plan.meetsMinPlan('scale'); // Journeys: Scale + Agency (and unlimited admins)
+  const canAccess = plan.meetsMinPlan('agency'); // Journeys: Agency (and unlimited admins)
   const { activeClientId } = useActiveClient();
   const cq = activeClientId ? `?clientId=${activeClientId}` : '';
   const [openId, setOpenId] = React.useState<string | null>(null);

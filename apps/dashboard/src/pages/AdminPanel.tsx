@@ -25,9 +25,6 @@ interface AdminPanelProps {
 
 const PLAN_COLORS: Record<string, { bg: string; color: string }> = {
   free:    { bg: 'rgba(113,113,122,0.12)', color: 'var(--text-muted)' },
-  starter: { bg: 'rgba(14,165,233,0.12)',  color: '#38bdf8' },
-  growth:  { bg: 'rgba(99,102,241,0.12)',  color: 'var(--accent-300)' },
-  scale:   { bg: 'rgba(139,92,246,0.12)',  color: '#c084fc' },
   agency:  { bg: 'rgba(245,158,11,0.12)',  color: '#fbbf24' },
   admin:   { bg: 'rgba(34,197,94,0.12)',   color: 'var(--status-success)' },
 };

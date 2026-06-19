@@ -229,7 +229,7 @@ const getDefaultTriggers = (): CampaignTriggers => ({
   timeDelaySeconds: 5,
   pageTargeting: '*',
   deviceTargeting: 'all' as const,
-  geoTargeting: 'JP', // TEMP: Japan default while geo is locked to JP/IN (see geo block below)
+  geoTargeting: 'JP', // Default region (Japan); any country is selectable via the Geo Targeting dropdown.
   frequencyCapDays: 1,
   newVisitorOnly: false,
   sessionPageCount: 0,
@@ -1535,6 +1535,53 @@ export default function SidebarLeft({
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-4 pr-1 pb-4 scrollbar-thin">
+              {/* Geo Targeting — single-region dropdown, pinned to the top of the triggers panel. */}
+              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-zinc-400" />
+                  <span className="text-xs font-semibold text-zinc-100">Geo Targeting</span>
+                </div>
+                {(() => {
+                  const ALL = 'All Countries';
+                  const COUNTRIES: [string, string][] = [
+                    ['US', '🇺🇸 USA'], ['JP', '🇯🇵 Japan'], ['CA', '🇨🇦 Canada'],
+                    ['GB', '🇬🇧 UK'], ['AU', '🇦🇺 Australia'], ['DE', '🇩🇪 Germany'],
+                    ['FR', '🇫🇷 France'], ['IN', '🇮🇳 India'], ['BR', '🇧🇷 Brazil'],
+                  ];
+                  // Single-region selection. Legacy comma-joined values (e.g. "JP,IN") or the old
+                  // "All Worldwide Markets" sentinel resolve to their first code / All so old
+                  // campaigns keep working.
+                  const raw = (campaign.triggers.geoTargeting || ALL).trim();
+                  const current =
+                    raw === ALL || raw === 'All Worldwide Markets' || !raw
+                      ? ALL
+                      : (raw.split(',').map((s) => s.trim()).filter(Boolean)[0] || ALL);
+                  const label = COUNTRIES.find(([c]) => c === current)?.[1];
+                  return (
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <select
+                          value={current}
+                          onChange={(e) => onUpdateTriggers('geoTargeting', e.target.value)}
+                          className="w-full appearance-none bg-zinc-800 border border-zinc-700 rounded-md pl-3 pr-8 py-2 text-[11px] font-medium text-zinc-100 cursor-pointer hover:border-zinc-600 focus:outline-hidden focus:border-indigo-500 transition-colors"
+                        >
+                          <option value={ALL}>🌍 All Worldwide Markets</option>
+                          {COUNTRIES.map(([code, lbl]) => (
+                            <option key={code} value={code}>{lbl}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+                      </div>
+                      <p className="text-[10px] text-zinc-500 pt-0.5">
+                        {current === ALL
+                          ? 'Shows to visitors in every country.'
+                          : <>Shows only to visitors in <span className="text-zinc-300 font-medium">{label ?? current}</span>.</>}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* 0. Display Frequency */}
               <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
                 <div className="flex items-center gap-2">
@@ -1789,61 +1836,6 @@ export default function SidebarLeft({
                 </div>
               </div>
 
-              {/* 6. Geo Target */}
-              <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-2">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-zinc-400" />
-                  <span className="text-xs font-semibold text-zinc-100">Geo Targeting Regions</span>
-                </div>
-                {(() => {
-                  const COUNTRIES: [string, string][] = [
-                    ['US', '🇺🇸 USA'], ['JP', '🇯🇵 Japan'], ['CA', '🇨🇦 Canada'],
-                    ['GB', '🇬🇧 UK'], ['AU', '🇦🇺 Australia'], ['DE', '🇩🇪 Germany'],
-                    ['FR', '🇫🇷 France'], ['IN', '🇮🇳 India'], ['BR', '🇧🇷 Brazil'],
-                  ];
-                  const raw = campaign.triggers.geoTargeting || 'JP';
-                  const selected = (raw === 'All Countries' || !raw)
-                    ? []
-                    : raw.split(',').map((s) => s.trim()).filter(Boolean);
-                  const isAll = selected.length === 0;
-                  const commit = (codes: string[]) =>
-                    onUpdateTriggers('geoTargeting', codes.length === 0 ? 'All Countries' : codes.join(','));
-                  const toggle = (code: string) =>
-                    commit(selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]);
-                  const chip = (active: boolean) =>
-                    `text-[11px] font-medium px-2 py-1.5 rounded-md border cursor-pointer transition-colors ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`;
-                  // TEMP geo lock: only Japan + India are selectable for now, and Japan is the
-                  // default (see getDefaultTriggers + CampaignDesign load defaults). "All Worldwide
-                  // Markets" and every other country are shown but disabled so they can't be picked.
-                  // Re-enable a country later by adding its code here (e.g. add 'US'); use
-                  // [...COUNTRIES.map(([c]) => c)] to unlock everything again.
-                  const GEO_ENABLED = ['JP', 'IN'];
-                  const lockCls = (enabled: boolean) => (enabled ? '' : ' opacity-40 cursor-not-allowed hover:bg-zinc-800');
-                  return (
-                    <div className="space-y-1.5">
-                      <button type="button" disabled onClick={() => commit([])} className={`w-full ${chip(isAll)}${lockCls(false)}`}>
-                        🌍 All Worldwide Markets
-                      </button>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {COUNTRIES.map(([code, label]) => {
-                          const enabled = GEO_ENABLED.includes(code);
-                          return (
-                            <button key={code} type="button" disabled={!enabled} onClick={() => toggle(code)} className={`${chip(selected.includes(code))}${lockCls(enabled)}`}>
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p className="text-[10px] text-zinc-500 pt-0.5">Only Japan and India are available right now.</p>
-                      {!isAll && (
-                        <p className="text-[10px] text-zinc-500 pt-0.5">
-                          Shows only to visitors in: <span className="text-zinc-300 font-medium">{selected.join(', ')}</span>
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
 
               {/* 7. New vs Returning Visitor */}
               <div className="p-3.5 border border-zinc-800 rounded-lg bg-zinc-900 space-y-3">

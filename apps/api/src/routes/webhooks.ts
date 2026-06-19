@@ -86,10 +86,7 @@ async function bustTenantCache(tenantId: string): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
-function getPlanFromStripePrice(priceId: string): 'starter' | 'growth' | 'scale' | 'agency' | null {
-  if (priceId === process.env['STRIPE_PRICE_STARTER']) return 'starter';
-  if (priceId === process.env['STRIPE_PRICE_GROWTH']) return 'growth';
-  if (priceId === process.env['STRIPE_PRICE_SCALE']) return 'scale';
+function getPlanFromStripePrice(priceId: string): 'agency' | null {
   if (priceId === process.env['STRIPE_PRICE_AGENCY']) return 'agency';
   return null;
 }

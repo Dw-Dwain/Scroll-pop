@@ -68,7 +68,7 @@ function bootstrapCampaign(
   let deviceTargeting = 'all';
   let newVisitorOnly = false;
   let pageTargeting = '*';
-  let geoTargeting = 'JP'; // TEMP: Japan default while geo is locked to JP/IN in the designer
+  let geoTargeting = 'JP'; // Default region (Japan) when a campaign has no saved geo rule.
   let sessionPageCount = 0;
   let utmParam = 'utm_source';
   let utmValue = '';

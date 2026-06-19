@@ -15,6 +15,10 @@ import { sql } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
+// Product currently offers only `free` and `agency` (see @scrollpop/shared `Plan`). The legacy
+// `starter`/`growth`/`scale` values are kept in the Postgres enum so existing rows stay valid and
+// to avoid a destructive enum-recreate migration on the live DB — they are never assigned by the
+// app (checkout, admin plan-change, and Stripe webhooks all reject anything but free/agency).
 export const planEnum = pgEnum('plan', [
   'free', 'starter', 'growth', 'scale', 'agency',
 ]);
