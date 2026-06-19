@@ -1187,7 +1187,7 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 .dismiss-text{text-align:center;margin-top:4px;font-size:12px;opacity:.6;cursor:pointer;}
 .dismiss-text:hover{opacity:1;}
 .powered-by{text-align:center;margin-top:4px;font-size:10px;opacity:.4;}
-.sp-dl{display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid rgba(127,127,127,.2);font-size:10px;line-height:1.4;color:${cssText};opacity:.85;}.sp-dl b{font-weight:700;}
+.sp-dl{display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid rgba(127,127,127,.2);font-size:10px;line-height:1.4;color:${disclosureColor(cssBackground)};opacity:.9;}.sp-dl b{font-weight:700;}
 .success-coupon-box{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed ${cssAccent};border-radius:8px;padding:12px;background:rgba(99,102,241,.05);font-size:18px;font-weight:800;font-family:monospace;letter-spacing:2px;text-align:center;cursor:pointer;transition:background .2s;}
 .success-coupon-box:hover{background:rgba(99,102,241,.1);}
 .success-icon{width:44px;height:44px;background:#d1fae5;color:#065f46;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px auto;font-size:20px;}
@@ -1500,6 +1500,29 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
 
   // Beacon view after 1s (user actually saw it)
   setTimeout(() => beaconEvent(campaign, 'view'), 1000);
+}
+
+// Pick a legible color for the affiliate disclosure (PR) strip from the popup CARD background.
+// The strip sits on the card's backgroundColor, so a design whose textColor happens to match a
+// dark card (e.g. full-bleed image templates like the Rakuten/Amazon creatives) rendered the PR
+// label invisible — black-on-black. Derive the label color from the background's perceived
+// luminance instead — light text on dark cards, dark on light — so the disclosure is ALWAYS
+// readable (a compliance requirement, not cosmetic).
+function disclosureColor(bg: string): string {
+  let r = 255, g = 255, b = 255; // assume a light card if we can't parse → dark text
+  const hex = /^#([0-9a-f]{3,8})$/i.exec(bg);
+  if (hex) {
+    let h = hex[1] as string;
+    if (h.length === 3 || h.length === 4) h = h.replace(/./g, (c) => c + c); // expand #rgb / #rgba
+    r = parseInt(h.slice(0, 2), 16);
+    g = parseInt(h.slice(2, 4), 16);
+    b = parseInt(h.slice(4, 6), 16);
+  } else {
+    const m = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(bg);
+    if (m) { r = +(m[1] as string); g = +(m[2] as string); b = +(m[3] as string); }
+  }
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum < 0.55 ? 'rgba(255,255,255,.92)' : 'rgba(0,0,0,.72)';
 }
 
 function getPositionStyles(design: DesignConfig): string {
