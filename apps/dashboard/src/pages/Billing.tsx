@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Crown, CreditCard, X, TrendingUp, Zap, Building2, RefreshCw, ExternalLink, Clock } from 'lucide-react';
+import { Check, Crown, CreditCard, X, Zap, Building2, RefreshCw, ExternalLink, Clock } from 'lucide-react';
 import { usePlan, PLAN_LIMITS, PLAN_PRICES, PLAN_ORDER } from '../hooks/usePlan';
 import { useCustomMutation, useCustom } from '@refinedev/core';
 import { getApiBase } from '../providers/dataProvider';
