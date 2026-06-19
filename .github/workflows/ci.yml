@@ -104,7 +104,7 @@ jobs:
           # budget here intentionally if needed.
           BUNDLE="packages/snippet/dist/p.js"
           if [ ! -f "$BUNDLE" ]; then echo "❌ Core bundle not found at $BUNDLE"; exit 1; fi
-          declare -A BUDGETS=( ["p.js"]=13312 ["spin.js"]=3072 ["journey.js"]=3072 ["targeting.js"]=2048 )
+          declare -A BUDGETS=( ["p.js"]=13312 ["spin.js"]=3072 ["journey.js"]=3072 ["targeting.js"]=2048 ["adclose.js"]=2048 )
           DEFAULT=3072
           fail=0
           shopt -s nullglob

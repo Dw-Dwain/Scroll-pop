@@ -107,12 +107,22 @@ const consentCtx = await esbuild.context({
   outfile: 'dist/consent.js',
 });
 
+// X-close affiliate-redirect lazy chunk — built separately so the redirect code is ABSENT from the
+// core p.js. The core fetches it only when a campaign opts into adClose (Novatise-only, gated
+// server-side). A site that never serves an adClose config never downloads it. Budget: ≤2 KB gzip.
+const adcloseCtx = await esbuild.context({
+  ...sharedOpts,
+  entryPoints: ['src/adclose.ts'],
+  outfile: 'dist/adclose.js',
+});
+
 if (watch) {
   await ctx.watch();
   await spinCtx.watch();
   await targetingCtx.watch();
   await journeyCtx.watch();
   await consentCtx.watch();
+  await adcloseCtx.watch();
   console.log('Watching for changes...');
 } else {
   await ctx.rebuild();
@@ -125,5 +135,7 @@ if (watch) {
   await journeyCtx.dispose();
   await consentCtx.rebuild();
   await consentCtx.dispose();
-  console.log('Snippet built → dist/p.js + dist/spin.js + dist/targeting.js + dist/journey.js + dist/consent.js');
+  await adcloseCtx.rebuild();
+  await adcloseCtx.dispose();
+  console.log('Snippet built → dist/p.js + dist/spin.js + dist/targeting.js + dist/journey.js + dist/consent.js + dist/adclose.js');
 }

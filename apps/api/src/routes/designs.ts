@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { designs, campaigns, tenants } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
-import { isGreyHatTenant, stripAdClose } from '../lib/grey-hat.js';
+import { isGreyHatTenant, stripAdClose, hasAdClose } from '../lib/grey-hat.js';
+import { recordAudit } from '../lib/audit.js';
 
 export const DESIGN_KINDS = ['modal', 'slide_in', 'banner', 'bar', 'fullscreen', 'spin_wheel'] as const;
 export type DesignKindValue = (typeof DESIGN_KINDS)[number];
@@ -86,12 +87,14 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
     // saved config so it never persists (the designer hides the toggle, and a template may default
     // it on). Strip rather than reject so honest edits to such a campaign still save. The serve
     // gate re-enforces this regardless.
+    let greyHat = false;
     if (body.config) {
       const tenant = await db.query.tenants.findFirst({
         where: eq(tenants.id, request.tenantId),
         columns: { clerkOrgId: true },
       });
-      if (!isGreyHatTenant(tenant?.clerkOrgId)) stripAdClose(body.config);
+      greyHat = isGreyHatTenant(tenant?.clerkOrgId);
+      if (!greyHat) stripAdClose(body.config);
     }
 
     const existing = await db.query.designs.findFirst({
@@ -101,13 +104,32 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
       ),
     });
 
+    // Layer 5 audit: record when a Novatise design save flips the X-close redirect (adClose) on or
+    // off — the evidence trail of who enabled the grey-hat tactic on which campaign, and when.
+    // Only meaningful for Novatise (everyone else's adClose was just stripped above). Compares the
+    // FINAL adClose state to what was stored, so a partial save that doesn't touch `steps` is a no-op.
+    const auditAdCloseToggle = (finalConfig: unknown) => {
+      if (!greyHat || !body.config) return;
+      const after = hasAdClose(finalConfig);
+      const before = existing ? hasAdClose(existing.config) : false;
+      if (before === after) return;
+      void recordAudit({
+        actorUserId: request.userId,
+        action: after ? 'greyhat_adclose_enabled' : 'greyhat_adclose_disabled',
+        targetTenantId: request.tenantId,
+        details: { campaignId: request.params.id },
+      });
+    };
+
     if (existing) {
       // Update
+      const mergedConfig = body.config ? { ...(existing.config as object), ...body.config } : existing.config;
+      auditAdCloseToggle(mergedConfig);
       const [updated] = await db
         .update(designs)
         .set({
           kind: coercedKind ?? existing.kind,
-          config: body.config ? { ...(existing.config as object), ...body.config } : existing.config,
+          config: mergedConfig,
           affiliateSlots: body.affiliateSlots ?? existing.affiliateSlots,
           updatedAt: new Date(),
         })
@@ -117,13 +139,15 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data: updated });
     } else {
       // Create
+      const newConfig = body.config ?? {};
+      auditAdCloseToggle(newConfig);
       const [created] = await db
         .insert(designs)
         .values({
           campaignId: request.params.id,
           tenantId: request.tenantId,
           kind: coercedKind ?? 'modal',
-          config: body.config ?? {},
+          config: newConfig,
           affiliateSlots: body.affiliateSlots ?? [],
         })
         .returning();
