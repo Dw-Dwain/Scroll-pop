@@ -1,9 +1,11 @@
 # ScrollPop Trust & Security
 
-> **Status:** Public-facing trust-portal content (draft). Last reviewed: 2026-06-13.
+> **Status:** Public-facing trust-portal content — **finalized draft, pending legal/security sign-off
+> before publish.** Last reviewed: 2026-06-19.
 > Publish this as `trust.scrollpop.online` (mirror of competitors' trust portals, e.g. Justuno's
-> `trust.justuno.com`). Items marked **(in progress)** must not be presented as completed
-> certifications until a signed report/certificate exists. Legal/security to approve before publish.
+> `trust.justuno.com`). **Honesty rule (non-negotiable):** items marked **(in progress)** /
+> **(planned)** must NEVER be presented as completed certifications until a signed report/certificate
+> exists. Re-verify each sub-processor's current certification before publishing.
 
 ScrollPop renders monetized popup overlays on our customers' websites. Because our snippet runs
 on third-party sites and we process end-visitor data on our customers' behalf, security and
@@ -39,12 +41,16 @@ ScrollPop is built on hardened, SOC 2 / ISO 27001-certified cloud providers:
 | **Stripe** | Billing & payment processing (we store no card data) | PCI DSS Level 1, SOC 2 Type II |
 | **Sentry** | Error monitoring | SOC 2 Type II |
 | **PostHog** | Product analytics | SOC 2 Type II |
+| **Resend** | Transactional email | SOC 2 Type II |
 
 > Verify each provider's current certification before publishing; provider posture changes over time.
 
-**Data residency:** Primary data is currently hosted in [REGION — confirm Fly.io region]. Edge config
-and static assets are cached globally via Cloudflare. Customers with regional residency requirements
-(e.g. EU, Japan) should contact us — see the data-residency roadmap in §7.
+**Data residency:** First-party data (the primary database, API compute, and the event-ingest buffer)
+is hosted in **Japan — Fly.io Tokyo (`nrt`) region, with Upstash Redis in `ap-northeast-1` (Tokyo)**.
+Edge config and static assets are cached globally via Cloudflare. Error-monitoring and product-
+analytics sub-processors (Sentry, PostHog) are US/EU SaaS run with IP minimisation enabled; any
+resulting transfers are covered by Standard Contractual Clauses and APPI cross-border safeguards
+(see §6). Customers with additional regional residency requirements should contact us.
 
 ---
 
@@ -77,8 +83,8 @@ Every change is gated in CI before it can ship:
 - **No history manipulation** — automated check rejects any `history.pushState`,
   `history.replaceState`, `popstate` listener, or back-button-capture code. This keeps us
   compliant with Google's June 2026 "back button hijacking" spam policy by construction.
-- **Snippet size budgets** — the on-site bundle is capped (core ≤ 12 KB gzipped) so we can never
-  ship bloated or surprising code to customer sites.
+- **Snippet size budgets** — the on-site bundle is capped (core ≤ 13 KB gzipped, with per-chunk caps)
+  so we can never ship bloated or surprising code to customer sites.
 - **Migration safety** — destructive database migration patterns are flagged.
 - **Lint, typecheck, and security regression tests** — run on every pull request with zero-warning
   enforcement.
@@ -92,8 +98,10 @@ Every change is gated in CI before it can ship:
   source control.
 - The database uses a dedicated low-privilege application role that **cannot** bypass Row-Level
   Security, separate from the migration/admin role.
-- [TODO before publish: document MFA enforcement, access-review cadence, onboarding/offboarding,
-  audit logging, and incident-response SLAs — required for SOC 2 and for enterprise questionnaires.]
+- Administrative actions are recorded in an append-only audit log (actor, action, timestamp).
+- MFA enforcement on production/admin systems, a formal access-review cadence, documented
+  onboarding/offboarding, centralized security logging, and incident-response SLAs are being
+  formalized as part of our SOC 2 program (§7). **(in progress — not yet represented as complete.)**
 
 ---
 
@@ -107,9 +115,10 @@ Every change is gated in CI before it can ship:
   mode is available.
 - **GDPR / CCPA / CPRA.** We support data-subject requests (access, deletion). Soft-delete with
   retention windows protects against accidental loss while honoring deletion obligations.
-- **Japan (APPI).** APPI readiness — including cross-border transfer consent and cookie/tag-consent
-  handling — is on our roadmap (§7). **(in progress — pending legal review; do not represent as
-  complete.)**
+- **Japan (APPI).** First-party personal data is hosted in **Japan (Tokyo)** as of June 2026, which
+  removes the cross-border question for the data we control. Remaining APPI readiness — the
+  cross-border transfer basis for US/EU sub-processors and cookie/tag-consent handling — is being
+  finalized with counsel (§7). **(in progress — pending legal review; do not represent as complete.)**
 
 ---
 
@@ -136,8 +145,14 @@ We hold ourselves to enterprise security standards and are formalizing them thro
 ## 8. Reporting a vulnerability
 
 We welcome reports from security researchers. Email **security@scrollpop.online** with details and
-reproduction steps. We aim to acknowledge within [SLA] business days. Please do not publicly
-disclose until we have confirmed a fix. [Add safe-harbor language and scope before publish.]
+reproduction steps. We aim to acknowledge within **2 business days**. Please do not publicly disclose
+until we have confirmed and shipped a fix.
+
+**Safe harbor.** We will not pursue legal action against researchers who act in good faith: test only
+against accounts and data you own, avoid privacy violations and service degradation, never access or
+modify other users' data, and allow reasonable time to remediate before disclosure. **In scope:** the
+dashboard, API, edge Worker, and the on-site snippet. **Out of scope:** third-party sub-processors,
+volumetric/DoS testing, social engineering, and physical attacks.
 
 ---
 
@@ -145,4 +160,4 @@ disclose until we have confirmed a fix. [Add safe-harbor language and scope befo
 
 - Security & trust questions: **security@scrollpop.online**
 - Privacy / DPA requests: **privacy@scrollpop.online**
-- Status page: [status.scrollpop.online — TODO]
+- Status page: **planned** (`status.scrollpop.online`)

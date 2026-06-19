@@ -258,7 +258,9 @@ const WordPressConnectPanel: React.FC<{
   // 1.0.1: bumped to evict the cached 1.0.0 R2 object, which had backslash path
   // separators (Windows-built zip) and failed WP activation with "Plugin file does not exist."
   const PLUGIN_VERSION = '1.0.1';
-  const pluginDownloadUrl = `https://pub-0a090ba944ba46269b65a6cfbb0ed1f0.r2.dev/scrollpop-wp.zip?v=${PLUGIN_VERSION}`;
+  // Served by the Worker from R2 over our own production domain (cdn.scrollpop.online) — NOT the
+  // rate-limited *.r2.dev public bucket URL, which Cloudflare documents as not-for-production (P3-3).
+  const pluginDownloadUrl = `https://cdn.scrollpop.online/scrollpop-wp.zip?v=${PLUGIN_VERSION}`;
 
   return (
     <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>

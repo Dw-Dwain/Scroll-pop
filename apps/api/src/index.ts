@@ -506,14 +506,21 @@ async function bootstrap() {
 
   // Resolve the real client IP. Only trust the forwarded CF-Connecting-IP header when the
   // request actually came from our Worker (proven by INTERNAL_SECRET) — otherwise a direct
-  // caller to the public API could spoof the header to evade per-IP limits. Falls back to the
-  // unspoofable socket IP for direct callers.
+  // caller to the public API could spoof the header to evade per-IP limits.
   function realClientIp(req: { headers: Record<string, unknown>; ip: string }): string {
-    const fromWorker = isFromWorker(req);
-    if (fromWorker) {
+    if (isFromWorker(req)) {
       const fwd = req.headers['x-cf-connecting-ip'];
       if (typeof fwd === 'string' && fwd) return fwd;
     }
+    // S14: the API sits behind Fly's proxy, so for DIRECT (non-Worker) callers the socket IP
+    // (req.ip) is the Fly edge — which would bucket every direct caller into one IP and defeat the
+    // per-IP rate/flood gates. Fly's proxy sets `Fly-Client-IP` to the real connecting client and
+    // OVERWRITES any client-supplied value, so it's authoritative for traffic that transited Fly
+    // (all production traffic). Off-Fly / local dev the header is absent → fall back to the socket
+    // IP. We deliberately do NOT enable Fastify `trustProxy`/X-Forwarded-For: its leftmost entry is
+    // client-spoofable without a fixed trusted-hop count; keying off Fly-Client-IP avoids that.
+    const flyIp = req.headers['fly-client-ip'];
+    if (typeof flyIp === 'string' && flyIp) return flyIp;
     return req.ip;
   }
 

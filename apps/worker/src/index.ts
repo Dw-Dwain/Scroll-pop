@@ -129,6 +129,28 @@ export default Sentry.withSentry(
       return new Response('Creative not found', { status: 404, headers: CORS_HEADERS });
     }
 
+    // GET /scrollpop-wp.zip — the WordPress plugin bundle, served from R2 over our own production
+    // domain (cdn.scrollpop.online) instead of the rate-limited *.r2.dev public bucket URL, which
+    // Cloudflare documents as not-for-production (P3-3). Same R2 bucket binding the snippet/creatives
+    // use. The `?v=` query is a cache-bust token only — the object key is fixed.
+    if (request.method === 'GET' && url.pathname === '/scrollpop-wp.zip') {
+      if (env.SNIPPET_BUCKET) {
+        const obj = await env.SNIPPET_BUCKET.get('scrollpop-wp.zip');
+        if (obj) {
+          return new Response(obj.body, {
+            headers: {
+              'Content-Type': 'application/zip',
+              'Content-Disposition': 'attachment; filename="scrollpop-wp.zip"',
+              'X-Content-Type-Options': 'nosniff',
+              ...CORS_HEADERS,
+              'Cache-Control': 'public, max-age=300',
+            },
+          });
+        }
+      }
+      return new Response('Plugin bundle not found', { status: 404, headers: CORS_HEADERS });
+    }
+
     // GET /c/:publicKey — config endpoint
     if (request.method === 'GET' && url.pathname.startsWith('/c/')) {
       return handleConfig(request, env, ctx, url);
