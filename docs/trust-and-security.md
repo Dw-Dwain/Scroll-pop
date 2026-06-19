@@ -39,12 +39,16 @@ ScrollPop is built on hardened, SOC 2 / ISO 27001-certified cloud providers:
 | **Stripe** | Billing & payment processing (we store no card data) | PCI DSS Level 1, SOC 2 Type II |
 | **Sentry** | Error monitoring | SOC 2 Type II |
 | **PostHog** | Product analytics | SOC 2 Type II |
+| **Resend** | Transactional email (account, billing, notifications) | SOC 2 Type II |
 
 > Verify each provider's current certification before publishing; provider posture changes over time.
 
-**Data residency:** Primary data is currently hosted in [REGION — confirm Fly.io region]. Edge config
-and static assets are cached globally via Cloudflare. Customers with regional residency requirements
-(e.g. EU, Japan) should contact us — see the data-residency roadmap in §7.
+**Data residency:** Primary data — the PostgreSQL datastore and the Redis event-ingest buffer — is
+hosted in **Tokyo, Japan** (Fly.io `nrt` region; Upstash `ap-northeast-1`). Edge config and static
+assets are cached globally via Cloudflare. US-based sub-processors (Clerk, Stripe, PostHog, Sentry,
+Resend) handle account, billing, analytics, and telemetry data; international transfers are covered by
+EU SCCs, the UK Addendum, and APPI transfer measures as applicable (see `docs/dpa.md` §8). Customers
+with additional regional residency requirements should contact us — see the roadmap in §7.
 
 ---
 

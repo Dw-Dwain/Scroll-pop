@@ -48,15 +48,16 @@ function PrivacyPolicy() {
       <Section title="3. Third-Party Services">
         <p>ScrollPop integrates with the following sub-processors:</p>
         <ul className="list-disc pl-5 space-y-1.5">
+          <li><strong className="font-medium text-neutral-800">Fly.io</strong> — API hosting and managed PostgreSQL (our primary datastore), hosted in the Tokyo, Japan region. Your campaign data and analytics are stored here.</li>
+          <li><strong className="font-medium text-neutral-800">Cloudflare</strong> — edge delivery (CDN, Workers, KV, R2). Processes snippet requests and event ingest globally.</li>
+          <li><strong className="font-medium text-neutral-800">Upstash</strong> — Redis for rate limiting and event buffering (Tokyo region). No personal data stored persistently.</li>
           <li><strong className="font-medium text-neutral-800">Clerk</strong> — authentication and user management. Processes email and identity data.</li>
           <li><strong className="font-medium text-neutral-800">Stripe</strong> — payment processing. Processes billing and card data under their PCI-DSS compliance.</li>
-          <li><strong className="font-medium text-neutral-800">Cloudflare</strong> — edge delivery (CDN, Workers, KV, R2). Processes snippet requests and event ingest.</li>
-          <li><strong className="font-medium text-neutral-800">Neon</strong> — Postgres database hosting. Your campaign data and analytics are stored here.</li>
-          <li><strong className="font-medium text-neutral-800">Render</strong> — API hosting; processes event data in transit before it is stored.</li>
-          <li><strong className="font-medium text-neutral-800">Upstash</strong> — Redis for rate limiting and event buffering. No personal data stored persistently.</li>
+          <li><strong className="font-medium text-neutral-800">PostHog</strong> — product analytics for our dashboard (usage telemetry).</li>
           <li><strong className="font-medium text-neutral-800">Sentry</strong> — error monitoring (when enabled). May include sanitised stack traces.</li>
+          <li><strong className="font-medium text-neutral-800">Resend</strong> — transactional email (account, billing, and notification messages).</li>
         </ul>
-        <p>A Data Processing Agreement (DPA) is available to customers on request.</p>
+        <p>Our primary datastore is located in Japan. Some sub-processors (e.g. Clerk, Stripe, PostHog, Sentry, Resend) are based in the United States; cross-border transfers are covered by the EU Standard Contractual Clauses, the UK Addendum, and APPI transfer measures as applicable. A Data Processing Agreement (DPA) describing these is available to customers on request.</p>
       </Section>
 
       <Section title="4. Cookies">

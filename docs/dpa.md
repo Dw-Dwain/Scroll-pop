@@ -2,9 +2,11 @@
 
 > ⚠️ **DRAFT TEMPLATE — NOT LEGAL ADVICE.** This is a starting template modeled on standard
 > processor DPAs (cf. OptinMonster's published DPA). It **must** be reviewed and adapted by
-> qualified privacy counsel before being offered to customers. Bracketed `[...]` fields are
-> placeholders. Do not represent this as executed or counsel-approved until it is.
-> Last updated: 2026-06-13.
+> qualified privacy counsel before being offered to customers. The sub-processor list, regions, and
+> cross-border bases (§6, §8) are filled from the current (post-Tokyo-migration) infrastructure; the
+> remaining bracketed `[...]` items are the **legal-entity name** (§ preamble) and counsel-decision
+> notes flagged inline. Do not represent this as executed or counsel-approved until it is.
+> Last updated: 2026-06-17.
 
 This Data Processing Agreement ("DPA") forms part of the Agreement between **[ScrollPop legal entity
 name]** ("ScrollPop", "Processor") and the customer ("Customer", "Controller") for the provision of
@@ -98,7 +100,7 @@ Subject requests (§7).
 impact-assessment, and prior-consultation obligations (Articles 32–36 GDPR), taking into account the
 information available to ScrollPop.
 
-5.7 Notify Customer **without undue delay and in any case within [72] hours** after becoming aware of
+5.7 Notify Customer **without undue delay and in any case within 72 hours** after becoming aware of
 a Personal Data Breach, with the information reasonably available.
 
 5.8 At Customer's choice, delete or return Personal Data at the end of the Service (§9).
@@ -111,26 +113,32 @@ audits, subject to §10.
 ## 6. Sub-processors
 
 6.1 Customer provides **general authorization** for ScrollPop to engage Sub-processors. The current
-list is maintained at **[sub-processor list URL]** and in `docs/trust-and-security.md` §2.
+list is maintained in `docs/trust-and-security.md` §2 and in Annex III below (to be published at
+`trust.scrollpop.online/sub-processors` before general availability).
 
-6.2 ScrollPop shall notify Customer of intended changes (addition/replacement) at least **[30] days**
+6.2 ScrollPop shall notify Customer of intended changes (addition/replacement) at least **30 days**
 in advance, giving Customer the opportunity to object on reasonable data-protection grounds.
 
 6.3 ScrollPop shall impose data-protection obligations on Sub-processors no less protective than this
 DPA and remains liable for their performance.
 
-**Current Sub-processors (Annex III — confirm before publishing):**
+**Current Sub-processors (Annex III — verify provider posture before publishing):**
 
-| Sub-processor | Purpose | Location | Transfer mechanism |
+End Visitor Personal Data collected via the Service is processed and stored primarily in **Japan**
+(Fly.io Tokyo region + Upstash Tokyo). The US-based Sub-processors below primarily handle Customer
+account, billing, transactional-email, and product-analytics data, plus error telemetry; Cloudflare
+serves edge delivery globally. Cross-border transfers are addressed in §8.
+
+| Sub-processor (entity) | Purpose | Data location | Cross-border transfer basis |
 |---|---|---|---|
-| Fly.io | API hosting + PostgreSQL | [region] | SCCs / DPF as applicable |
-| Cloudflare | Edge delivery, R2 storage, KV cache | Global | SCCs / DPF as applicable |
-| Upstash | Redis (rate limiting, event buffer) | [region] | SCCs / DPF as applicable |
-| Clerk | Authentication | [region] | SCCs / DPF as applicable |
-| Stripe | Billing (no card data stored by ScrollPop) | [region] | SCCs / DPF as applicable |
-| Sentry | Error monitoring | [region] | SCCs / DPF as applicable |
-| PostHog | Product analytics | [region] | SCCs / DPF as applicable |
-| Resend | Transactional email | [region] | SCCs / DPF as applicable |
+| **Fly.io** (Fly.io, Inc., US) | API hosting + managed PostgreSQL (primary datastore) | Tokyo, Japan (`nrt`) | Primary data resident in Japan. EEA/UK data: EU SCCs + UK Addendum, Fly.io as importer. |
+| **Cloudflare** (Cloudflare, Inc., US) | Edge delivery (Workers), R2 object storage, KV cache | Global edge (PoP nearest the visitor) | EU SCCs + UK Addendum; confirm provider DPF certification. APPI: see §8.2. |
+| **Upstash** (Upstash, Inc., US) | Redis — rate-limit counters, event-ingest buffer | Tokyo, Japan (`ap-northeast-1`) | Transient buffer in Japan. EEA/UK data: EU SCCs + UK Addendum. |
+| **Clerk** (Clerk, Inc., US) | Authentication & org management (Customer users) | United States | EU SCCs + UK Addendum. APPI: see §8.2. |
+| **Stripe** (Stripe, Inc., US) | Billing (no card data stored by ScrollPop) | United States (global) | EU SCCs + UK Addendum; confirm provider DPF certification. APPI: see §8.2. |
+| **Sentry** (Functional Software, Inc., US) | Error monitoring | United States | EU SCCs + UK Addendum. APPI: see §8.2. |
+| **PostHog** (PostHog, Inc., US) | Product analytics (dashboard usage) | United States (US Cloud) | EU SCCs + UK Addendum. APPI: see §8.2. |
+| **Resend** (Resend, Inc., US) | Transactional email | United States | EU SCCs + UK Addendum. APPI: see §8.2. |
 
 ---
 
@@ -150,17 +158,24 @@ correct, delete, or export End Visitor Personal Data to fulfill access/deletion/
 applicable **Standard Contractual Clauses** (and the UK Addendum, where relevant) are incorporated by
 reference, with ScrollPop as data importer.
 
-8.2 **Japan (APPI).** Where Customer transfers Personal Data of individuals in Japan to ScrollPop,
-the parties shall comply with APPI cross-border transfer requirements, including providing required
-information to, and obtaining any required consent from, Data Subjects. [Counsel to finalize the
-APPI mechanism — consent, equivalent-protection, or supplementary measures.]
+8.2 **Japan (APPI).** ScrollPop's primary datastore and event-ingest buffer are located in Japan
+(Fly.io Tokyo region; Upstash `ap-northeast-1`), so End Visitor Personal Data collected via the
+Service is processed and stored in Japan. Certain Sub-processors located outside Japan may receive
+Personal Data: Cloudflare (global edge delivery) and — for Customer account, billing, transactional-
+email, product-analytics, and error-telemetry data — Clerk, Stripe, Resend, PostHog, and Sentry
+(all United States). For such cross-border transfers, ScrollPop relies on APPI Article 28 measures,
+namely binding contractual commitments (the applicable Sub-processor DPAs) requiring the recipient
+to maintain protections substantially equivalent to APPI standards, together with the provision of
+required information to Data Subjects. [Counsel to confirm whether End Visitor consent (obtained via
+the Service's consent banner) is additionally required or relied upon, and to finalize the
+per-recipient mechanism — contractual equivalent-protection vs. consent vs. adequacy.]
 
 ---
 
 ## 9. Retention and deletion
 
 9.1 ScrollPop uses soft-deletion with retention windows to guard against accidental loss. On
-termination, ScrollPop shall delete or return Personal Data within **[30] days**, except where
+termination, ScrollPop shall delete or return Personal Data within **30 days**, except where
 retention is required by law.
 
 9.2 Analytics/event data is retained for **13 months** and then deleted or irreversibly
@@ -173,9 +188,9 @@ anonymized/aggregated.
 10.1 ScrollPop shall make available a summary of its security posture and, when available, its
 SOC 2 Type II report and/or ISO 27001 certificate under NDA, to satisfy audit obligations.
 
-10.2 To the extent the above is insufficient, Customer may conduct an audit on **[reasonable notice,
-no more than once per 12 months]**, during business hours, without unreasonably disrupting ScrollPop's
-operations, subject to confidentiality.
+10.2 To the extent the above is insufficient, Customer may conduct an audit on **reasonable prior
+written notice, no more than once per 12 months**, during business hours, without unreasonably
+disrupting ScrollPop's operations, subject to confidentiality.
 
 ---
 
