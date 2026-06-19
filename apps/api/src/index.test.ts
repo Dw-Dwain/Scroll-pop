@@ -415,6 +415,47 @@ describe('Webhook signature verification', () => {
   });
 });
 
+describe('Contact route (public marketing form)', () => {
+  async function buildContactApp() {
+    const app = Fastify({ logger: false });
+    app.register(await import('@fastify/cors').then((m) => m.default), { origin: '*' });
+    const { errorHandlerPlugin } = await import('./plugins/error-handler.js');
+    app.register(errorHandlerPlugin);
+    const { contactRoutes } = await import('./routes/contact.js');
+    app.register(contactRoutes, { prefix: '/api/v1' });
+    await app.ready();
+    return app;
+  }
+
+  it('POST /contact rejects a missing email (400)', async () => {
+    const app = await buildContactApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/contact',
+      payload: { name: 'Test Lead', message: 'hi' }, // no email
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('POST /contact returns 503 when Resend is unconfigured (never silently drops)', async () => {
+    const prevKey = process.env['RESEND_API_KEY'];
+    const prevFrom = process.env['RESEND_FROM'];
+    delete process.env['RESEND_API_KEY'];
+    delete process.env['RESEND_FROM'];
+    const app = await buildContactApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/contact',
+      payload: { name: 'Test Lead', email: 'lead@example.com', message: 'Need agency pricing' },
+    });
+    expect(res.statusCode).toBe(503);
+    if (prevKey !== undefined) process.env['RESEND_API_KEY'] = prevKey;
+    if (prevFrom !== undefined) process.env['RESEND_FROM'] = prevFrom;
+    await app.close();
+  });
+});
+
 describe('Billing checkout redirect URL validation', () => {
   it('rejects checkout when Stripe not configured (graceful error)', async () => {
     delete process.env['STRIPE_SECRET_KEY'];

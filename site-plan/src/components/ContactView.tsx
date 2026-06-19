@@ -1,6 +1,11 @@
 import { useState, ChangeEvent, FormEvent } from 'react';
-import { Send, CheckCircle2, Calendar, Phone, Mail, MapPin, ArrowRight, ShieldAlert, CheckCircle } from 'lucide-react';
+import { Send, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+// The form POSTs to the ScrollPop API's public /contact endpoint, which emails the enquiry
+// (via Resend) to the inbox below. CONTACT_EMAIL is also shown as a direct fallback.
+const API_URL = 'https://scrollpop-api.fly.dev/api/v1';
+const CONTACT_EMAIL = 'noreply@novatise.com';
 
 export default function ContactView() {
   const [formData, setFormData] = useState({
@@ -8,32 +13,45 @@ export default function ContactView() {
     email: '',
     storefrontUrl: '',
     platformType: 'shopify',
-    projectScope: 'install-help',
+    projectScope: 'custom-sections',
     briefMessage: '',
   });
 
   const [formSubmitted, setFormSubmitted] = useState(false);
-  const [selectedConsultDate, setSelectedConsultDate] = useState<string | null>(null);
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (formData.name && formData.email) {
+    if (!formData.name || !formData.email || submitting) return;
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`${API_URL}/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          message: formData.briefMessage,
+          storefrontUrl: formData.storefrontUrl,
+          platformType: formData.platformType,
+          projectScope: formData.projectScope,
+        }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
       setFormSubmitted(true);
+    } catch {
+      setErrorMsg(`Sorry — we couldn't send that just now. Please email us directly at ${CONTACT_EMAIL}.`);
+    } finally {
+      setSubmitting(false);
     }
   };
-
-  const dates = [
-    { id: 'date_1', day: 'Mon', num: '01', month: 'June', time: '10:00 AM EST' },
-    { id: 'date_2', day: 'Tue', num: '02', month: 'June', time: '02:30 PM EST' },
-    { id: 'date_3', day: 'Wed', num: '03', month: 'June', time: '11:15 AM EST' },
-    { id: 'date_4', day: 'Thu', num: '04', month: 'June', time: '04:00 PM EST' },
-  ];
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-16 font-sans text-neutral-850">
@@ -44,25 +62,25 @@ export default function ContactView() {
           Questions? We’re here to help.
         </h1>
         <p className="font-light text-neutral-600 leading-relaxed text-sm md:text-base mt-4 max-w-xl mx-auto">
-          Whether you’re evaluating ScrollPop, need install help, or want to discuss a custom plan — fill in the form and we’ll get back to you within one business day.
+          Whether you’re evaluating ScrollPop, need install help, or want to discuss the Agency plan — fill in the form and we’ll get back to you within one business day.
         </p>
       </div>
 
       {/* Form only — full width */}
       <div className="glass rounded-2xl overflow-hidden p-8 md:p-10 flex flex-col gap-8">
-          
+
           <AnimatePresence mode="wait">
             {!formSubmitted ? (
-              <motion.form 
+              <motion.form
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onSubmit={handleSubmit} 
+                onSubmit={handleSubmit}
                 className="flex flex-col gap-6"
               >
                 <div>
-                  <h3 className="font-serif text-xl font-normal text-neutral-900">Submit Design Mission</h3>
-                  <p className="text-xs text-neutral-600 mt-1 font-light">Complete this brief, and an integration architect will contact your dev team within 12 business hours.</p>
+                  <h3 className="font-serif text-xl font-normal text-neutral-900">Tell us about your project</h3>
+                  <p className="text-xs text-neutral-600 mt-1 font-light">Complete this brief and our team will reply to your email within one business day.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -149,15 +167,20 @@ export default function ContactView() {
                   />
                 </div>
 
+                {errorMsg && (
+                  <p className="text-xs text-red-600 font-medium text-center -mt-2">{errorMsg}</p>
+                )}
+
                 <button
                   type="submit"
-                  className="h-11 w-full bg-neutral-950 text-white hover:bg-neutral-850 transition-colors font-mono text-xs uppercase tracking-wider rounded-full font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-98"
+                  disabled={submitting}
+                  className="h-11 w-full bg-neutral-950 text-white hover:bg-neutral-850 transition-colors font-mono text-xs uppercase tracking-wider rounded-full font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <span>Submit Studio Inquiry</span> <Send className="h-3.5 w-3.5" />
+                  <span>{submitting ? 'Sending…' : 'Send Enquiry'}</span> <Send className="h-3.5 w-3.5" />
                 </button>
               </motion.form>
             ) : (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="text-center py-12 flex flex-col items-center justify-center gap-6"
@@ -166,80 +189,18 @@ export default function ContactView() {
                   <CheckCircle2 className="h-8 w-8 text-neutral-200" />
                 </div>
                 <div>
-                  <h3 className="font-serif text-2xl font-normal text-neutral-900">Mission Received</h3>
-                  <p className="text-neutral-600 text-sm mt-1 max-w-sm mx-auto font-light leading-relaxed">
-                    Thank you, {formData.name}. Your blueprint mission has been routed to our lead visual engineer under ticket ID #{Math.floor(Math.random() * 90000 + 10000)}.
+                  <h3 className="font-serif text-2xl font-normal text-neutral-900">Thanks, {formData.name}!</h3>
+                  <p className="text-neutral-600 text-sm mt-1 max-w-md mx-auto font-light leading-relaxed">
+                    Your enquiry is on its way to our team — we’ll reply within one business day. Prefer email? Reach us any time at{' '}
+                    <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#C05621] font-medium hover:underline">{CONTACT_EMAIL}</a>.
                   </p>
                 </div>
 
-                {/* SIMULATED SCHEDULING INTERACTIVE CARD */}
-                <div className="w-full max-w-md border border-neutral-200 rounded-3xl bg-neutral-100/40 p-6 text-left mt-6">
-                  <span className="text-[9px] font-mono tracking-widest text-[#C05621] uppercase font-bold block mb-2">OPTIONAL NEXT STEP</span>
-                  <h4 className="font-serif text-base font-normal text-neutral-900 flex items-center gap-1.5">
-                    <Calendar className="h-4 w-4 text-neutral-700" /> Book immediate tech briefing
-                  </h4>
-                  <p className="text-xs text-neutral-600 font-light mt-1">Select a simulated slot below with custom compiler engineers to discuss your storefront liquid attributes:</p>
-                  
-                  {!bookingConfirmed ? (
-                    <>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
-                        {dates.map((d) => (
-                          <button
-                            type="button"
-                            key={d.id}
-                            onClick={() => setSelectedConsultDate(d.id)}
-                            className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col gap-0.5 ${
-                              selectedConsultDate === d.id 
-                                ? 'bg-neutral-950 border-neutral-950 text-white shadow-md scale-105 font-medium'
-                                : 'bg-white border-neutral-250 text-neutral-700 hover:border-neutral-350 hover:bg-neutral-50'
-                            }`}
-                          >
-                            <span className={`text-[9px] font-mono uppercase tracking-wider ${selectedConsultDate === d.id ? 'text-white/80' : 'text-neutral-500'}`}>{d.day}</span>
-                            <span className="text-sm font-serif font-bold">{d.num}</span>
-                            <span className="text-[8px] font-mono leading-tight">{d.time.split(' ')[0]} {d.time.split(' ')[1]}</span>
-                          </button>
-                        ))}
-                      </div>
-
-                      {selectedConsultDate && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="mt-4 pt-4 border-t border-neutral-200 text-center"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBookingConfirmed(true);
-                            }}
-                            className="w-full h-9 bg-neutral-950 hover:bg-neutral-850 text-white transition-colors text-[10px] font-mono uppercase tracking-widest font-bold rounded-full flex items-center justify-center gap-1 cursor-pointer shadow-md"
-                          >
-                            Confirm Slot Selection <ArrowRight className="h-3 w-3" />
-                          </button>
-                        </motion.div>
-                      )}
-                    </>
-                  ) : (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="mt-4 p-4 bg-emerald-50 border border-emerald-250 rounded-full text-emerald-850 text-xs font-semibold text-center flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle className="h-4 w-4 text-emerald-700" />
-                      <span>Briefing confirmed block June {dates.find(x => x.id === selectedConsultDate)?.num}! invitation dispatched.</span>
-                    </motion.div>
-                  )}
-                </div>
-
                 <button
-                  onClick={() => {
-                    setFormSubmitted(false);
-                    setBookingConfirmed(false);
-                    setSelectedConsultDate(null);
-                  }}
-                  className="text-xs text-neutral-600 hover:text-neutral-950 hover:underline cursor-pointer transition-colors mt-4 block"
+                  onClick={() => setFormSubmitted(false)}
+                  className="text-xs text-neutral-600 hover:text-neutral-950 hover:underline cursor-pointer transition-colors mt-2 block"
                 >
-                  ← Submit another custom brief
+                  ← Submit another enquiry
                 </button>
               </motion.div>
             )}
