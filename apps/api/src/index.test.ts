@@ -153,7 +153,7 @@ vi.mock('@clerk/fastify', () => ({
 // Minimal stub so tenantContextPlugin can read from a test header
 // fp-wrapped so the preHandler is GLOBAL (the real plugin is fastify-plugin-wrapped). Without this
 // the hook is encapsulated and req.tenantId/isUnlimited never reach the sibling route plugins,
-// so the Scale+Agency plan-gate on journeys/variants would 403 in tests.
+// so the Agency plan-gate on journeys/variants would 403 in tests.
 vi.mock('./plugins/tenant-context.js', async () => {
   const fp = (await import('fastify-plugin')).default;
   return {
@@ -423,7 +423,7 @@ describe('Billing checkout redirect URL validation', () => {
       method: 'POST',
       url: '/api/v1/billing/checkout',
       payload: {
-        plan: 'starter',
+        plan: 'agency',
         successUrl: 'https://dashboard.scrollpop.online/billing?success=1',
         cancelUrl: 'https://dashboard.scrollpop.online/billing',
       },

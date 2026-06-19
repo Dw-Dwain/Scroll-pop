@@ -106,14 +106,16 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // Plan site-count limit (free 1 / starter 3 / growth 10 / scale+agency 999). Enforced
-    // server-side, not just in the UI. Unlimited users (admin/Novatise) bypass.
+    // Plan site-count limit (free 1 / agency 999). Enforced server-side, not just in the UI.
+    // Unlimited users (admin/Novatise) bypass. Any legacy starter/growth/scale tenant that
+    // still exists falls back to free limits (those tiers are no longer offered).
     if (!request.isUnlimited) {
       const tenant = await db.query.tenants.findFirst({
         where: eq(tenants.id, request.tenantId),
         columns: { plan: true },
       });
-      const maxSites = PLAN_LIMITS[tenant?.plan ?? 'free'].sites;
+      const planKey = tenant?.plan === 'agency' ? 'agency' : 'free';
+      const maxSites = PLAN_LIMITS[planKey].sites;
       const [countRow] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(sites)

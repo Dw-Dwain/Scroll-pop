@@ -46,7 +46,8 @@ const redirectUrl = z.string().url().refine(isAllowedRedirect, {
 });
 
 const CheckoutBody = z.object({
-  plan: z.enum(['starter', 'growth', 'scale', 'agency']),
+  // `free` is a downgrade (handled via the Stripe portal), so the only checkout-able plan is `agency`.
+  plan: z.enum(['agency']),
   successUrl: redirectUrl,
   cancelUrl: redirectUrl,
 });

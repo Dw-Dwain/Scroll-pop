@@ -200,9 +200,6 @@ SNIPPET_EDGE_URL=          # https://edge.scrollpop.io
 | Tier | Price | Monthly popup views |
 |---|---|---|
 | free | $0 | 1,000 |
-| starter | $19 | 25,000 |
-| growth | $49 | 150,000 |
-| scale | $129 | 500,000 |
 | agency | $299 | 2,000,000 |
 
 ## Key Domain Terms

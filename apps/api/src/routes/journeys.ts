@@ -177,13 +177,13 @@ export function compileJourney(nodes: NodeRow[], edges: EdgeRow[]): CompileResul
 }
 
 export const journeyRoutes: FastifyPluginAsync = async (fastify) => {
-  // Server-side feature gate: Journeys is a Scale + Agency feature. Mirrors the dashboard's
-  // meetsMinPlan('scale') so a non-Scale tenant can't drive the API directly. Unlimited bypasses.
+  // Server-side feature gate: Journeys is an Agency feature. Mirrors the dashboard's
+  // meetsMinPlan('agency') so a non-Agency tenant can't drive the API directly. Unlimited bypasses.
   fastify.addHook('preHandler', async (request, reply) => {
     if (request.isUnlimited) return;
     const t = await db.query.tenants.findFirst({ where: eq(tenants.id, request.tenantId), columns: { plan: true } });
-    if (t?.plan !== 'scale' && t?.plan !== 'agency') {
-      return reply.code(403).send({ error: { code: 'PLAN_REQUIRED', message: 'Journeys is available on the Scale and Agency plans.' } });
+    if (t?.plan !== 'agency') {
+      return reply.code(403).send({ error: { code: 'PLAN_REQUIRED', message: 'Journeys is available on the Agency plan.' } });
     }
   });
 

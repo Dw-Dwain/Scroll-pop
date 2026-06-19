@@ -11,9 +11,6 @@ interface BillingProps {
 
 const PLAN_DETAILS: { id: PlanId; name: string; tagline: string; popular?: boolean; icon: React.ReactNode }[] = [
   { id: 'free',    name: 'Free',    tagline: 'No card needed',              icon: <Zap size={13} /> },
-  { id: 'starter', name: 'Starter', tagline: 'Solo creators & bloggers',    icon: <Zap size={13} /> },
-  { id: 'growth',  name: 'Growth',  tagline: 'Growing affiliate sites',     icon: <TrendingUp size={13} />, popular: true },
-  { id: 'scale',   name: 'Scale',   tagline: 'High-traffic publishers',     icon: <TrendingUp size={13} /> },
   { id: 'agency',  name: 'Agency',  tagline: 'Agencies & white-label',      icon: <Building2 size={13} /> },
 ];
 
@@ -237,7 +234,7 @@ export const Billing: React.FC<BillingProps> = ({ onNavigate: _onNavigate }) => 
       {/* Plans grid */}
       <div style={{ marginBottom: 12 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 14px', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>Plans</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${PLAN_DETAILS.length}, 1fr)`, gap: 12 }}>
           {PLAN_DETAILS.map(({ id, name, tagline, popular, icon }) => {
             const isCurrent = id === currentPlan;
             const isUpgrade = planRank(id) > planRank(currentPlan);

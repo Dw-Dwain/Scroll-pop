@@ -24,7 +24,7 @@ const statusBadge = (s: string) =>
 
 export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
   const plan = usePlan();
-  const canAccess = plan.meetsMinPlan('scale'); // Experiments: Scale + Agency (and unlimited admins)
+  const canAccess = plan.meetsMinPlan('agency'); // Experiments: Agency (and unlimited admins)
   const { activeClientId } = useActiveClient();
   const cq = activeClientId ? `&clientId=${activeClientId}` : '';
 

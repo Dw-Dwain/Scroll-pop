@@ -206,7 +206,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     if (!await assertSuperAdmin(request, reply)) return;
 
     const { plan, monthlyViewLimit } = request.body;
-    const validPlans = ['free', 'starter', 'growth', 'scale', 'agency'];
+    const validPlans = ['free', 'agency'];
     if (!validPlans.includes(plan)) {
       return reply.code(400).send({ error: { code: 'INVALID_PLAN', message: 'Invalid plan value' } });
     }

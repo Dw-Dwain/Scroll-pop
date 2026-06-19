@@ -17,14 +17,11 @@ export function isUnlimitedEmail(email: string): boolean {
     UNLIMITED_DOMAINS.some((d) => e.endsWith(`@${d}`));
 }
 
-export type PlanId = 'free' | 'starter' | 'growth' | 'scale' | 'agency';
-export const PLAN_ORDER: PlanId[] = ['free', 'starter', 'growth', 'scale', 'agency'];
+export type PlanId = 'free' | 'agency';
+export const PLAN_ORDER: PlanId[] = ['free', 'agency'];
 
 export const PLAN_PRICES: Record<PlanId, string> = {
   free: '$0',
-  starter: '$19',
-  growth: '$49',
-  scale: '$129',
   agency: '$299',
 };
 
@@ -69,45 +66,6 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     noWatermark: false,
     prioritySupport: false,
     geoTargeting: false,
-  },
-  starter: {
-    maxSites: 3,
-    maxCampaigns: 5,
-    maxViews: 25_000,
-    abTesting: false,
-    advancedAnalytics: false,
-    customWebhooks: false,
-    apiAccess: false,
-    whiteLabel: false,
-    noWatermark: true,
-    prioritySupport: true,
-    geoTargeting: false,
-  },
-  growth: {
-    maxSites: 10,
-    maxCampaigns: 20,
-    maxViews: 150_000,
-    abTesting: true,
-    advancedAnalytics: true,
-    customWebhooks: true,
-    apiAccess: false,
-    whiteLabel: false,
-    noWatermark: true,
-    prioritySupport: true,
-    geoTargeting: true,
-  },
-  scale: {
-    maxSites: Infinity,
-    maxCampaigns: Infinity,
-    maxViews: 500_000,
-    abTesting: true,
-    advancedAnalytics: true,
-    customWebhooks: true,
-    apiAccess: false,
-    whiteLabel: false,
-    noWatermark: true,
-    prioritySupport: true,
-    geoTargeting: true,
   },
   agency: {
     maxSites: Infinity,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-export const Plan = z.enum(['free', 'starter', 'growth', 'scale', 'agency']);
+export const Plan = z.enum(['free', 'agency']);
 export const MemberRole = z.enum(['owner', 'admin', 'editor', 'viewer']);
 export const Platform = z.enum(['wordpress', 'shopify', 'html', 'donorbox', 'gofundme', 'other']);
 export const CampaignStatus = z.enum(['draft', 'active', 'paused', 'archived']);
@@ -245,17 +245,11 @@ export const PLAN_LIMITS: Record<z.infer<typeof Plan>, {
   showPoweredBy: boolean;
 }> = {
   free:    { monthlyViews: 1_000,     sites: 1,   showPoweredBy: true },
-  starter: { monthlyViews: 25_000,    sites: 3,   showPoweredBy: false },
-  growth:  { monthlyViews: 150_000,   sites: 10,  showPoweredBy: false },
-  scale:   { monthlyViews: 500_000,   sites: 999, showPoweredBy: false },
   agency:  { monthlyViews: 2_000_000, sites: 999, showPoweredBy: false },
 };
 
 export const PLAN_PRICES_USD: Record<z.infer<typeof Plan>, number> = {
   free:    0,
-  starter: 19,
-  growth:  49,
-  scale:   129,
   agency:  299,
 };
 
@@ -285,7 +279,7 @@ export type ExperimentResults = z.infer<typeof ExperimentResultsSchema>;
 // Site config payload sent by the edge Worker to the snippet
 export interface SiteConfigPayload {
   siteId: string;
-  plan: 'free' | 'starter' | 'growth' | 'scale' | 'agency';
+  plan: 'free' | 'agency';
   /** Strict opt-in: when true the snippet records no analytics until the host grants consent. */
   requireConsent?: boolean;
   /** Optional GDPR/CCPA cookie-consent bar, rendered by the snippet's lazy consent.js chunk.
