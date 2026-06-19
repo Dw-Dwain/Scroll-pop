@@ -123,7 +123,7 @@ export function setPlanOverride(p: PlanOverride): void {
 // ─── Main hook ────────────────────────────────────────────────────────────────
 
 type MePayload = {
-  tenant?: { plan?: string; usage?: number; monthlyViewLimit?: number };
+  tenant?: { plan?: string; usage?: number; monthlyViewLimit?: number; greyHat?: boolean };
   user?: { email?: string };
   role?: string;
 };
@@ -155,6 +155,9 @@ export function usePlan() {
   const apiRole  = mePayload?.role;                 // membership role (undefined while loading)
   const apiUsage = mePayload?.tenant?.usage;        // live popup impressions this month (or undefined while loading)
   const apiViewLimit = mePayload?.tenant?.monthlyViewLimit;
+  // Grey-hat (X-close → affiliate redirect) is gated server-side to the Novatise org tenant.
+  // Used only to hide the designer toggle for everyone else (cosmetic — the API enforces it).
+  const isNovatise: boolean = mePayload?.tenant?.greyHat === true;
 
   // isAdmin = platform super-admin ONLY (exact ADMIN_EMAIL match from API).
   // NO localStorage fallback — admin panel access must be confirmed by the API.
@@ -204,5 +207,5 @@ export function usePlan() {
   const isViewer = role === 'viewer';
   const canWrite = !isViewer;
 
-  return { plan, isAdmin, isUnlimited, limits, hasFeature, withinLimit, meetsMinPlan, planOverride, usage: apiUsage, monthlyViewLimit: apiViewLimit, role, isViewer, canWrite, loaded: !!mePayload };
+  return { plan, isAdmin, isUnlimited, isNovatise, limits, hasFeature, withinLimit, meetsMinPlan, planOverride, usage: apiUsage, monthlyViewLimit: apiViewLimit, role, isViewer, canWrite, loaded: !!mePayload };
 }

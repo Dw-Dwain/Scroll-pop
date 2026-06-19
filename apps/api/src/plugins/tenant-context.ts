@@ -5,6 +5,7 @@ import { tenants, users, tenantMembers } from '../db/schema.js';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getAuth, clerkClient } from '@clerk/fastify';
 import { viewerMayWrite } from '../lib/role-guard.js';
+import { NOVATISE_ORG_KEY } from '../lib/grey-hat.js';
 
 // ─── Access tiers ─────────────────────────────────────────────────────────────
 // ADMIN_EMAIL   = platform super-admin (dwain3991@gmail.com). One account only.
@@ -12,7 +13,6 @@ import { viewerMayWrite } from '../lib/role-guard.js';
 // novatise.com  = Novatise agency. All @novatise.com emails share ONE org tenant
 //                 (org_novatise) and get unlimited agency plan, but no admin console.
 const ADMIN_EMAIL       = process.env['ADMIN_EMAIL']?.toLowerCase() ?? '';
-const NOVATISE_ORG_KEY  = 'org_novatise';
 const NOVATISE_ORG_NAME = 'Novatise';
 
 function isUnlimitedUser(email: string): boolean {
