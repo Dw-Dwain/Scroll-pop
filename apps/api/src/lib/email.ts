@@ -18,6 +18,8 @@ export async function sendEmail(opts: {
   subject: string;
   html: string;
   text?: string;
+  /** Optional Reply-To (e.g. a contact-form submitter's address). */
+  replyTo?: string;
 }): Promise<boolean> {
   const key = process.env['RESEND_API_KEY'];
   const from = process.env['RESEND_FROM'];
@@ -36,6 +38,7 @@ export async function sendEmail(opts: {
         subject: opts.subject,
         html: opts.html,
         ...(opts.text ? { text: opts.text } : {}),
+        ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
       }),
     });
     return res.ok;

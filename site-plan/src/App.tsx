@@ -136,7 +136,7 @@ export default function App() {
               <TemplatesView />
             )}
             {activePage === 'pricing' && (
-              <PricingView />
+              <PricingView onPageChange={setActivePage} />
             )}
             {activePage === 'integration-guide' && (
               <WordPressShopifyGuide />

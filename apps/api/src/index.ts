@@ -38,6 +38,7 @@ import { targetingRoutes } from './routes/targeting.js';
 import { frequencyRoutes } from './routes/frequency.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { billingRoutes } from './routes/billing.js';
+import { contactRoutes } from './routes/contact.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { internalRoutes } from './routes/internal.js';
 import { notificationRoutes, emitNotification } from './routes/notifications.js';
@@ -95,10 +96,14 @@ async function bootstrap() {
     process.env['DASHBOARD_URL'],
     'https://dashboard.scrollpop.online',
     'https://scrollpop-dashboard.pages.dev',
+    // Marketing site (scrollpop.online) — posts the public contact form to /api/v1/contact.
+    'https://scrollpop.online',
+    'https://scrollpop-site.pages.dev',
     ...(isDev ? ['http://localhost:5173', 'http://localhost:3000'] : []),
   ].filter((o): o is string => Boolean(o));
-  // Allows Cloudflare Pages preview deployments: <hash>.scrollpop-dashboard.pages.dev
-  const pagesPreviewPattern = /^https:\/\/[a-z0-9-]+\.scrollpop-dashboard\.pages\.dev$/;
+  // Allows Cloudflare Pages preview deployments for either project:
+  //   <hash>.scrollpop-dashboard.pages.dev  /  <hash>.scrollpop-site.pages.dev
+  const pagesPreviewPattern = /^https:\/\/[a-z0-9-]+\.scrollpop-(dashboard|site)\.pages\.dev$/;
   await app.register(cors, {
     origin: (origin, cb) => {
       // No-origin requests (curl, Postman, server-to-server) are allowed through, but they
@@ -186,6 +191,7 @@ async function bootstrap() {
   await app.register(journeyRoutes, { prefix: '/api/v1' });
   await app.register(experimentRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
+  await app.register(contactRoutes, { prefix: '/api/v1' }); // public — marketing contact form
   await app.register(tenantRoutes, { prefix: '/api/v1' });
 
   // ─── Local Development Snippet & Edge Routes ────────────────────────────────

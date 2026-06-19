@@ -84,6 +84,7 @@ const PUBLIC_ROUTES = [
   '/api/v1/webhooks/shopify',
   '/api/v1/shopify/callback',   // Shopify OAuth redirect — verified by HMAC + nonce
   '/api/v1/public/',            // unauthenticated read-only endpoints (e.g. invite-info deep link)
+  '/api/v1/contact',            // public marketing contact form (rate-limited, fixed recipient)
   '/api/v1/internal',
   '/v1/',
   '/c/',
