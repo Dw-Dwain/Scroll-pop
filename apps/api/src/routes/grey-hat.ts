@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { db, systemDb } from '../db/client.js';
-import { tenants, users, adminAuditLog } from '../db/schema.js';
+import { db } from '../db/client.js';
+import { tenants } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { isGreyHatTenant, killSwitchValueIsEnabled } from '../lib/grey-hat.js';
+import { recordAudit } from '../lib/audit.js';
 
 /**
  * Grey-hat kill-switch admin API (Novatise-only).
@@ -97,22 +98,13 @@ export const greyHatRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(502).send({ error: { code: 'KV_WRITE_FAILED', message: 'Could not update the kill switch.' } });
       }
 
-      // Audit the flip (best-effort) — who, when, which way. admin_audit_log is global / system-pool.
-      try {
-        const actor = await systemDb.query.users.findFirst({
-          where: eq(users.id, request.userId),
-          columns: { email: true },
-        });
-        await systemDb.insert(adminAuditLog).values({
-          actorUserId: request.userId,
-          actorEmail: actor?.email ?? null,
-          action: enabled ? 'greyhat_killswitch_enabled' : 'greyhat_killswitch_disabled',
-          targetTenantId: request.tenantId,
-          details: { key: KILL_SWITCH_KEY },
-        });
-      } catch {
-        /* best-effort — never fail the flip on a logging hiccup */
-      }
+      // Audit the flip — who, when, which way (best-effort; never fails the flip).
+      void recordAudit({
+        actorUserId: request.userId,
+        action: enabled ? 'greyhat_killswitch_enabled' : 'greyhat_killswitch_disabled',
+        targetTenantId: request.tenantId,
+        details: { key: KILL_SWITCH_KEY },
+      });
 
       return reply.send({ data: { enabled } });
     } catch {

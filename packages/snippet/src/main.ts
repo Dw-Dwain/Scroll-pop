@@ -1415,42 +1415,26 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   // Close (X) button behaviour is per-campaign:
   //   default            → natural instant close (X just dismisses the popup).
   //   extraProps.adClose → single-click "ad-then-close": ONE X click opens the operator's affiliate
-  //                        link in a new tab AND dismisses the popup in the same click. (Previously a
-  //                        two-step flow — the 1st click opened the ad and kept the popup, a 2nd click
-  //                        was needed to close. The second close has been removed.)
+  //                        link in a new tab AND dismisses the popup in the same click.
+  // The adClose redirect lives ENTIRELY in the lazy adclose.js chunk — the core p.js carries NO
+  // redirect code, so a site that never serves an adClose config never downloads it (the served
+  // core binary literally can't perform the X-close redirect). The server-side Novatise gate
+  // (apps/api) only ever puts adClose in Novatise configs, so in practice only Novatise sites fetch
+  // the chunk. The X always defaults to a plain dismiss; the chunk overrides that once it loads.
   const closeEl = elementMode ? mainStep?.elements?.find((e: any) => e.type === 'close') : null;
-  const adClose = closeEl?.extraProps?.adClose === true;
-  // Ad-close target priority: explicit href on the close element → the step's primary affiliate
-  // link (the image/button href — where creative templates put it) → the affiliate slot URL.
-  // Mirrors the designer preview's getStepAffiliate so production matches the simulation: new
-  // creative-template campaigns keep the link on the image element, not the close button, so
-  // closeEl.href alone is empty and the X used to close instantly instead of opening the ad.
-  let stepAffiliateHref = '';
-  if (adClose && !closeEl?.href && elementMode && Array.isArray(mainStep?.elements)) {
-    for (const e of mainStep.elements as any[]) {
-      const l = e?.href || e?.extraProps?.href;
-      if (typeof l === 'string' && l.length > 4 && !l.includes('YOUR_') && !l.includes('REPLACE-')) { stepAffiliateHref = l; break; }
-    }
+  let onCloseClick = () => dismiss(true);
+  shadow.getElementById('close-btn')?.addEventListener('click', () => onCloseClick());
+  if (closeEl?.extraProps?.adClose === true) {
+    // If the chunk is blocked / slow / absent, onCloseClick stays the plain dismiss — the X is never
+    // prevented from closing the popup. dismiss() owns frequency-cap semantics (never reset on close).
+    void loadChunk('adclose.js').then(() => {
+      (window as any).__sp_adclose?.({
+        closeEl, elements: mainStep?.elements, slot, campaign,
+        injectMacros, safeHref, beaconEvent, getDisplayDuration, dismiss,
+        setOnClose: (fn: () => void) => { onCloseClick = fn; },
+      });
+    });
   }
-  const rawCloseHref = adClose ? (closeEl?.href || stepAffiliateHref || slot?.click_tracker_url || slot?.product_url || '') : '';
-  const safeCloseHref = rawCloseHref ? safeHref(injectMacros(rawCloseHref)) : '';
-  const closeUrl = (safeCloseHref && safeCloseHref !== '#') ? safeCloseHref : null;
-  shadow.getElementById('close-btn')?.addEventListener('click', () => {
-    if (closeUrl) {
-      // adClose: ONE click opens the affiliate redirect in a new tab AND closes the popup (below).
-      // Beacon as 'close_ad_click' (NOT 'click') — the X-close redirect stays out of Clicks/CTR.
-      window.open(closeUrl, '_blank', 'noopener');
-      beaconEvent(campaign, 'close_ad_click', slot?.id, { destinationUrl: closeUrl, displayDuration: getDisplayDuration() });
-    }
-    // Close on this same click — whether or not an ad fired (no-ad / free / starter just close).
-    // viaAd=true when an ad fired so the close is exempt from rage suppression (re-shows stay alive).
-    // Do NOT clear the frequency cap on close: the cap (`_sp_<id>` ts/count + `_sp_session_<id>`) is
-    // written when the popup SHOWS, and wiping it here defeats once_per_day / once_per_visitor /
-    // recurrence / convert-suppression — the popup would re-open on the next load. Closing the popup
-    // must never reset how often it's allowed to show. (Removed the old SR-11 cap-clear, which only
-    // ever made sense as an adClose re-engagement hack and broke operator frequency settings.)
-    dismiss(true, !!closeUrl);
-  });
   // An explicit "no thanks" dismiss-text link still closes, but clicking/tapping the dark backdrop
   // does NOT (intentional: the popup is X-only, so a stray tap outside — common on mobile — can't
   // dismiss it). The overlay is purely a visual scrim now.
