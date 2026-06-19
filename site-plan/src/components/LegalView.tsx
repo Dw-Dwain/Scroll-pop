@@ -6,9 +6,9 @@ interface LegalViewProps {
 }
 
 const LAST_UPDATED: Record<string, string> = {
-  'privacy-policy': 'June 17, 2026',
+  'privacy-policy': 'June 19, 2026',
   'terms': 'May 1, 2026',
-  'security': 'May 1, 2026',
+  'security': 'June 19, 2026',
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -51,10 +51,11 @@ function PrivacyPolicy() {
           <li><strong className="font-medium text-neutral-800">Clerk</strong> — authentication and user management. Processes email and identity data.</li>
           <li><strong className="font-medium text-neutral-800">Stripe</strong> — payment processing. Processes billing and card data under their PCI-DSS compliance.</li>
           <li><strong className="font-medium text-neutral-800">Cloudflare</strong> — edge delivery (CDN, Workers, KV, R2). Processes snippet requests and event ingest.</li>
-          <li><strong className="font-medium text-neutral-800">Neon</strong> — Postgres database hosting. Your campaign data and analytics are stored here.</li>
-          <li><strong className="font-medium text-neutral-800">Render</strong> — API hosting; processes event data in transit before it is stored.</li>
-          <li><strong className="font-medium text-neutral-800">Upstash</strong> — Redis for rate limiting and event buffering. No personal data stored persistently.</li>
-          <li><strong className="font-medium text-neutral-800">Sentry</strong> — error monitoring (when enabled). May include sanitised stack traces.</li>
+          <li><strong className="font-medium text-neutral-800">Fly.io</strong> — API and managed Postgres database hosting (Tokyo / Japan region). Your campaign data and analytics are stored here, and event data is processed in transit before it is stored.</li>
+          <li><strong className="font-medium text-neutral-800">Upstash</strong> — Redis for rate limiting and event buffering (Tokyo region). No personal data stored persistently.</li>
+          <li><strong className="font-medium text-neutral-800">Sentry</strong> — error monitoring (when enabled). May include sanitised stack traces (IP-minimised).</li>
+          <li><strong className="font-medium text-neutral-800">PostHog</strong> — product analytics for the ScrollPop dashboard (IP-minimised).</li>
+          <li><strong className="font-medium text-neutral-800">Resend</strong> — transactional email (account, billing, and lead auto-responder messages).</li>
         </ul>
         <p>A Data Processing Agreement (DPA) is available to customers on request.</p>
       </Section>
@@ -155,8 +156,8 @@ function SecurityPage() {
         <p>ScrollPop is built on enterprise-grade infrastructure:</p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li><strong className="font-medium text-neutral-800">Edge delivery</strong> — Cloudflare Workers serve the popup snippet from 300+ PoPs globally. DDoS protection and WAF are active on all edge endpoints.</li>
-          <li><strong className="font-medium text-neutral-800">Database</strong> — Postgres hosted on Neon with Row-Level Security (RLS) policies on every tenant-scoped table. No query bypasses tenant isolation.</li>
-          <li><strong className="font-medium text-neutral-800">API</strong> — Fastify backend deployed on Render. All external traffic is TLS 1.2+ only.</li>
+          <li><strong className="font-medium text-neutral-800">Database</strong> — managed Postgres hosted on Fly.io (Tokyo / Japan region) with Row-Level Security (RLS) policies on every tenant-scoped table. No query bypasses tenant isolation.</li>
+          <li><strong className="font-medium text-neutral-800">API</strong> — Fastify backend deployed on Fly.io (Tokyo / Japan region). All external traffic is TLS 1.2+ only.</li>
           <li><strong className="font-medium text-neutral-800">Authentication</strong> — Clerk manages all identity and session tokens. We never store passwords. Multi-factor authentication is available on all plans.</li>
         </ul>
       </Section>
@@ -191,7 +192,7 @@ function SecurityPage() {
 
       <Section title="Compliance">
         <ul className="list-disc pl-5 space-y-1.5">
-          <li><strong className="font-medium text-neutral-800">GDPR</strong> — Data Processing Agreement available on request. Personal data is hosted in the Asia-Pacific (Singapore) region; international transfers are covered by Standard Contractual Clauses.</li>
+          <li><strong className="font-medium text-neutral-800">GDPR</strong> — Data Processing Agreement available on request. First-party personal data is hosted in Japan (Tokyo); international transfers (e.g. to error-monitoring and analytics sub-processors) are covered by Standard Contractual Clauses and, for Japan, APPI cross-border safeguards.</li>
           <li><strong className="font-medium text-neutral-800">CCPA</strong> — We do not sell consumer personal information. Data Subject Request form available in dashboard.</li>
           <li><strong className="font-medium text-neutral-800">Global Privacy Control (GPC)</strong> — The snippet honors the browser-level GPC opt-out signal recognized under CCPA/CPRA: when a visitor's browser sends GPC, popups still render but no analytics events are recorded and no visitor ID is stored.</li>
           <li><strong className="font-medium text-neutral-800">PCI DSS</strong> — Payment data handled exclusively by Stripe (Level 1 PCI-DSS). We are out of scope for card data.</li>
