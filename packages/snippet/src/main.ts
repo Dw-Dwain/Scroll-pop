@@ -1235,10 +1235,18 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   // Affiliate disclosure (PR label) — rendered on EVERY popup (compliance). A bottom strip so it
   // never overlaps the positioned design canvas above. Localized by the visitor's country: JP gets
   // the Japanese label, everyone else (US / English sites) gets the English one. Operators can
-  // override the note text via design.disclosure (escaped). SUPPRESSED when the creative already
-  // bakes its own PR into the image (mainStep.hideDisclosure) or design.disclosure === 'none'.
+  // override the note text via design.disclosure (escaped). SUPPRESSED when: design.disclosure ===
+  // 'none', the step opts out (mainStep.hideDisclosure), OR the main creative image already bakes
+  // its own PR into the artwork (by filename, below) — so it never double-renders regardless of how
+  // the campaign was built.
+  const PR_BAKED_CREATIVES = ['AMAZON THEME SALE ENG']; // /creatives/ basenames whose IMAGE has its own PR
+  const imgHasBakedPR = elementMode && Array.isArray(mainStep?.elements) && (mainStep.elements as any[]).some((e) => {
+    if (e?.type !== 'image' || typeof e.content !== 'string' || e.content.indexOf('/creatives/') < 0) return false;
+    let c = e.content; try { c = decodeURIComponent(c); } catch { /* keep raw */ }
+    return PR_BAKED_CREATIVES.some((n) => c.indexOf(n) >= 0);
+  });
   const dlOverride = (design as any).disclosure;
-  if ((mainStep as any)?.hideDisclosure !== true && dlOverride !== 'none') {
+  if ((mainStep as any)?.hideDisclosure !== true && dlOverride !== 'none' && !imgHasBakedPR) {
     const dlJP = visitorCountry === 'JP';
     const dlNote = dlOverride ? String(dlOverride) : (dlJP ? 'アフィリエイト広告を含みます' : 'Contains affiliate advertising');
     htmlChunks.push('<div class="sp-dl"><b>' + escapeHtml(dlJP ? '広告 · PR' : 'Ad · PR') + '</b><span>' + escapeHtml(dlNote) + '</span></div>');
