@@ -101,6 +101,9 @@ export interface CampaignStepConfig {
   animationEntrance: string;
   popupType: PopupType;
   position: CanvasPosition;
+  /** When true, the snippet does NOT render the affiliate PR/disclosure strip on this popup —
+   *  used for creatives whose image already bakes in its own PR mark. Persisted via steps. */
+  hideDisclosure?: boolean;
 }
 
 export interface CampaignTriggers {
