@@ -730,6 +730,7 @@ const CREATIVE_TEMPLATES: Campaign[] = [
   creativeTemplate('creative-amazon-prime-manga', 'Amazon Prime — Manga Theme Sale', 'AMAZON PRIME MANGA THEME SALE'),
   creativeTemplate('creative-amazon-prime-treasure-hunt', 'Amazon Prime — Treasure Hunt', 'AMAZON PRIME TREASURE HUNT'),
   creativeTemplate('creative-amazon-prime-arts-crafts', 'Amazon Prime — Arts & Crafts', 'AMAZON PRIME ARTS CRAFTS'), // renamed in R2 to drop '&' (CDN can't serve '&' paths)
+  creativeTemplate('creative-amazon-theme-sale-eng', 'Amazon — Theme Sale (English)', 'AMAZON THEME SALE ENG'), // English-language creative (added 2026-06-20)
   // Rakuten themed creatives (added 2026-06-15).
   creativeTemplate('creative-rakuten-app-promo', 'Rakuten — App Promo', 'RAKUTEN APP PROMO'),
   creativeTemplate('creative-rakuten-discounts', 'Rakuten — Discounts', 'RAKUTEN DISCOUNTS'),
