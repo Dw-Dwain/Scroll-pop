@@ -663,7 +663,9 @@ const CREATIVE_W = 380;   // fixed width  (Wisepops-style vertical affiliate car
 const CREATIVE_H = 560;   // fixed height
 const creativeUrl = (file: string) => `https://cdn.scrollpop.online/creatives/${encodeURIComponent(file)}.jpg`;
 
-const creativeTemplate = (id: string, name: string, file: string): Campaign => ({
+// opts.hideDisclosure → the snippet skips the affiliate PR strip (for creatives whose IMAGE already
+// bakes in its own PR mark, e.g. the English "Theme Sale" creative — don't double up the label).
+const creativeTemplate = (id: string, name: string, file: string, opts?: { hideDisclosure?: boolean }): Campaign => ({
   id,
   name,
   category: 'Affiliate',
@@ -687,6 +689,7 @@ const creativeTemplate = (id: string, name: string, file: string): Campaign => (
       // Solid card so the popup is NEVER invisible (even if the creative image is slow/unavailable).
       backgroundColor: '#0b0b0c', borderRadius: 16, borderWidth: 0, borderColor: 'transparent',
       boxShadow: '0 24px 60px rgba(0,0,0,0.45)', overlayColor: 'rgba(0,0,0,0.6)', animationEntrance: 'zoom',
+      ...(opts?.hideDisclosure ? { hideDisclosure: true } : {}),
       elements: [
         // The creative image IS the click target (href → tracked + opens the affiliate link). No
         // separate full-card button overlaying it. White-circle X on top to dismiss.
@@ -730,7 +733,7 @@ const CREATIVE_TEMPLATES: Campaign[] = [
   creativeTemplate('creative-amazon-prime-manga', 'Amazon Prime — Manga Theme Sale', 'AMAZON PRIME MANGA THEME SALE'),
   creativeTemplate('creative-amazon-prime-treasure-hunt', 'Amazon Prime — Treasure Hunt', 'AMAZON PRIME TREASURE HUNT'),
   creativeTemplate('creative-amazon-prime-arts-crafts', 'Amazon Prime — Arts & Crafts', 'AMAZON PRIME ARTS CRAFTS'), // renamed in R2 to drop '&' (CDN can't serve '&' paths)
-  creativeTemplate('creative-amazon-theme-sale-eng', 'Amazon — Theme Sale (English)', 'AMAZON THEME SALE ENG'), // English-language creative (added 2026-06-20)
+  creativeTemplate('creative-amazon-theme-sale-eng', 'Amazon — Theme Sale (English)', 'AMAZON THEME SALE ENG', { hideDisclosure: true }), // English creative — PR baked into the image, so suppress the snippet PR strip (2026-06-20)
   // Rakuten themed creatives (added 2026-06-15).
   creativeTemplate('creative-rakuten-app-promo', 'Rakuten — App Promo', 'RAKUTEN APP PROMO'),
   creativeTemplate('creative-rakuten-discounts', 'Rakuten — Discounts', 'RAKUTEN DISCOUNTS'),
