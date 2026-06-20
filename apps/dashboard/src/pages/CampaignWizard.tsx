@@ -328,6 +328,9 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
 
   // Advanced Visual Designer state variables
   const [campaign, setCampaign] = React.useState<Campaign | null>(null);
+  // Auto-open the template gallery when the designer first opens (create flow); stop once a
+  // template has been picked so it doesn't pop up again on step navigation.
+  const [templateChosen, setTemplateChosen] = React.useState(false);
   const [activeStep, setActiveStep] = React.useState<CampaignStep>('main');
   const [deviceMode, setDeviceMode] = React.useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [selectedElementId, setSelectedElementId] = React.useState<string | null>(null);
@@ -1018,6 +1021,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
             <SidebarLeftDesigner
               campaign={campaign}
               activeStep={activeStep}
+              autoOpenGallery={!templateChosen}
               onUpdateStepConfig={handleUpdateStepConfig}
               onUpdateTriggers={handleUpdateTriggers}
               onSelectTemplate={(tpl) => {
@@ -1027,6 +1031,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onNavigate }) =>
                 const mainEls = JSON.parse(JSON.stringify(tpl.steps.main?.elements ?? []));
                 setHistory([mainEls]);
                 setHistoryIndex(0);
+                setTemplateChosen(true);
                 toastMessage(`🎨 Template design loaded`);
               }}
               onAddElement={handleAddElement}

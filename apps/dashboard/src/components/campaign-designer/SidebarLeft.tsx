@@ -25,12 +25,11 @@ import {
   Eye,
   EyeOff,
   CheckSquare,
-  Heart,
   ChevronDown
 } from 'lucide-react';
 import { Campaign, CampaignElement, ElementType, PopupType, BrandStyle, CampaignTriggers } from './types';
-import { PREBUILT_TEMPLATES } from './data/templates';
 import { TargetingRuleBuilder } from './TargetingRuleBuilder';
+import { TemplateGalleryModal } from './TemplateGalleryModal';
 
 // Deferred element types. These (product/review/qrcode/ticker/progressbar/couponcard) are in the
 // palette source + type system but are half-built: no property editors and the live snippet renders
@@ -46,6 +45,8 @@ interface SidebarLeftProps {
   onUpdateStepConfig: (keyOrObj: string | Record<string, unknown>, value?: unknown) => void;
   onUpdateTriggers: (key: string, value: unknown) => void;
   onSelectTemplate: (template: Campaign) => void;
+  /** When true, the template gallery modal opens on mount (the campaign-create flow). */
+  autoOpenGallery?: boolean;
   onAddElement: (type: ElementType) => void;
   onRemoveElement: (id: string) => void;
   onReorderElement: (id: string, action: 'up' | 'down') => void;
@@ -248,6 +249,7 @@ export default function SidebarLeft({
   onUpdateStepConfig,
   onUpdateTriggers,
   onSelectTemplate,
+  autoOpenGallery = false,
   onAddElement,
   onRemoveElement,
   onReorderElement,
@@ -259,7 +261,9 @@ export default function SidebarLeft({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingName, setRenamingName] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'templates' | 'elements' | 'triggers' | 'brands' | 'layers' | 'mixer'>('templates');
-  const [selectedTemplateCat, setSelectedTemplateCat] = useState<string>('All');
+  // Template gallery modal (replaces the old cramped sidebar list). Auto-opens on the create flow.
+  const [galleryOpen, setGalleryOpen] = useState<boolean>(false);
+  React.useEffect(() => { if (autoOpenGallery) setGalleryOpen(true); }, [autoOpenGallery]);
 
   // Magic Mixer States
   const [mixerStyle, setMixerStyle] = useState<string>('noir');
@@ -270,41 +274,6 @@ export default function SidebarLeft({
 
   const stepConfig = campaign.steps[activeStep];
   const elements = stepConfig.elements;
-
-  // Derive categories from the templates that actually exist (drops empty/unused chips),
-  // preserving template order. 'All' always leads.
-  const categories = React.useMemo(() => {
-    const seen: string[] = [];
-    for (const t of PREBUILT_TEMPLATES) {
-      if (t.category && !seen.includes(t.category)) seen.push(t.category);
-    }
-    return ['All', ...seen];
-  }, []);
-
-  // Template "likes" (per browser). Liked templates float to the top of the list.
-  const LIKES_KEY = '_sp_template_likes';
-  const [likedIds, setLikedIds] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem(LIKES_KEY) || '[]') as string[]); } catch { return new Set(); }
-  });
-  const toggleLike = (id: string) => {
-    setLikedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      try { localStorage.setItem(LIKES_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
-      return next;
-    });
-  };
-
-  const filteredTemplates = React.useMemo(() => {
-    const base = selectedTemplateCat === 'All'
-      ? PREBUILT_TEMPLATES
-      : PREBUILT_TEMPLATES.filter((t) => t.category === selectedTemplateCat);
-    // Stable sort: liked first, original order otherwise.
-    return base
-      .map((t, i) => ({ t, i }))
-      .sort((a, b) => (likedIds.has(b.t.id) ? 1 : 0) - (likedIds.has(a.t.id) ? 1 : 0) || a.i - b.i)
-      .map((x) => x.t);
-  }, [selectedTemplateCat, likedIds]);
 
   // Programmatically compiles customized step configs using Canva visual guidelines
   const handleGenerateProceduralMixer = () => {
@@ -925,6 +894,15 @@ export default function SidebarLeft({
     <div
       className="flex h-full w-[400px] shrink-0 border-r border-zinc-800 bg-zinc-950 select-none designer-panel"
     >
+      {/* Template gallery (grid modal) — replaces the old cramped vertical list. Opened by the
+          "Browse templates" button below, and auto-opened on the create flow via autoOpenGallery. */}
+      <TemplateGalleryModal
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        onPick={onSelectTemplate}
+        activeId={campaign.id}
+      />
+
       {/* 1. Left Icon Navigation Rail */}
       <div className="flex w-[80px] flex-col items-center border-r border-zinc-800 bg-zinc-900 py-4 gap-4 justify-between shrink-0">
         <div className="flex flex-col items-center gap-3 w-full">
@@ -1021,152 +999,18 @@ export default function SidebarLeft({
             <div className="mb-4">
               <h3 className="text-xs font-semibold text-white tracking-tight uppercase font-mono flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-zinc-400" />
-                Premium Presets Catalog
+                Templates
               </h3>
-              <p className="text-[11px] text-zinc-500 mt-1 leading-normal">Select an expert layout crafted to maximize conversions.</p>
+              <p className="text-[11px] text-zinc-500 mt-1 leading-normal">Browse the full preset gallery and pick a starting design.</p>
             </div>
-
-            {/* Category selection — a dropdown (not a cramped horizontal chip row) so the list
-                stays readable and doesn't depend on horizontal trackpad scrolling. */}
-            <div className="shrink-0 border-b border-zinc-800 pb-3 mb-4 select-none">
-              <label className="block text-[9px] font-semibold text-zinc-600 tracking-wider uppercase font-mono mb-1.5">
-                Category
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedTemplateCat}
-                  onChange={(e) => setSelectedTemplateCat(e.target.value)}
-                  className="w-full appearance-none bg-zinc-900 border border-zinc-700 rounded-md pl-3 pr-8 py-2 text-[11px] font-medium text-zinc-100 cursor-pointer hover:border-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat} className="bg-zinc-900 text-zinc-100">
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
-              </div>
-            </div>
-
-            {/* Scrollable Template Cards */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
-              <div className="text-[9px] font-semibold text-zinc-600 tracking-wider uppercase font-mono mb-1">
-                Aesthetic Campaigns ({filteredTemplates.length})
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                {filteredTemplates.map((tpl) => {
-                  const isActiveTemplate = campaign.id === tpl.id;
-                  return (
-                    <div
-                      key={tpl.id}
-                      onClick={() => onSelectTemplate(tpl)}
-                      className={`group relative overflow-hidden rounded-lg border transition-all duration-200 cursor-pointer ${
-                        isActiveTemplate 
-                          ? 'border-zinc-900 ring-1 ring-zinc-900 bg-zinc-50/20' 
-                          : 'border-zinc-200 hover:border-zinc-400 bg-white'
-                      }`}
-                    >
-                      {/* Thumbnail — render the actual creative image when the template has one
-                          (full-bleed image templates like the Japanese sale creatives), otherwise
-                          fall back to the mini mockup. */}
-                      {(() => {
-                        const heroImg = tpl.steps.main.elements.find(
-                          (e) => e.type === 'image' && typeof e.content === 'string' && e.content.startsWith('http')
-                        );
-                        if (heroImg) {
-                          return (
-                            <div className="relative aspect-video w-full overflow-hidden bg-zinc-100 flex items-center justify-center">
-                              <img
-                                src={heroImg.content}
-                                alt={tpl.name}
-                                className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
-                                loading="lazy"
-                              />
-                              <span className="absolute top-1 right-1 text-[6px] font-mono uppercase tracking-wider px-1 bg-black/40 text-white rounded">
-                                {tpl.steps.main.popupType}
-                              </span>
-                            </div>
-                          );
-                        }
-                        return (
-                      <div className="relative aspect-video w-full overflow-hidden bg-zinc-50 p-3 flex items-center justify-center transition-all">
-                        <div
-                          className="w-[90%] h-[90%] rounded shadow-xs border p-2 flex flex-col justify-between overflow-hidden relative"
-                          style={{
-                             backgroundColor: tpl.steps.main.backgroundColor,
-                             borderColor: tpl.steps.main.borderColor,
-                             borderWidth: tpl.steps.main.borderWidth || 1,
-                          }}
-                        >
-                          {/* Inner mini elements helper */}
-                          <div className="flex flex-col gap-0.5 w-full pointer-events-none">
-                            <span className="text-[8px] font-bold truncate" style={{ color: tpl.steps.main.elements.find((e) => e.type === 'heading')?.color || '#111827' }}>
-                              {tpl.steps.main.elements.find((e) => e.type === 'heading')?.content.substring(0, 24) || 'Exclusive Discount'}
-                            </span>
-                            <span className="text-[6px] line-clamp-1 leading-tight text-gray-500">
-                              {tpl.steps.main.elements.find((e) => e.type === 'text')?.content.substring(0, 48) || 'Sign up to redeem.'}
-                            </span>
-                          </div>
-                          
-                          {/* Miniature Form & Button */}
-                          <div className="w-full flex items-center gap-1 mt-1 pointer-events-none">
-                            <div className="flex-1 h-3 rounded-xs bg-white border border-gray-200 text-[5px] pl-1 pt-0.5 text-gray-300">
-                              email@com...
-                            </div>
-                            <div 
-                              className="px-2 h-3 text-[5px] font-semibold text-white rounded-xs flex items-center justify-center truncate"
-                              style={{ backgroundColor: tpl.steps.main.elements.find((e) => e.type === 'button')?.backgroundColor || '#000000' }}
-                            >
-                              CLAIM
-                            </div>
-                          </div>
-                          
-                          {/* Sticky/Slide and Tag tags on card */}
-                          <div className="absolute top-1 right-1 flex items-center gap-1 scale-75">
-                            <span className="text-[6px] font-mono uppercase tracking-wider px-1 bg-black/5 rounded text-gray-650 border border-black/10">
-                              {tpl.steps.main.popupType}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                        );
-                      })()}
-
-                      {/* Info & like */}
-                      <div className="p-3 border-t border-zinc-200 bg-white text-left">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-xs font-semibold text-zinc-900 group-hover:text-zinc-950 transition-colors truncate">
-                            {tpl.name}
-                          </h4>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleLike(tpl.id); }}
-                            title={likedIds.has(tpl.id) ? 'Unlike' : 'Like — pins to the top'}
-                            aria-label={likedIds.has(tpl.id) ? 'Unlike template' : 'Like template'}
-                            className="shrink-0 p-1 -m-1 rounded transition-colors"
-                          >
-                            <Heart
-                              className="h-3.5 w-3.5 transition-colors"
-                              style={{
-                                color: likedIds.has(tpl.id) ? '#ef4444' : '#a1a1aa',
-                                fill: likedIds.has(tpl.id) ? '#ef4444' : 'none',
-                              }}
-                            />
-                          </button>
-                        </div>
-                        <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400">
-                          {tpl.category.split(' ')[0]}
-                        </span>
-                      </div>
-
-                      {isActiveTemplate && (
-                        <div className="absolute inset-0 border border-zinc-950 rounded-lg pointer-events-none" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <button
+              onClick={() => setGalleryOpen(true)}
+              className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800/60 transition-all py-10 px-4 cursor-pointer"
+            >
+              <Layout className="h-6 w-6 text-zinc-400" />
+              <span className="text-sm font-semibold text-white">Browse templates</span>
+              <span className="text-[11px] text-zinc-500">Open the full gallery (grid view)</span>
+            </button>
           </div>
         )}
 
