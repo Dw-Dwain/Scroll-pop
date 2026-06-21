@@ -1,0 +1,60 @@
+# Scheduled software-composition analysis (SCA) — weekly dependency vulnerability re-scan.
+#
+# Why this exists in ADDITION to the `dependency-scan` job in ci.yml:
+#   • ci.yml's scan runs on push/PR — it only sees the dependency tree when something changes.
+#   • Advisories are published continuously against code that ISN'T changing. Dependabot raises
+#     a security PR when it can, but this job is the belt-and-suspenders weekly re-scan that
+#     produces a dated evidence artifact even in a quiet week.
+#   • SOC 2 Type II is about proving a control OPERATED CONTINUOUSLY over the observation window.
+#     A weekly run with an uploaded JSON report is exactly that evidence (CC6.8 / CC7.1).
+#
+# This job does NOT gate deploys (the PR-time `dependency-scan` job does). It alerts + records:
+# a CRITICAL advisory turns the run red (→ notification), and every run uploads the full audit
+# JSON as a retained artifact.
+name: Security Audit (scheduled SCA)
+
+on:
+  schedule:
+    # Mondays 07:30 UTC — just after the CodeQL weekly scan (07:00) so security signals land together.
+    - cron: "30 7 * * 1"
+  workflow_dispatch: {} # allow on-demand runs (e.g. when triaging a freshly published advisory)
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '11.1.1'
+
+jobs:
+  audit:
+    name: Dependency audit (weekly evidence)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '${{ env.NODE_VERSION }}'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Capture full audit report (evidence artifact)
+        run: |
+          # Never let a non-zero audit exit fail THIS step — we want the report written regardless;
+          # the blocking gate is the next step.
+          pnpm audit --json > audit-report.json || true
+          echo "::group::Audit summary (high and above)"
+          pnpm audit --audit-level high || true
+          echo "::endgroup::"
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dependency-audit-report
+          path: audit-report.json
+          # Keep a year of weekly reports — comfortably covers a 3–12 month observation window.
+          retention-days: 365
+
+      - name: Fail on critical advisories (alert)
+        # Same hard line as the PR gate: a critical advisory in unchanged code must raise a signal.
+        run: pnpm audit --audit-level critical
