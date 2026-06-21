@@ -4,20 +4,20 @@
  * The snippet only fires a close-redirect when a popup's close (✕) element carries
  * `extraProps.adClose === true` AND resolves to a destination href. We contain that tactic
  * in the CONFIG the edge serves — NOT in the snippet binary — so it stays isolated to the one
- * party that runs it by choice, and can be turned off centrally and instantly:
+ * tenant permitted to run it, and can be turned off centrally and instantly:
  *
  *   Master gate (layer 4): the X-close redirect is permitted ONLY for the Novatise org tenant
  *     (`tenant.clerkOrgId === 'org_novatise'`). Every other account (free/agency) gets a plain ✕.
- *     This is the ISOLATION: if Novatise/Jon's affiliate accounts ever get hit for this, no other
- *     client is exposed — they never had it. Enforced server-side at WRITE (designs route strips
+ *     This is the ISOLATION: if the Novatise tenant's affiliate accounts are ever penalized for
+ *     this, no other client is exposed — they never had it. Enforced server-side at WRITE (designs route strips
  *     it from non-Novatise saves) AND SERVE (config assembly strips it from non-Novatise payloads,
  *     so even a leaked/forced config can't enable it). The dashboard hides the toggle (cosmetic).
  *   Kill switch (layer 2): a global KV flip the Worker honours per-request (see apps/worker) —
  *     the instant, no-deploy off-ramp if a network audit lands on Novatise.
  *
- * NOTE: there is intentionally NO per-network restriction. Novatise's affiliate play IS Amazon /
- * Rakuten, and Jon has accepted that risk on his own accounts — the job is to ISOLATE it to him,
- * not to second-guess what he runs within his own tenant. The kill switch is the off-ramp.
+ * NOTE: there is intentionally NO per-network restriction. The Novatise tenant's affiliate play is
+ * Amazon / Rakuten — an accepted risk on that tenant's own accounts; the job is to ISOLATE it to
+ * that tenant, not to second-guess what it runs within its own workspace. The kill switch is the off-ramp.
  *
  * "Strip" = neutralise the close element so the ✕ just dismisses: drop `extraProps.adClose` and
  * any close href. The snippet's entire close-redirect path is gated on `adClose === true`, so this

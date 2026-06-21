@@ -65,7 +65,7 @@ Client switcher currently re-scopes only **Sites**. AG-6 extends it to **Campaig
 
 > New feature work beyond the original 54-item audit. Built the agency multi-tenant layer (client workspaces + coupled-login team invites), fixed the `/e` analytics undercount at its true root cause, and shipped the Creatives picker + Simulate-preview polish. All commits on **origin** + **dwain-coder**.
 
-**Agency model.** An **agency-plan** tenant holds multiple **client** sub-accounts; the operator switches the active client in the top nav and the workspace re-scopes. **Coupled logins:** the agency owner invites employees by *verified* email; on accept they join the same tenant and share its data. **Novatise** stays super-admin — its `@novatise.com` domain auto-join is untouched; Jon (owner) can also invite outside people, and Jon + owner see the same data. All management is **agency-plan + owner/admin gated**.
+**Agency model.** An **agency-plan** tenant holds multiple **client** sub-accounts; the operator switches the active client in the top nav and the workspace re-scopes. **Coupled logins:** the agency owner invites employees by *verified* email; on accept they join the same tenant and share its data. **Novatise** stays super-admin — its `@novatise.com` domain auto-join is untouched; the agency owner can also invite outside people, and they + the platform owner see the same data. All management is **agency-plan + owner/admin gated**.
 
 ### Shipped
 | Step | Commit | What |
