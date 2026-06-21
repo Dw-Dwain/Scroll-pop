@@ -1,5 +1,5 @@
 import React from 'react';
-import { FlaskConical, ChevronDown, ChevronRight, Trophy, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { FlaskConical, ChevronDown, ChevronRight, Trophy, Lock, ArrowRight, CheckCircle2, Sparkles, Pause, Play } from 'lucide-react';
 import { useActiveClient } from '../hooks/useClients';
 import { usePlan } from '../hooks/usePlan';
 import { authedFetch } from '../providers/dataProvider';
@@ -16,7 +16,18 @@ interface VariantResultRow {
   impressions: number; clicks: number; conversions: number; conversionRate: number;
   confidence?: number; isSignificant?: boolean; upliftPct?: number; isWinner?: boolean;
 }
-interface ExperimentResults { variants: VariantResultRow[]; decided: boolean; winnerVariantId: string | null }
+type AbObjective = 'ctr' | 'conversion';
+type AbMode = 'manual' | 'bandit';
+type AbStatus = 'running' | 'paused';
+interface ExperimentResults {
+  variants: VariantResultRow[];
+  decided: boolean;
+  winnerVariantId: string | null;
+  objective?: AbObjective;
+  mode?: AbMode;
+  status?: AbStatus;
+  lastBalancedAt?: string | null;
+}
 interface ExpData { variants: Variant[]; results: ExperimentResults }
 
 const statusBadge = (s: string) =>
@@ -79,10 +90,17 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
   };
 
   const promote = async (campaignId: string, variantId: string) => {
-    if (!confirm('Promote this variant to 100% of traffic? The other variants stop showing.')) return;
+    if (!confirm('Promote this variant to 100% of traffic? The other variants stop showing, and auto-optimize turns off.')) return;
     const res = await authedFetch(`/variants/promote`, { method: 'POST', body: JSON.stringify({ campaignId, variantId }) });
     if (res.ok) await loadCampaign(campaignId);
     else alert('Could not promote the winner.');
+  };
+
+  // Update A/B experiment settings (objective / bandit mode / pause). Re-loads results after.
+  const setExperiment = async (campaignId: string, patch: { mode?: AbMode; objective?: AbObjective; status?: AbStatus }) => {
+    const res = await authedFetch(`/variants/experiment`, { method: 'PUT', body: JSON.stringify({ campaignId, ...patch }) });
+    if (res.ok) await loadCampaign(campaignId);
+    else alert('Could not update the experiment settings.');
   };
 
   const toggle = async (id: string) => {
@@ -142,6 +160,7 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
                         onCreate={() => void createVariant(c.id)}
                         onManage={() => onNavigate(`/campaigns/detail/${c.id}`)}
                         onPromote={(variantId) => void promote(c.id, variantId)}
+                        onSetExperiment={(patch) => void setExperiment(c.id, patch)}
                       />
                     )}
                   </div>
@@ -169,9 +188,27 @@ const Header: React.FC = () => (
 
 const pct = (n: number | undefined, d = 1) => n === undefined ? '—' : (n * 100).toFixed(d) + '%';
 
-const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => void; onManage: () => void; onPromote: (variantId: string) => void }> = ({ data, creating, onCreate, onManage, onPromote }) => {
+const fmtAgo = (iso?: string | null): string => {
+  if (!iso) return 'not yet';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 'just now';
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+};
+
+const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => void; onManage: () => void; onPromote: (variantId: string) => void; onSetExperiment: (patch: { mode?: AbMode; objective?: AbObjective; status?: AbStatus }) => void }> = ({ data, creating, onCreate, onManage, onPromote, onSetExperiment }) => {
   const { variants, results } = data;
   const byId = new Map(results.variants.map((r) => [r.variantId, r]));
+  const objective: AbObjective = results.objective ?? 'ctr';
+  const mode: AbMode = results.mode ?? 'manual';
+  const status: AbStatus = results.status ?? 'running';
+  const banditOn = mode === 'bandit';
+  const rateLabel = objective === 'conversion' ? 'CVR' : 'CTR';
+  const winnerRow = results.winnerVariantId ? byId.get(results.winnerVariantId) : undefined;
 
   if (variants.length < 2) {
     return (
@@ -193,6 +230,45 @@ const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => v
 
   return (
     <div>
+      {/* Optimization controls — objective + Thompson-sampling auto-optimize + pause/resume */}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14, padding: '10px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Sparkles size={14} style={{ color: banditOn ? 'var(--accent-500, #6366f1)' : 'var(--text-muted)' }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Auto-optimize</span>
+        </div>
+        <button
+          className={`btn btn-sm ${banditOn ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => onSetExperiment({ mode: banditOn ? 'manual' : 'bandit' })}
+          title="Thompson-sampling bandit — automatically shifts traffic toward the better variant. Off = manual weights."
+        >
+          {banditOn ? 'On' : 'Off'}
+        </button>
+
+        <span style={{ width: 1, height: 18, background: 'var(--border-subtle)' }} />
+
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Goal</span>
+        <select
+          value={objective}
+          onChange={(e) => onSetExperiment({ objective: e.target.value as AbObjective })}
+          style={{ fontSize: 12, padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-raised)', color: 'var(--text-primary)' }}
+        >
+          <option value="ctr">Click-through rate</option>
+          <option value="conversion">Conversion rate</option>
+        </select>
+
+        {banditOn && (
+          <>
+            <span style={{ width: 1, height: 18, background: 'var(--border-subtle)' }} />
+            <button className="btn btn-secondary btn-sm" onClick={() => onSetExperiment({ status: status === 'paused' ? 'running' : 'paused' })}>
+              {status === 'paused' ? <><Play size={12} style={{ marginRight: 4 }} />Resume</> : <><Pause size={12} style={{ marginRight: 4 }} />Pause</>}
+            </button>
+            <span style={{ fontSize: 11, color: status === 'paused' ? 'var(--status-warning)' : 'var(--text-muted)', marginLeft: 'auto' }}>
+              {status === 'paused' ? 'Paused — weights frozen' : `Auto-optimized ${fmtAgo(results.lastBalancedAt)}`}
+            </span>
+          </>
+        )}
+      </div>
+
       {allIdentical && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-raised)', border: '1px solid var(--status-warning)', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
           <span>⚠️ All variants share the same design, so there's nothing to compare yet. Edit a variant to make it different.</span>
@@ -221,7 +297,7 @@ const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => v
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(5, 1fr)', gap: 8, fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, paddingBottom: 6, borderBottom: '1px solid var(--border-subtle)' }}>
-        <span>Variant</span><span style={{ textAlign: 'right' }}>Impr.</span><span style={{ textAlign: 'right' }}>CVR</span><span style={{ textAlign: 'right' }}>Uplift</span><span style={{ textAlign: 'right' }}>Confidence</span><span style={{ textAlign: 'right' }}>Sig.</span>
+        <span>Variant</span><span style={{ textAlign: 'right' }}>Reach</span><span style={{ textAlign: 'right' }}>{rateLabel}</span><span style={{ textAlign: 'right' }}>Uplift</span><span style={{ textAlign: 'right' }}>Confidence</span><span style={{ textAlign: 'right' }}>Sig.</span>
       </div>
       {variants.map((v) => {
         const r = byId.get(v.id);
@@ -242,9 +318,9 @@ const ExpResults: React.FC<{ data: ExpData; creating: boolean; onCreate: () => v
       })}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 12 }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          {results.decided
-            ? 'A winner is statistically significant (≥95% confidence, sufficient sample).'
+        <span style={{ fontSize: 11, color: results.decided ? 'var(--status-success)' : 'var(--text-muted)' }}>
+          {results.decided && winnerRow
+            ? `✓ ${winnerRow.name ?? 'Winner'} is a significant winner — ${pct(winnerRow.confidence, 0)} confidence${winnerRow.upliftPct !== undefined ? `, ${winnerRow.upliftPct > 0 ? '+' : ''}${winnerRow.upliftPct.toFixed(1)}% ${rateLabel}` : ''}.`
             : 'No statistically conclusive winner yet — keep the test running.'}
         </span>
         {results.decided && winnerId ? (

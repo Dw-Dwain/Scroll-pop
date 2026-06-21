@@ -23,7 +23,9 @@ import { ensureTeamInvitesSchema } from './db/ensure-team-invites.js';
 import { ensureAffiliateLinksSchema } from './db/ensure-affiliate-links.js';
 import { ensureWebhooksSchema } from './db/ensure-webhooks.js';
 import { ensureIntegrationsSchema } from './db/ensure-integrations.js';
+import { ensureAbExperimentSchema } from './db/ensure-ab-experiment.js';
 import { startDeletedDataPurge } from './db/purge-deleted.js';
+import { startAbBandit } from './db/ab-bandit.js';
 import { sites, campaigns, designs, triggers, targetingRules, frequencyRules, events, tenants, leads, coupons } from './db/schema.js';
 import { eq, and, isNull, sql as drizzleSql } from 'drizzle-orm';
 
@@ -57,7 +59,6 @@ import { opsRoutes } from './routes/ops.js';
 import { adminRoutes } from './routes/admin.js';
 import { greyHatRoutes } from './routes/grey-hat.js';
 import { journeyRoutes } from './routes/journeys.js';
-import { experimentRoutes } from './routes/experiments.js';
 import { shopifyRoutes, shopifyWebhookRoutes } from './routes/shopify.js';
 
 // Plugins
@@ -191,7 +192,6 @@ async function bootstrap() {
   await app.register(adminRoutes, { prefix: '/api/v1' });
   await app.register(greyHatRoutes, { prefix: '/api/v1' });
   await app.register(journeyRoutes, { prefix: '/api/v1' });
-  await app.register(experimentRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
   await app.register(contactRoutes, { prefix: '/api/v1' }); // public — marketing contact form
   await app.register(tenantRoutes, { prefix: '/api/v1' });
@@ -1052,7 +1052,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '21'; // v21: close_ad_click added to event_type enum (X-close affiliate redirect)
+  const SCHEMA_VERSION = '22'; // v22: campaigns.ab_config column (A/B Thompson-sampling bandit, migration 0016)
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)
@@ -1139,6 +1139,8 @@ async function bootstrap() {
     await ensureWebhooksSchema(app.log);
     // Ensure integrations column on tenants + esp_config on campaigns (migration 0013, P1-8/P1-9).
     await ensureIntegrationsSchema(app.log);
+    // Ensure campaigns.ab_config column (migration 0016, Thompson-sampling A/B bandit).
+    await ensureAbExperimentSchema(app.log);
     // Ensure agency clients table + sites.client_id (multi-client layer).
     await ensureClientsSchema(app.log);
     // Ensure agency team_invites table (coupled-login layer).
@@ -1162,6 +1164,11 @@ async function bootstrap() {
   // Deleted-data lifecycle: hard-delete analytics events for campaigns/sites soft-deleted
   // >24h ago (after the download grace window). In-process hourly job; no external cron.
   startDeletedDataPurge(app.log);
+
+  // A/B Thompson-sampling bandit: every ~2.5h, reweight variants of campaigns explicitly opted into
+  // bandit mode (advisory-locked so one machine runs it). Opt-in only — never touches a live campaign
+  // until an operator turns it on. AB_BANDIT_ENABLED=false disables it entirely.
+  startAbBandit(app.log);
 }
 
 // Last-resort error reporting to Sentry (no-op until SENTRY_DSN is set). Log and report,

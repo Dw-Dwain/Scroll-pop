@@ -383,6 +383,13 @@ export const campaigns = pgTable('campaigns', {
   outboundWebhook: jsonb('outbound_webhook').notNull().default({}),
   // Per-campaign ESP opt-in: { klaviyo: bool, mailchimp: bool }. Added migration 0013.
   espConfig: jsonb('esp_config').notNull().default({}),
+  // A/B experiment settings for a campaign WITH variants (migration 0016):
+  //   { mode: 'manual'|'bandit', objective: 'ctr'|'conversion', status: 'running'|'paused',
+  //     lastBalancedAt?: ISO8601 }
+  // Default '{}' ⇒ mode is undefined ⇒ treated as 'manual', so the Thompson-sampling bandit
+  // NEVER touches a campaign until an operator explicitly opts in. Snippet allocation is unchanged;
+  // the bandit only rewrites variants.weight on an opt-in campaign.
+  abConfig: jsonb('ab_config').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`NOW()`),

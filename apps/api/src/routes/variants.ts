@@ -10,10 +10,29 @@ import { purgeSiteConfigCache } from '../lib/cache-purge.js';
  * A/B test by the snippet. All routes are tenant-scoped via request.tenantId.
  */
 
-// Before declaring a winner we require enough data, or noise masquerades as a result.
-const MIN_IMPRESSIONS = 100;   // per variant
-const MIN_CONVERSIONS = 25;    // across the experiment
+// Before declaring a winner we require enough data, or noise masquerades as a result. Counts are
+// UNIQUE visitors (the same bounded counting analytics uses), so spammy repeat events can't inflate.
+const MIN_REACH = 100;      // per variant: unique visitors reached before it can be control/winner
+const MIN_SUCCESSES = 25;   // total successes (unique clickers or converters) across the experiment
 const CONFIDENCE_THRESHOLD = 0.95;
+
+// The optimization objective: "success" is a unique clicker (CTR) or a unique converter (conversion).
+type AbObjective = 'ctr' | 'conversion';
+interface NormalizedAbConfig {
+  mode: 'manual' | 'bandit';
+  objective: AbObjective;
+  status: 'running' | 'paused';
+  lastBalancedAt?: string;
+}
+function normalizeAbConfig(raw: unknown): NormalizedAbConfig {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  return {
+    mode: o['mode'] === 'bandit' ? 'bandit' : 'manual',
+    objective: o['objective'] === 'conversion' ? 'conversion' : 'ctr',
+    status: o['status'] === 'paused' ? 'paused' : 'running',
+    ...(typeof o['lastBalancedAt'] === 'string' ? { lastBalancedAt: o['lastBalancedAt'] } : {}),
+  };
+}
 
 // Standard-normal CDF (Abramowitz-Stegun 26.2.17) — no stats dependency in packages/shared land.
 function normalCdf(z: number): number {
@@ -23,13 +42,13 @@ function normalCdf(z: number): number {
   return z > 0 ? 1 - p : p;
 }
 
-/** One-sided probability that `v` beats the `base` variant on conversion rate (two-proportion z). */
-function probBeatsBaseline(v: { impressions: number; conversions: number }, base: { impressions: number; conversions: number }): number {
-  if (v.impressions === 0 || base.impressions === 0) return 0;
-  const p1 = v.conversions / v.impressions;
-  const p2 = base.conversions / base.impressions;
-  const pooled = (v.conversions + base.conversions) / (v.impressions + base.impressions);
-  const se = Math.sqrt(pooled * (1 - pooled) * (1 / v.impressions + 1 / base.impressions));
+/** One-sided probability that `v` beats `base` on its success rate (two-proportion z-test). */
+function probBeatsBaseline(v: { trials: number; successes: number }, base: { trials: number; successes: number }): number {
+  if (v.trials === 0 || base.trials === 0) return 0;
+  const p1 = v.successes / v.trials;
+  const p2 = base.successes / base.trials;
+  const pooled = (v.successes + base.successes) / (v.trials + base.trials);
+  const se = Math.sqrt(pooled * (1 - pooled) * (1 / v.trials + 1 / base.trials));
   if (se === 0) return p1 > p2 ? 1 : 0;
   return normalCdf((p1 - p2) / se);
 }
@@ -165,25 +184,34 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/v1/variants/results?campaignId= — per-variant performance + statistical significance.
-  // Significance is measured vs. the CONTROL (the variant with the most impressions) using a
-  // two-proportion z-test on conversion rate. A winner is only declared once both the control and
-  // the leader clear the sample-size guardrails AND the leader's confidence ≥ 95%.
+  // Counts are UNIQUE visitors (reach / unique clickers / unique converters) — the same bounded
+  // counting analytics uses — so the displayed significance agrees with what the bandit optimizes.
+  // "Success" follows the campaign's objective (CTR = unique clickers, conversion = unique converters).
+  // Significance is vs. the CONTROL (most reach) via a two-proportion z-test on the objective rate.
+  // A winner is declared only once control + leader clear the sample guardrails AND confidence ≥ 95%.
   fastify.get('/variants/results', async (request, reply) => {
     const { campaignId } = z.object({ campaignId: z.string().uuid() }).parse(request.query);
-    if (!(await assertCampaign(request.tenantId, campaignId))) {
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, campaignId), eq(campaigns.tenantId, request.tenantId)),
+      columns: { id: true, abConfig: true },
+    });
+    if (!campaign) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
     }
+    const ab = normalizeAbConfig(campaign.abConfig);
+    const objective = ab.objective;
 
     const [defs, agg] = await Promise.all([
       db.query.variants.findMany({
         where: and(eq(variants.tenantId, request.tenantId), eq(variants.campaignId, campaignId)),
         columns: { id: true, name: true, weight: true },
+        orderBy: asc(variants.createdAt),
       }),
       db.select({
         variantId: events.abVariantId,
-        impressions: sql<number>`count(*) filter (where ${events.eventType} = 'impression')::int`,
-        clicks: sql<number>`count(*) filter (where ${events.eventType} = 'click')::int`,
-        conversions: sql<number>`count(*) filter (where ${events.eventType} = 'conversion')::int`,
+        reach: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
+        clickers: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
+        converters: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'conversion')::int`,
       })
         .from(events)
         .where(and(eq(events.tenantId, request.tenantId), eq(events.campaignId, campaignId), isNotNull(events.abVariantId)))
@@ -192,25 +220,29 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
 
     const aggById = new Map(agg.map((r) => [r.variantId as string, r]));
     const base = defs.map((d) => {
-      const a = aggById.get(d.id) ?? { impressions: 0, clicks: 0, conversions: 0 };
-      return { variantId: d.id, name: d.name, weight: d.weight, impressions: a.impressions, clicks: a.clicks, conversions: a.conversions };
+      const a = aggById.get(d.id) ?? { reach: 0, clickers: 0, converters: 0 };
+      const successes = objective === 'conversion' ? a.converters : a.clickers;
+      return { variantId: d.id, name: d.name, weight: d.weight, reach: a.reach, clickers: a.clickers, converters: a.converters, successes };
     });
 
-    // Control = most impressions (the established arm everything is compared against).
-    const control = base.reduce<typeof base[number] | null>((best, v) => (!best || v.impressions > best.impressions ? v : best), null);
-    const totalImpressions = base.reduce((s, v) => s + v.impressions, 0);
-    const totalConversions = base.reduce((s, v) => s + v.conversions, 0);
+    // Control = most reach (the established arm everything is compared against).
+    const control = base.reduce<typeof base[number] | null>((best, v) => (!best || v.reach > best.reach ? v : best), null);
+    const totalReach = base.reduce((s, v) => s + v.reach, 0);
+    const totalSuccesses = base.reduce((s, v) => s + v.successes, 0);
 
     const results = base.map((v) => {
-      const conversionRate = v.impressions > 0 ? v.conversions / v.impressions : 0;
+      const rate = v.reach > 0 ? v.successes / v.reach : 0;
       const isControl = control?.variantId === v.variantId;
-      const confidence = (!control || isControl) ? undefined : probBeatsBaseline(v, control);
-      const baseRate = control && control.impressions > 0 ? control.conversions / control.impressions : 0;
-      const upliftPct = (!isControl && baseRate > 0) ? ((conversionRate - baseRate) / baseRate) * 100 : undefined;
+      const confidence = (!control || isControl)
+        ? undefined
+        : probBeatsBaseline({ trials: v.reach, successes: v.successes }, { trials: control.reach, successes: control.successes });
+      const baseRate = control && control.reach > 0 ? control.successes / control.reach : 0;
+      const upliftPct = (!isControl && baseRate > 0) ? ((rate - baseRate) / baseRate) * 100 : undefined;
       return {
         variantId: v.variantId, name: v.name, weight: v.weight,
-        impressions: v.impressions, clicks: v.clicks, conversions: v.conversions,
-        conversionRate: Number(conversionRate.toFixed(4)),
+        // Field names kept for dashboard back-compat, but these are UNIQUE-visitor counts now.
+        impressions: v.reach, clicks: v.clickers, conversions: v.converters,
+        conversionRate: Number(rate.toFixed(4)),
         confidence: confidence === undefined ? undefined : Number(confidence.toFixed(4)),
         isSignificant: confidence !== undefined && confidence >= CONFIDENCE_THRESHOLD,
         upliftPct: upliftPct === undefined ? undefined : Number(upliftPct.toFixed(1)),
@@ -218,13 +250,13 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
       };
     });
 
-    // Decide a winner: enough data overall, control + leader each ≥ MIN_IMPRESSIONS, leader's
-    // conversion rate beats control with ≥95% confidence.
+    // Decide a winner: enough data overall, control + leader each ≥ MIN_REACH, leader's success
+    // rate beats control with ≥95% confidence.
     let winnerVariantId: string | null = null;
-    const enoughData = totalConversions >= MIN_CONVERSIONS && (control?.impressions ?? 0) >= MIN_IMPRESSIONS;
+    const enoughData = totalSuccesses >= MIN_SUCCESSES && (control?.reach ?? 0) >= MIN_REACH;
     if (enoughData) {
       const leader = results
-        .filter((r) => r.impressions >= MIN_IMPRESSIONS && r.isSignificant && (r.upliftPct ?? 0) > 0)
+        .filter((r) => r.impressions >= MIN_REACH && r.isSignificant && (r.upliftPct ?? 0) > 0)
         .sort((a, b) => b.conversionRate - a.conversionRate)[0];
       if (leader) { winnerVariantId = leader.variantId; leader.isWinner = true; }
     }
@@ -232,13 +264,60 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({
       data: {
         campaignId,
+        objective,
+        mode: ab.mode,
+        status: ab.status,
+        lastBalancedAt: ab.lastBalancedAt ?? null,
         variants: results,
         decided: winnerVariantId !== null,
         winnerVariantId,
-        minImpressions: MIN_IMPRESSIONS,
-        totalImpressions,
+        minImpressions: MIN_REACH,
+        totalImpressions: totalReach,
       },
     });
+  });
+
+  // GET /api/v1/variants/experiment?campaignId= — the campaign's A/B experiment settings (normalized).
+  fastify.get('/variants/experiment', async (request, reply) => {
+    const { campaignId } = z.object({ campaignId: z.string().uuid() }).parse(request.query);
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, campaignId), eq(campaigns.tenantId, request.tenantId)),
+      columns: { id: true, abConfig: true },
+    });
+    if (!campaign) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    return reply.send({ data: { campaignId, ...normalizeAbConfig(campaign.abConfig) } });
+  });
+
+  // PUT /api/v1/variants/experiment — set mode (manual|bandit), objective (ctr|conversion), and
+  // status (running|paused). This is the stop/pause control: status='paused' freezes weights (the
+  // bandit skips paused campaigns); mode='bandit' opts the campaign into Thompson-sampling auto-
+  // optimization. Does NOT change served weights, so no cache purge is needed (the snippet reads
+  // variants.weight, not ab_config).
+  fastify.put('/variants/experiment', async (request, reply) => {
+    const body = z.object({
+      campaignId: z.string().uuid(),
+      mode: z.enum(['manual', 'bandit']).optional(),
+      objective: z.enum(['ctr', 'conversion']).optional(),
+      status: z.enum(['running', 'paused']).optional(),
+    }).parse(request.body);
+
+    const campaign = await db.query.campaigns.findFirst({
+      where: and(eq(campaigns.id, body.campaignId), eq(campaigns.tenantId, request.tenantId)),
+      columns: { id: true, abConfig: true },
+    });
+    if (!campaign) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+
+    const current = normalizeAbConfig(campaign.abConfig);
+    const next: NormalizedAbConfig = {
+      mode: body.mode ?? current.mode,
+      objective: body.objective ?? current.objective,
+      status: body.status ?? current.status,
+      ...(current.lastBalancedAt ? { lastBalancedAt: current.lastBalancedAt } : {}),
+    };
+    await db.update(campaigns)
+      .set({ abConfig: next, updatedAt: new Date() })
+      .where(and(eq(campaigns.id, body.campaignId), eq(campaigns.tenantId, request.tenantId)));
+    return reply.send({ data: { campaignId: body.campaignId, ...next } });
   });
 
   // POST /api/v1/variants/promote — route 100% of traffic to the winner (others → weight 0).
@@ -258,6 +337,12 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
       .where(and(eq(variants.campaignId, campaignId), eq(variants.tenantId, request.tenantId)));
     await db.update(variants).set({ weight: 100, updatedAt: new Date() })
       .where(and(eq(variants.id, variantId), eq(variants.tenantId, request.tenantId)));
+
+    // Promotion ends the experiment's automation: flip the bandit off so it can't re-spread traffic
+    // away from the promoted winner. Constant JSONB merge preserves objective/lastBalancedAt.
+    await db.update(campaigns)
+      .set({ abConfig: sql`${campaigns.abConfig} || '{"mode":"manual"}'::jsonb`, updatedAt: new Date() })
+      .where(and(eq(campaigns.id, campaignId), eq(campaigns.tenantId, request.tenantId)));
 
     await purgeForCampaign(request.tenantId, campaignId);
     return reply.send({ data: { campaignId, winnerVariantId: variantId } });
