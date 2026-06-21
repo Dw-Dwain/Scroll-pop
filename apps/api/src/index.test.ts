@@ -1093,6 +1093,46 @@ describe('Variant (A/B) routes', () => {
     expect(res.statusCode).toBe(400);
     await app.close();
   });
+
+  it('GET /variants/experiment requires campaignId query param', async () => {
+    const app = await buildVariantsApp();
+    const res = await app.inject({ method: 'GET', url: '/api/v1/variants/experiment' });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('PUT /variants/experiment rejects an invalid mode', async () => {
+    const app = await buildVariantsApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/variants/experiment',
+      payload: { campaignId: UUID_A, mode: 'turbo' }, // not manual|bandit
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('PUT /variants/experiment rejects an invalid objective', async () => {
+    const app = await buildVariantsApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/variants/experiment',
+      payload: { campaignId: UUID_A, objective: 'revenue' }, // not ctr|conversion
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('PUT /variants/experiment rejects a non-UUID campaignId', async () => {
+    const app = await buildVariantsApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/variants/experiment',
+      payload: { campaignId: 'nope', status: 'paused' },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
 });
 
 // ── Coupons routes coverage ───────────────────────────────────────────────────
