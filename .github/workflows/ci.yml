@@ -68,9 +68,11 @@ jobs:
     #   • ANY HIGH advisory in the PRODUCTION dependency tree (`--prod`) — i.e. what actually
     #     ships to the customer runtime.
     # Reported-but-non-blocking: HIGH advisories that exist only in devDependencies (build/test/
-    # migration tooling). As of 2026-06-21 the sole such high is a dev-only transitive (esbuild
-    # <0.28.1 via drizzle-kit's deprecated @esbuild-kit loader — migration tooling, not customer
-    # runtime). If a HIGH lands in the runtime tree, the `--prod` gate below fails by construction.
+    # migration tooling) — these never reach a customer. As of 2026-06-22 these are dev-only:
+    # esbuild (<0.28.1, via drizzle-kit's deprecated @esbuild-kit migration loader) and vite (the
+    # marketing site's build tool — a `vite dev` advisory that can't affect the statically-built,
+    # CDN-served site). Dependabot bumps them on its schedule. If a HIGH ever lands in the runtime
+    # (production) dependency tree, the `--prod` gate below fails by construction.
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
