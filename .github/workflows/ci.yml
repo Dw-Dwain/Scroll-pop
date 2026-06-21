@@ -55,14 +55,22 @@ jobs:
 
   dependency-scan:
     # Software-composition analysis (SCA) — flags known-vulnerable dependencies.
-    # Maps to SOC 2 CC6.8 / CC7.1 (vulnerability management). Continuous coverage between runs
-    # comes from Dependabot (.github/dependabot.yml).
+    # Maps to SOC 2 CC6.8 / CC7.1 (vulnerability management). This job is a REQUIRED check:
+    # it gates the deploy jobs below (see their `needs:`), and must also be listed in the
+    # branch-protection required-status-checks set on `main` (repo setting — see
+    # docs/soc2-readiness-checklist.md §"Required CI checks"). Continuous coverage between PRs
+    # comes from Dependabot (.github/dependabot.yml) raising security PRs automatically, plus the
+    # weekly scheduled re-scan in .github/workflows/security-audit.yml (catches advisories in
+    # unchanged dependencies during the SOC 2 observation window).
     #
-    # CRITICAL advisories FAIL the build (SOC 2 CC7.1). HIGH and below are reported but
-    # non-blocking. As of 2026-06-14 the only remaining high is a dev-only transitive
-    # (esbuild <0.28.1 via drizzle-kit's deprecated @esbuild-kit loader — migration tooling, not the
-    # customer runtime). If a HIGH ever lands in the runtime dependency tree, promote it to a hard
-    # gate here too.
+    # Hard gates (fail the build):
+    #   • ANY CRITICAL advisory, in any dependency (dev or runtime).
+    #   • ANY HIGH advisory in the PRODUCTION dependency tree (`--prod`) — i.e. what actually
+    #     ships to the customer runtime.
+    # Reported-but-non-blocking: HIGH advisories that exist only in devDependencies (build/test/
+    # migration tooling). As of 2026-06-21 the sole such high is a dev-only transitive (esbuild
+    # <0.28.1 via drizzle-kit's deprecated @esbuild-kit loader — migration tooling, not customer
+    # runtime). If a HIGH lands in the runtime tree, the `--prod` gate below fails by construction.
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
@@ -74,13 +82,18 @@ jobs:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Audit dependencies (fail on critical, report high)
+      - name: Audit dependencies (fail on critical or runtime-high; report all high)
         run: |
-          echo "::group::High advisories (reported, non-blocking)"
+          echo "::group::All advisories ≥ high (reported, non-blocking)"
           pnpm audit --audit-level high || true
           echo "::endgroup::"
-          # CRITICAL advisories block the build (no `|| true`).
+          # Gate 1 — CRITICAL anywhere blocks (no `|| true`).
+          echo "Gate 1/2: critical advisories (all dependencies)"
           pnpm audit --audit-level critical
+          # Gate 2 — HIGH in the production dependency tree blocks. Dev-only highs are excluded
+          # by --prod and remain reported (above) but non-blocking.
+          echo "Gate 2/2: high advisories (production dependencies only)"
+          pnpm audit --prod --audit-level high
 
   snippet-size-check:
     name: Snippet Size Budgets (core ≤10KB · lazy chunks capped)
@@ -241,7 +254,7 @@ jobs:
   deploy-api:
     name: Deploy API → Fly.io (production)
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
+    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
@@ -291,7 +304,7 @@ jobs:
   deploy-worker:
     name: Deploy Worker → Cloudflare
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
+    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
@@ -359,7 +372,7 @@ jobs:
   deploy-dashboard:
     name: Deploy Dashboard → Cloudflare Pages (production)
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, snippet-size-check, no-history-manipulation, migration-safety]
+    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
