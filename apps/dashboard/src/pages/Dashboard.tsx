@@ -714,8 +714,8 @@ function EventsAreaChart({ daily, granularity = 'day' }: {
 
 // ── Campaign performance board ────────────────────────────────────────────────
 // One place to review every campaign: window totals (impr/views/clicks/CTR/conv) + a daily-clicks
-// sparkline per row, sortable, with an inline drill-down chart on row click. This is what Jon asked
-// for — "how many clicks in a campaign on a daily basis" — without leaving the Dashboard.
+// sparkline per row, sortable, with an inline drill-down chart on row click. Answers
+// "how many clicks in a campaign on a daily basis" without leaving the Dashboard.
 type BoardSortCol = 'impressions' | 'views' | 'clicks' | 'ctr' | 'conversions';
 function CampaignPerformanceBoard({ rows, granularity, windowLabel, onNavigate }: {
   rows: BoardRow[];

@@ -120,7 +120,7 @@ Verified locally: `pnpm --filter @scrollpop/api exec vitest run` → 86 pass; AP
 **Built the agency multi-tenant layer (client workspaces + coupled-login team invites), fixed the analytics undercount at its real root cause, and shipped the Creatives picker + Simulate-preview polish.**
 
 ### Agency SaaS layer (new feature — beyond the original 54-item audit)
-Model: an **agency-plan** tenant is a workspace that holds multiple **client** sub-accounts; the operator switches the active client from the top nav and the workspace re-scopes. **Coupled logins:** the agency owner invites employees by verified email; on accept they join the *same* tenant and share all its data. **Novatise** stays a super-admin agency — its `@novatise.com` domain auto-join is untouched; Jon (owner) can additionally invite outside people, and Jon + the owner see the same data.
+Model: an **agency-plan** tenant is a workspace that holds multiple **client** sub-accounts; the operator switches the active client from the top nav and the workspace re-scopes. **Coupled logins:** the agency owner invites employees by verified email; on accept they join the *same* tenant and share all its data. **Novatise** stays a super-admin agency — its `@novatise.com` domain auto-join is untouched; the agency owner can additionally invite outside people, and they + the platform owner see the same data.
 
 | Step | Commit | What |
 |---|---|---|
