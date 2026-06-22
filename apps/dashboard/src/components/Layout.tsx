@@ -21,6 +21,7 @@ import {
   Moon,
   Users,
   Eye,
+  Compass,
 } from 'lucide-react';
 import { usePlan } from '../hooks/usePlan';
 import type { PlanId } from '../hooks/usePlan'; // used in PLAN_VIEWS lookup
@@ -29,6 +30,7 @@ import { NotificationBell } from './NotificationBell';
 import { ClientSwitcher } from './ClientSwitcher';
 import { AdminTierSwitcher } from './AdminTierSwitcher';
 import { PendingInvites } from './PendingInvites';
+import { GuidedTour, type TourStep } from './GuidedTour';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -89,6 +91,29 @@ export const Layout: React.FC<LayoutProps> = ({
   const journeysEnabled = isAgencyPlan || isFeatureEnabled('ff_journeys_ui');
   const opsEnabled = isFeatureEnabled('ff_realtime_ops_dashboard');
   const experimentsEnabled = isAgencyPlan || isFeatureEnabled('ff_experiments_v1');
+
+  // ── Guided product tour (first-run onboarding) — flag-gated (ff_onboarding_tour) ─────────
+  const tourEnabled = isFeatureEnabled('ff_onboarding_tour');
+  const [tourOpen, setTourOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!tourEnabled) return;
+    let seen = false;
+    try { seen = !!localStorage.getItem('_sp_tour_done'); } catch {}
+    if (seen) return;
+    const t = setTimeout(() => setTourOpen(true), 600); // let the shell settle before spotlighting
+    return () => clearTimeout(t);
+  }, [tourEnabled]);
+  const closeTour = React.useCallback((_completed: boolean) => {
+    setTourOpen(false);
+    try { localStorage.setItem('_sp_tour_done', '1'); } catch {}
+  }, []);
+  const tourSteps: TourStep[] = [
+    { title: 'Welcome to ScrollPop', body: 'Let’s get your first popup live — it takes about a minute. Three quick steps.' },
+    { target: '[data-tour="sites"]', title: 'Step 1 — Connect your site', body: 'Add your domain and drop in the snippet. That’s what lets ScrollPop show popups on your site.', placement: 'bottom' },
+    { target: '[data-tour="campaigns"]', title: 'Step 2 — Build a campaign', body: 'Pick a template, customize the design, and set a scroll trigger — no code. Use “New Campaign” (top-right) to start one.', placement: 'bottom' },
+    { target: '[data-tour="analytics"]', title: 'Step 3 — Track performance', body: 'Impressions, clicks, and conversions show up here as visitors interact with your popups.', placement: 'bottom' },
+    { title: 'You’re all set', body: 'Connect your first site and you’re off. You can replay this tour anytime from the account menu.', cta: { label: 'Connect a site', onClick: () => onNavigate('/sites') } },
+  ];
 
   React.useEffect(() => {
     const onStorage = () => setUserProfile(loadProfileFromStorage());
@@ -206,6 +231,7 @@ export const Layout: React.FC<LayoutProps> = ({
             return (
               <button
                 key={item.path}
+                data-tour={item.path.replace('/', '')}
                 onClick={() => onNavigate(item.path)}
                 style={{
                   display: 'flex',
@@ -400,6 +426,16 @@ export const Layout: React.FC<LayoutProps> = ({
                   <CreditCard size={13} />
                   <span>Billing</span>
                 </button>
+                {tourEnabled && (
+                  <button
+                    onClick={() => { setTourOpen(true); setUserMenuOpen(false); }}
+                    className="nav-item"
+                    style={{ width: '100%', textAlign: 'left', padding: '6px 10px', borderRadius: 4, fontSize: 13 }}
+                  >
+                    <Compass size={13} />
+                    <span>Take a tour</span>
+                  </button>
+                )}
                 <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
                 <button
                   onClick={() => { onLogout(); setUserMenuOpen(false); }}
@@ -595,6 +631,9 @@ export const Layout: React.FC<LayoutProps> = ({
           </div>
         </>
       )}
+
+      {/* Guided onboarding tour (flag-gated: ff_onboarding_tour) */}
+      {tourEnabled && <GuidedTour steps={tourSteps} open={tourOpen} onClose={closeTour} />}
     </div>
   );
 };
