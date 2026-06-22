@@ -746,14 +746,18 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
         </div>
       )}
 
-      {/* Selected site: setup / detail panel (full width, below the grid) */}
+      {/* Selected site: setup / detail in a centered modal popup */}
       {selectedSite && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{
+        <div className="modal-backdrop" onClick={() => setSelectedSite(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-default)',
-            borderRadius: 8,
-            overflow: 'hidden',
+            borderRadius: 12,
+            width: '100%',
+            maxWidth: 760,
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.45)',
           }}>
           {/* Panel header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-raised)' }}>

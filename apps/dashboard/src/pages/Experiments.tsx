@@ -127,7 +127,7 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
   const selectedCampaign = expanded ? campaigns.find((c) => c.id === expanded) : undefined;
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ width: '100%' }}>
       <Header />
       {isLoading ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
@@ -210,21 +210,24 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
             })}
           </div>
 
-          {/* Selected campaign: A/B detail (full width, below the grid) */}
+          {/* Selected campaign: A/B detail in a centered modal popup */}
           {expanded && (
-            <div style={{ marginTop: 20 }}>
-              {data[expanded] === 'loading' || !data[expanded] ? (
-                <div className="skeleton" style={{ height: 220, borderRadius: 10 }} />
-              ) : (
-                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 10, padding: '16px 18px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      <FlaskConical size={16} style={{ color: 'var(--accent-500, #6366f1)', flexShrink: 0 }} />
-                      <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedCampaign?.name}</span>
-                      <span className={`badge ${statusBadge(selectedCampaign?.status ?? '')}`} style={{ fontSize: 9, flexShrink: 0 }}>{selectedCampaign?.status}</span>
-                    </div>
-                    <button className="btn btn-icon" title="Close" onClick={() => setExpanded(null)}><X size={14} /></button>
+            <div className="modal-backdrop" onClick={() => setExpanded(null)}>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 12, width: '100%', maxWidth: 920, maxHeight: '90vh', overflowY: 'auto', padding: '16px 18px', boxShadow: '0 8px 40px rgba(0,0,0,0.45)' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <FlaskConical size={16} style={{ color: 'var(--accent-500, #6366f1)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedCampaign?.name}</span>
+                    <span className={`badge ${statusBadge(selectedCampaign?.status ?? '')}`} style={{ fontSize: 9, flexShrink: 0 }}>{selectedCampaign?.status}</span>
                   </div>
+                  <button className="btn btn-icon" title="Close" onClick={() => setExpanded(null)}><X size={14} /></button>
+                </div>
+                {data[expanded] === 'loading' || !data[expanded] ? (
+                  <div className="skeleton" style={{ height: 220, borderRadius: 10 }} />
+                ) : (
                   <ExpResults
                     data={data[expanded] as ExpData}
                     creating={creating === expanded}
@@ -233,8 +236,8 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
                     onPromote={(variantId) => void promote(expanded, variantId)}
                     onSetExperiment={(patch) => void setExperiment(expanded, patch)}
                   />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </>
