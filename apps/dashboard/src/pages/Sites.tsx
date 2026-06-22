@@ -619,95 +619,142 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
 
       {atSiteLimit && <LimitBanner type="site" current={siteCount} max={limits.maxSites} onNavigate={onNavigate} />}
 
-      {/* Master-detail: site list (left) + setup/detail (right) */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24, alignItems: 'flex-start' }}>
+      {/* Sites grid — clean card layout (mirrors Campaigns) so they're easy to scan & scroll */}
       {visibleSites.length > 0 ? (
-        <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
-          {visibleSites.map((site) => (
-            <div key={site.id}
-              onClick={() => setSelectedSite(site)}
-              style={{
-              background: selectedSite?.id === site.id ? 'var(--bg-raised)' : 'var(--bg-surface)',
-              border: `1px solid ${selectedSite?.id === site.id ? 'var(--accent-400)' : 'var(--border-subtle)'}`,
-              borderRadius: 8,
-              padding: '11px 13px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-              cursor: 'pointer',
-            }}>
-              {/* Status + domain */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <PlatformIcon platform={site.platform} size={14} />
-                    <span className={`badge ${site.verifiedAt ? 'badge-success' : 'badge-warning'}`}>
-                      {site.verifiedAt ? 'CONNECTED' : 'PENDING'}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
+          {visibleSites.map((site) => {
+            const isSelected = selectedSite?.id === site.id;
+            const connected = !!site.verifiedAt;
+            return (
+              <div
+                key={site.id}
+                onClick={() => setSelectedSite(site)}
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: `1px solid ${isSelected ? 'var(--accent-400)' : 'var(--border-subtle)'}`,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  cursor: 'pointer',
+                  transition: 'box-shadow 0.15s, border-color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (isSelected) return;
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
+                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                  (e.currentTarget as HTMLElement).style.borderColor = isSelected ? 'var(--accent-400)' : 'var(--border-subtle)';
+                }}
+              >
+                {/* Header: platform icon + domain + status */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <PlatformIcon platform={site.platform} size={16} />
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {site.domain ?? site.name}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {canWrite && (
-                    <>
-                    <button
-                      className="btn btn-icon"
-                      onClick={() => { setEditSite({ id: site.id, name: site.name, platform: site.platform, clientId: site.clientId ?? '' }); setIsEditOpen(true); }}
-                      title="Edit"
-                    >
-                      <Edit size={14} />
-                    </button>
-                    <button
-                      className="btn btn-icon"
-                      onClick={() => handleDelete(site.id)}
-                      style={{ color: 'var(--status-error)' }}
-                      title="Remove"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                    </>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: connected ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)', color: connected ? 'var(--status-success)' : 'var(--status-warning)' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: connected ? 'var(--status-success)' : 'var(--status-warning)' }} />
+                    {connected ? 'Connected' : 'Pending'}
+                  </span>
+                </div>
+
+                {/* Body: platform/name meta + stats */}
+                <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                    <span>{platformLabel(site.platform)}</span>
+                    {site.name !== site.domain && (
+                      <>
+                        <span style={{ opacity: 0.4 }}>·</span>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{site.name}</span>
+                      </>
+                    )}
+                    {isAgency && !activeClientId && site.clientId && clientName(site.clientId) && (
+                      <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'rgba(var(--accent-rgb),0.1)', color: 'var(--accent-400)', border: '1px solid rgba(var(--accent-rgb),0.25)' }}>
+                        {clientName(site.clientId)}
+                      </span>
                     )}
                   </div>
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{site.domain ?? site.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {platformLabel(site.platform)}
-                  {site.name !== site.domain ? ` — ${site.name}` : ''}
-                </div>
-              </div>
 
-              {/* Compact meta — full details live in the right panel */}
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {site.campaignCount ?? 0} campaign{(site.campaignCount ?? 0) === 1 ? '' : 's'} · {(site.totalViews ?? 0) >= 1000 ? `${((site.totalViews ?? 0) / 1000).toFixed(1)}k` : (site.totalViews ?? 0)} views
+                  <div style={{ display: 'flex', gap: 16, paddingTop: 8, borderTop: '1px solid var(--border-subtle)' }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Campaigns</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{site.campaignCount ?? 0}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Views</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {(site.totalViews ?? 0) >= 1000 ? `${((site.totalViews ?? 0) / 1000).toFixed(1)}k` : (site.totalViews ?? 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {!connected && site.platform !== 'shopify' && site.platform !== 'wordpress' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleVerify(site.id); }}
+                      disabled={verifyingId === site.id}
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--status-warning)', justifyContent: 'flex-start', padding: 0, fontSize: 11 }}
+                    >
+                      {verifyingId === site.id ? 'Verifying…' : 'Verify connection'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Footer: actions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-raised)' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedSite(site); }}
+                    className="btn btn-sm btn-secondary"
+                    style={{ flex: 1, justifyContent: 'center', gap: 5, fontSize: 11 }}
+                  >
+                    <Code2 size={12} /> {connected ? 'Manage & snippet' : 'Complete setup'}
+                  </button>
+                  {canWrite && (
+                    <>
+                      <button
+                        className="btn btn-icon"
+                        title="Edit"
+                        onClick={(e) => { e.stopPropagation(); setEditSite({ id: site.id, name: site.name, platform: site.platform, clientId: site.clientId ?? '' }); setIsEditOpen(true); }}
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        className="btn btn-icon"
+                        title="Remove"
+                        style={{ color: 'var(--status-error)' }}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(site.id); }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              {/* Client workspace chip — only when viewing "All clients" on the agency plan */}
-              {isAgency && !activeClientId && site.clientId && clientName(site.clientId) && (
-                <span style={{ alignSelf: 'flex-start', fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'rgba(var(--accent-rgb),0.1)', color: 'var(--accent-400)', border: '1px solid rgba(var(--accent-rgb),0.25)' }}>
-                  {clientName(site.clientId)}
-                </span>
-              )}
-              {!site.verifiedAt && site.platform !== 'shopify' && site.platform !== 'wordpress' && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleVerify(site.id); }}
-                  disabled={verifyingId === site.id}
-                  className="btn btn-ghost btn-sm"
-                  style={{ color: 'var(--status-warning)', justifyContent: 'flex-start', padding: 0, fontSize: 11 }}
-                >
-                  {verifyingId === site.id ? 'Verifying…' : 'Verify connection'}
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
-      ) : null}
+      ) : (
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, marginBottom: 24 }}>
+          {activeClientId
+            ? 'No sites in this client workspace yet. Click "+ New Site" to add one, or assign an existing site to this client via its Edit dialog.'
+            : 'No sites yet — connect one below to get started.'}
+        </div>
+      )}
 
-      {/* Right: platform-aware setup / detail panel */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-      {selectedSite ? (
-        <div style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 8,
-          overflow: 'hidden',
-        }}>
+      {/* Selected site: setup / detail panel (full width, below the grid) */}
+      {selectedSite && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 8,
+            overflow: 'hidden',
+          }}>
           {/* Panel header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-raised)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -890,17 +937,8 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
             )}
           </div>
         </div>
-      ) : (
-        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          {visibleSites.length > 0
-            ? 'Select a site on the left to manage its setup, snippet, and connection.'
-            : activeClientId
-              ? 'No sites in this client workspace yet. Click “+ New Site” to add one, or assign an existing site to this client via its Edit dialog.'
-              : 'No sites yet — connect one below to get started.'}
         </div>
       )}
-      </div>
-      </div>
 
 
       {/* Add Site Modal */}

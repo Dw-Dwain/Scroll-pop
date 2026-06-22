@@ -1,5 +1,5 @@
 import React from 'react';
-import { FlaskConical, ChevronDown, ChevronRight, Trophy, Lock, ArrowRight, CheckCircle2, Sparkles, Pause, Play } from 'lucide-react';
+import { FlaskConical, Trophy, Lock, ArrowRight, CheckCircle2, Sparkles, Pause, Play, X } from 'lucide-react';
 import { useActiveClient } from '../hooks/useClients';
 import { usePlan } from '../hooks/usePlan';
 import { authedFetch } from '../providers/dataProvider';
@@ -124,12 +124,14 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
     );
   }
 
+  const selectedCampaign = expanded ? campaigns.find((c) => c.id === expanded) : undefined;
+
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
       <Header />
       {isLoading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 60, borderRadius: 10 }} />)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 140, borderRadius: 10 }} />)}
         </div>
       ) : campaigns.length === 0 ? (
         <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '40px', textAlign: 'center' }}>
@@ -138,37 +140,104 @@ export const Experiments: React.FC<ExperimentsProps> = ({ onNavigate }) => {
           <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={() => onNavigate('/campaigns')}>View campaigns</button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {campaigns.map((c) => {
-            const open = expanded === c.id;
-            const d = data[c.id];
-            return (
-              <div key={c.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
-                <div onClick={() => void toggle(c.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', cursor: 'pointer' }}>
-                  {open ? <ChevronDown size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} /> : <ChevronRight size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
-                  <span className={`badge ${statusBadge(c.status)}`} style={{ fontSize: 9 }}>{c.status}</span>
-                </div>
-                {open && (
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '14px 16px', background: 'var(--bg-raised)' }}>
-                    {d === 'loading' || !d ? (
-                      <div className="skeleton" style={{ height: 60 }} />
-                    ) : (
-                      <ExpResults
-                        data={d}
-                        creating={creating === c.id}
-                        onCreate={() => void createVariant(c.id)}
-                        onManage={() => onNavigate(`/campaigns/detail/${c.id}`)}
-                        onPromote={(variantId) => void promote(c.id, variantId)}
-                        onSetExperiment={(patch) => void setExperiment(c.id, patch)}
-                      />
+        <>
+          {/* Campaign card grid (mirrors Sites/Campaigns) — clean & easy to scan */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+            {campaigns.map((c) => {
+              const isSelected = expanded === c.id;
+              const d = data[c.id];
+              const loaded = !!d && d !== 'loading';
+              const vCount = loaded ? d.variants.length : null;
+              const decided = loaded ? d.results.decided : false;
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => void toggle(c.id)}
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: `1px solid ${isSelected ? 'var(--accent-400)' : 'var(--border-subtle)'}`,
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    cursor: 'pointer',
+                    transition: 'box-shadow 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isSelected) return;
+                    (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
+                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                    (e.currentTarget as HTMLElement).style.borderColor = isSelected ? 'var(--accent-400)' : 'var(--border-subtle)';
+                  }}
+                >
+                  {/* Header: name + status */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <FlaskConical size={15} style={{ color: 'var(--accent-500, #6366f1)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
+                    </div>
+                    <span className={`badge ${statusBadge(c.status)}`} style={{ fontSize: 9, flexShrink: 0 }}>{c.status}</span>
+                  </div>
+
+                  {/* Body: A/B summary */}
+                  <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {vCount == null ? 'A/B experiment' : vCount < 2 ? 'No A/B test yet' : `${vCount} variants`}
+                    </div>
+                    {loaded && (vCount ?? 0) >= 2 && (
+                      <span style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 20, background: decided ? 'rgba(34,197,94,0.1)' : 'var(--bg-raised)', color: decided ? 'var(--status-success)' : 'var(--text-muted)' }}>
+                        {decided ? <><Trophy size={11} /> Significant winner</> : 'Running — no winner yet'}
+                      </span>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {/* Footer */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-raised)' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void toggle(c.id); }}
+                      className="btn btn-sm btn-secondary"
+                      style={{ flex: 1, justifyContent: 'center', gap: 5, fontSize: 11 }}
+                    >
+                      {isSelected ? 'Hide A/B test' : (vCount != null && vCount < 2 ? 'Set up A/B test' : 'View A/B test')}
+                      <ArrowRight size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Selected campaign: A/B detail (full width, below the grid) */}
+          {expanded && (
+            <div style={{ marginTop: 20 }}>
+              {data[expanded] === 'loading' || !data[expanded] ? (
+                <div className="skeleton" style={{ height: 220, borderRadius: 10 }} />
+              ) : (
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 10, padding: '16px 18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <FlaskConical size={16} style={{ color: 'var(--accent-500, #6366f1)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedCampaign?.name}</span>
+                      <span className={`badge ${statusBadge(selectedCampaign?.status ?? '')}`} style={{ fontSize: 9, flexShrink: 0 }}>{selectedCampaign?.status}</span>
+                    </div>
+                    <button className="btn btn-icon" title="Close" onClick={() => setExpanded(null)}><X size={14} /></button>
+                  </div>
+                  <ExpResults
+                    data={data[expanded] as ExpData}
+                    creating={creating === expanded}
+                    onCreate={() => void createVariant(expanded)}
+                    onManage={() => onNavigate(`/campaigns/detail/${expanded}`)}
+                    onPromote={(variantId) => void promote(expanded, variantId)}
+                    onSetExperiment={(patch) => void setExperiment(expanded, patch)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
