@@ -194,8 +194,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@sentry/cloudflare':
-        specifier: ^9.0.0
-        version: 9.47.1(@cloudflare/workers-types@4.20260615.1)
+        specifier: ^10.58.0
+        version: 10.58.0(@cloudflare/workers-types@4.20260615.1)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260615.1
@@ -1919,8 +1919,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@sentry/cloudflare@9.47.1':
-    resolution: {integrity: sha512-k22rStK6PCNKBGp8eDBz2vmT/ksKoDDqiF2dwK2KSzngc1B0DSl5S4THdRB+gdkEcJOH0zbCKR/s9EsazbQmJQ==}
+  '@sentry/cloudflare@10.58.0':
+    resolution: {integrity: sha512-84Zk8Ala/+JoJ+/POnjQ7Udn64GO7kIlcas9c5Kgld5hUBicPSIoePshI3NkQeZwcHRbRioNaU8PwnV5yBBoSw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cloudflare/workers-types': ^4.x
@@ -1928,8 +1928,8 @@ packages:
       '@cloudflare/workers-types':
         optional: true
 
-  '@sentry/core@9.47.1':
-    resolution: {integrity: sha512-KX62+qIt4xgy8eHKHiikfhz2p5fOciXd0Cl+dNzhgPFq8klq4MGMNaf148GB3M/vBqP4nw/eFvRMAayFCgdRQw==}
+  '@sentry/core@10.58.0':
+    resolution: {integrity: sha512-bkIbh2c6dzwhrWn/FGWu7j8hf6TAat2XxpkGM91LiN09fLYUXIMwcohVsXqze5l2cq35TnvqmSROAbRNr27GVw==}
     engines: {node: '>=18'}
 
   '@shopify/cli@4.1.0':
@@ -5090,14 +5090,14 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.60.4':
     optional: true
 
-  '@sentry/cloudflare@9.47.1(@cloudflare/workers-types@4.20260615.1)':
+  '@sentry/cloudflare@10.58.0(@cloudflare/workers-types@4.20260615.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
-      '@sentry/core': 9.47.1
+      '@sentry/core': 10.58.0
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260615.1
 
-  '@sentry/core@9.47.1': {}
+  '@sentry/core@10.58.0': {}
 
   '@shopify/cli@4.1.0':
     dependencies:
