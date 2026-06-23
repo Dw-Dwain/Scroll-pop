@@ -395,7 +395,10 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
       name: '',
       email: '',
       role: 'Admin Manager', avatarUrl: '', bio: '',
-      developerMode: true, apiKey: 'sp_pk_live_a3e8630f904adceddc1d0553d7bcda0c',
+      // No committed API key — a hardcoded `sp_pk_live_…` literal would violate the
+      // no-hardcoded-secrets rule and could be scraped/probed. The demo key in the Developer
+      // panel is generated client-side on demand (see genDemoApiKey); the real key is server-side.
+      developerMode: false, apiKey: '',
       notifDigest: false,
     };
   });
@@ -576,9 +579,13 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
     });
   };
 
+  // Demo/sandbox key for the Developer panel preview. Generated client-side on demand so no
+  // `sp_pk_live_…` literal is ever committed to source (the real key is issued server-side).
+  const genDemoApiKey = () =>
+    `sp_pk_live_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
+
   const handleRollKey = () => {
-    const newKey = `sp_pk_live_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-    persistProfile({ ...profile, apiKey: newKey });
+    persistProfile({ ...profile, apiKey: genDemoApiKey() });
   };
 
   const initials = (profile.name || 'A').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -1076,7 +1083,12 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
                       <input
                         type="checkbox"
                         checked={profile.developerMode}
-                        onChange={(e) => persistProfile({ ...profile, developerMode: e.target.checked })}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          // Lazily mint a demo key the first time the panel is opened — keeps any
+                          // key value out of committed source.
+                          persistProfile({ ...profile, developerMode: on, apiKey: on && !profile.apiKey ? genDemoApiKey() : profile.apiKey });
+                        }}
                         style={{ accentColor: 'var(--accent-500)', cursor: 'pointer' }}
                       />
                       Enable

@@ -322,12 +322,18 @@ async function augmentConfig(configJson: string, request: Request, env: Env): Pr
 const GREY_HAT_KILL_SWITCH_KEY = 'killswitch:adclose';
 
 async function readKillSwitch(env: Env): Promise<boolean> {
-  if (!env.SCROLLPOP_CONFIG) return false;
+  // FAIL CLOSED. For the allowed (Novatise) path the origin does NOT strip the X-close redirect —
+  // this kill switch is the ONLY off-ramp — so if we can't confirm its state we must assume it's ON
+  // and strip, rather than ship a ToS-grey-area redirect we can't verify is still permitted. The
+  // happy path (KV bound, key unset) still returns false below, so normal serving is unchanged;
+  // only KV-unbound / read-error degrade to stripping. Briefly under-serving the redirect during a
+  // KV blip is the safe direction for a compliance panic button.
+  if (!env.SCROLLPOP_CONFIG) return true;
   try {
     const v = (await env.SCROLLPOP_CONFIG.get(GREY_HAT_KILL_SWITCH_KEY, 'text'))?.trim().toLowerCase();
     return !!v && v !== '' && v !== '0' && v !== 'false' && v !== 'off';
   } catch {
-    return false; // fail OPEN on a KV error — the origin gate still contains it
+    return true; // fail CLOSED on a KV error — strip when the switch can't be read
   }
 }
 

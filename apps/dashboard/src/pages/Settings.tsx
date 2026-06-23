@@ -33,7 +33,9 @@ function loadSettings(): SettingsRecord {
     amazonAffiliate: '',
     rakutenAffiliate: '',
     webhookUrl: '',
-    webhookSecret: 'whsec_placeholder_32chars_min',
+    // No committed secret literal (rule 11) — empty = "not set"; the real signing secret is
+    // entered by the operator and held server-side, never defaulted in the client bundle.
+    webhookSecret: '',
     notif_weekly: false,
     notif_conversion: true,
     notif_ab_winner: false,

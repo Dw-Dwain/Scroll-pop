@@ -19,6 +19,22 @@ interface InteractivePreviewProps {
   onRecordConversion: () => void;
 }
 
+/**
+ * Open a (tenant-controlled) campaign destination href in a new tab, but ONLY if it resolves to an
+ * http(s) URL — never a javascript:/data:/vbscript: scheme, which window.open would execute in the
+ * dashboard's own origin. Mirrors the snippet's safeHref intent for the live preview. Returns the
+ * opened window (for the ad-close "wait for tab to close" flow), or null if the href was blocked.
+ */
+function openExternalSafely(href: string): Window | null {
+  try {
+    const u = new URL(href, window.location.origin);
+    if (u.protocol === 'http:' || u.protocol === 'https:') {
+      return window.open(u.href, '_blank', 'noopener');
+    }
+  } catch { /* malformed href — block */ }
+  return null;
+}
+
 // ── Animation helpers (CSS keyframes, no framer-motion needed) ────────────
 
 const PREVIEW_KEYFRAMES = `
@@ -251,8 +267,15 @@ export default function InteractivePreview({
       return;
     }
     if (!awaitingReturn) {
-      // First click: open ad, lock popup until tab is closed
-      const win = window.open(href, '_blank', 'noopener');
+      // First click: open ad, lock popup until tab is closed. Block non-http(s) schemes — if the
+      // href is unsafe (javascript:/data:), don't open it; fall back to a natural dismiss.
+      const win = openExternalSafely(href);
+      if (!win) {
+        setShowMainCampaign(false);
+        setShowTeaser(true);
+        showToast('❌ Popup dismissed');
+        return;
+      }
       setAdWindow(win);
       setAwaitingReturn(true);
       showToast('🛒 Ad opened — close that tab to dismiss this popup');
@@ -938,12 +961,16 @@ export default function InteractivePreview({
                           <button
                             onClick={() => {
                               const href = el.href || (el.extraProps?.href as string | undefined);
-                              // If button has an affiliate/destination URL — open in new tab
+                              // If button has an affiliate/destination URL — open in new tab (http(s)
+                              // only; a javascript:/data: href is blocked rather than executed).
                               if (href && href.length > 4 && !href.includes('YOUR_')) {
-                                window.open(href, '_blank', 'noopener');
-                                showToast('🛒 Opening destination in new tab…');
-                                // Also advance to success step
-                                if (campaignStep === 'main') setCampaignStep('success');
+                                if (openExternalSafely(href)) {
+                                  showToast('🛒 Opening destination in new tab…');
+                                  // Also advance to success step
+                                  if (campaignStep === 'main') setCampaignStep('success');
+                                } else {
+                                  showToast('⚠️ Blocked an unsafe link');
+                                }
                                 return;
                               }
                               // Fallback: original submit / coupon flow

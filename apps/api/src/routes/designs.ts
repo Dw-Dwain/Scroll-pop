@@ -87,15 +87,17 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
     // saved config so it never persists (the designer hides the toggle, and a template may default
     // it on). Strip rather than reject so honest edits to such a campaign still save. The serve
     // gate re-enforces this regardless.
-    let greyHat = false;
-    if (body.config) {
-      const tenant = await db.query.tenants.findFirst({
-        where: eq(tenants.id, request.tenantId),
-        columns: { clerkOrgId: true },
-      });
-      greyHat = isGreyHatTenant(tenant?.clerkOrgId);
-      if (!greyHat) stripAdClose(body.config);
-    }
+    //
+    // Resolve grey-hat status up front (independent of whether THIS request carries a config) so
+    // the strip can run on the FINAL persisted config below. A partial save that omits `steps`, or
+    // a save with no config at all, must not let a previously-stored adClose survive in the merged
+    // row — stripping only `body.config` left that gap.
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, request.tenantId),
+      columns: { clerkOrgId: true },
+    });
+    const greyHat = isGreyHatTenant(tenant?.clerkOrgId);
+    if (!greyHat && body.config) stripAdClose(body.config);
 
     const existing = await db.query.designs.findFirst({
       where: and(
@@ -124,6 +126,10 @@ export const designRoutes: FastifyPluginAsync = async (fastify) => {
     if (existing) {
       // Update
       const mergedConfig = body.config ? { ...(existing.config as object), ...body.config } : existing.config;
+      // Re-enforce on the merged result: a partial save (no `steps`) or config-less update could
+      // otherwise carry forward a previously-stored adClose from existing.config for a non-Novatise
+      // tenant. Mutates the about-to-persist object in place.
+      if (!greyHat) stripAdClose(mergedConfig);
       auditAdCloseToggle(mergedConfig);
       const [updated] = await db
         .update(designs)

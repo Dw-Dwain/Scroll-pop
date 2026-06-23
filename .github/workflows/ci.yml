@@ -159,29 +159,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check for banned APIs in snippet source
-        run: |
-          BANNED_PATTERNS=(
-            "history\.pushState"
-            "history\.replaceState"
-            "onpopstate"
-            "addEventListener.*popstate"
-            "back_button_capture"
-          )
-          SNIPPET_DIR="packages/snippet/src"
-          FAILED=0
-          for pattern in "${BANNED_PATTERNS[@]}"; do
-            if grep -rE "$pattern" "$SNIPPET_DIR" 2>/dev/null; then
-              echo "❌ BANNED API FOUND: $pattern"
-              FAILED=1
-            fi
-          done
-          if [ "$FAILED" -eq 1 ]; then
-            echo "❌ FAIL: Snippet contains banned navigation manipulation APIs"
-            echo "See CLAUDE.md rule #1 for details."
-            exit 1
-          fi
-          echo "✅ PASS: No banned APIs found in snippet source"
+      - uses: pnpm/action-setup@v6
+        with: { version: '${{ env.PNPM_VERSION }}' }
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '${{ env.NODE_VERSION }}'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # AST-based check (not grep): parses the snippet TS with the TypeScript compiler so
+      # bracket-access (history['pushState']) and aliased receivers (const h=window.history;
+      # h.pushState()) and onbeforeunload can't evade it. Also token-scans the wp-plugin. See
+      # packages/snippet/scripts/check-banned-apis.mjs and CLAUDE.md rule #1.
+      - name: Check for banned navigation APIs (AST)
+        run: pnpm --filter @scrollpop/snippet lint
 
   migration-safety:
     name: Migration Safety Check
