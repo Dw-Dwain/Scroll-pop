@@ -1,9 +1,9 @@
 import React from 'react';
 import {
   User, Mail, Shield, Key, Check, Sliders,
-  Eye, EyeOff, RefreshCw, Copy, LogOut,
+  Eye, EyeOff, Copy, LogOut,
   Globe, Smartphone, Monitor, Lock,
-  Camera, ChevronRight, Activity, Zap,
+  Camera, ChevronRight, Zap,
   AlertCircle, QrCode, X,
 } from 'lucide-react';
 import { useClerk, useUser } from '@clerk/clerk-react';
@@ -395,10 +395,10 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
       name: '',
       email: '',
       role: 'Admin Manager', avatarUrl: '', bio: '',
-      // No committed API key — a hardcoded `sp_pk_live_…` literal would violate the
-      // no-hardcoded-secrets rule and could be scraped/probed. The demo key in the Developer
-      // panel is generated client-side on demand (see genDemoApiKey); the real key is server-side.
-      developerMode: false, apiKey: '',
+      // No API key is fabricated or stored client-side: an API-key backend doesn't exist yet, so
+      // the Developer panel shows a "coming soon" preview (mirrors Settings.tsx). This avoids both a
+      // committed `sp_pk_live_…` literal (rule 11) and a key-shaped secret sitting in localStorage.
+      developerMode: false,
       notifDigest: false,
     };
   });
@@ -427,8 +427,6 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
   });
 
   const [isSaved, setIsSaved] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
-  const [showKey, setShowKey] = React.useState(false);
   const [activeSection, setActiveSection] = React.useState<'identity' | 'security' | 'preferences' | 'developer'>('identity');
 
   // Password state
@@ -570,22 +568,6 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
     const updated = sessions.filter(s => s.current);
     setSessions(updated);
     saveSessions(updated);
-  };
-
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(profile.apiKey).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
-  // Demo/sandbox key for the Developer panel preview. Generated client-side on demand so no
-  // `sp_pk_live_…` literal is ever committed to source (the real key is issued server-side).
-  const genDemoApiKey = () =>
-    `sp_pk_live_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-
-  const handleRollKey = () => {
-    persistProfile({ ...profile, apiKey: genDemoApiKey() });
   };
 
   const initials = (profile.name || 'A').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -1083,12 +1065,7 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
                       <input
                         type="checkbox"
                         checked={profile.developerMode}
-                        onChange={(e) => {
-                          const on = e.target.checked;
-                          // Lazily mint a demo key the first time the panel is opened — keeps any
-                          // key value out of committed source.
-                          persistProfile({ ...profile, developerMode: on, apiKey: on && !profile.apiKey ? genDemoApiKey() : profile.apiKey });
-                        }}
+                        onChange={(e) => persistProfile({ ...profile, developerMode: e.target.checked })}
                         style={{ accentColor: 'var(--accent-500)', cursor: 'pointer' }}
                       />
                       Enable
@@ -1097,44 +1074,23 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
                 >
                   {profile.developerMode ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="badge badge-success" style={{ fontSize: 10 }}>Live</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Created May 2026</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Activity size={11} /> Last used: today
-                        </span>
+                      <div style={{ padding: '16px', background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <Key size={14} style={{ color: 'var(--accent-300)' }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Personal API keys are coming soon</span>
+                        </div>
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
+                          Programmatic API access isn’t available yet. When it ships you’ll issue and roll a key here, and requests will authenticate with a Bearer token — no key is generated or stored until then.
+                        </p>
                       </div>
-
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        background: 'var(--bg-raised)', border: '1px solid var(--border-subtle)',
-                        borderRadius: 8, padding: '10px 14px',
-                      }}>
-                        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {showKey ? profile.apiKey : `sp_pk_live_${'•'.repeat(32)}`}
-                        </code>
-                        <button type="button" className="btn btn-icon btn-sm" onClick={() => setShowKey(v => !v)} title={showKey ? 'Hide' : 'Reveal'}>
-                          {showKey ? <EyeOff size={13} /> : <Eye size={13} />}
-                        </button>
-                        <button type="button" className="btn btn-icon btn-sm" onClick={handleCopyKey} title="Copy">
-                          {copied ? <Check size={13} style={{ color: 'var(--status-success)' }} /> : <Copy size={13} />}
-                        </button>
-                        <button type="button" className="btn btn-secondary btn-sm" style={{ gap: 5 }} onClick={handleRollKey}>
-                          <RefreshCw size={12} /> Roll Key
-                        </button>
-                      </div>
-
-                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
-                        Identifies your account when making API requests. Keep this secret — treat it like a password.
-                      </p>
 
                       <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, overflow: 'hidden' }}>
                         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-raised)' }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Quick Start</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Quick Start (preview)</div>
                         </div>
                         <div style={{ padding: '12px 16px', background: 'var(--bg-raised)' }}>
                           <pre style={{ fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: '19px', color: 'var(--accent-300)', margin: 0, whiteSpace: 'pre-wrap' }}>{`curl https://api.scrollpop.online/v1/campaigns \\
-  -H "Authorization: Bearer ${showKey ? profile.apiKey : 'sp_pk_live_...'}" \\
+  -H "Authorization: Bearer <your-api-key>" \\
   -H "Content-Type: application/json"`}</pre>
                         </div>
                       </div>
@@ -1150,7 +1106,7 @@ export const Profile: React.FC<ProfileProps> = ({ onNavigate }) => {
                     <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <Key size={28} style={{ marginBottom: 8, opacity: 0.4 }} />
                       <div style={{ fontSize: 13, marginBottom: 4 }}>Developer access is disabled.</div>
-                      <div style={{ fontSize: 12 }}>Enable it above to generate your API key.</div>
+                      <div style={{ fontSize: 12 }}>Enable it above to preview API access.</div>
                     </div>
                   )}
                 </SectionCard>
