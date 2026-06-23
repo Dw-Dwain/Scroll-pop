@@ -336,6 +336,9 @@ export const teamInvites = pgTable('team_invites', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  // When the invite stops being acceptable. NULL = legacy invite with no expiry (still valid);
+  // new invites are stamped on create. Accept re-checks this; expired invites can't be redeemed.
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
 });
 
 // ─── Shopify Installations ────────────────────────────────────────────────────

@@ -60,9 +60,12 @@ function isAdminUser(email: string): boolean {
 }
 
 // Short-TTL cache of clerkUserIds that recently passed a LIVE Clerk primary-email verification.
-// Lets the super-admin check fail CLOSED on a Clerk API error (H-1) without locking the owner
-// out during a transient Clerk blip — but only if they verified successfully in the last 5 min.
-const ADMIN_VERIFY_TTL_MS = 5 * 60 * 1000;
+// Lets the super-admin check tolerate a transient Clerk blip without locking the owner out — but
+// only if they verified successfully within this window. Kept SHORT (60s, was 5min) to minimize
+// the stale-grant window: if an admin's primary email is unverified/changed in Clerk and a Clerk
+// API error then occurs, a cached pass can be honored until it expires — 60s bounds that exposure
+// while still covering a brief outage. (Fundamentally a fail-closed-vs-availability tradeoff.)
+const ADMIN_VERIFY_TTL_MS = 60 * 1000;
 const recentlyVerifiedAdmins = new Map<string, number>();
 
 /** Rejects the request if the calling user is not the super admin. */

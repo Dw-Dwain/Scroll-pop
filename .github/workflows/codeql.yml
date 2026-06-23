@@ -30,6 +30,13 @@ jobs:
           languages: javascript-typescript
           # security-extended adds more security queries than the default suite.
           queries: security-extended
+          # Test files intentionally contain adversarial fixtures (e.g. ReDoS patterns fed to the
+          # validator under test), which trip data-flow queries as false positives. Production code
+          # is still fully scanned.
+          config: |
+            paths-ignore:
+              - '**/*.test.ts'
+              - '**/*.test.tsx'
 
       # No compiled build step needed for JS/TS — CodeQL analyzes source directly.
       - name: Perform CodeQL Analysis

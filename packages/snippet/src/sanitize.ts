@@ -139,22 +139,35 @@ export function isSafeRegex(pattern: string): boolean {
   if (typeof pattern !== 'string') return false;
   if (pattern.length > 200) return false;
 
-  // 1. Nested quantifiers: a quantified group whose body also contains a quantifier,
-  //    e.g. (a+)+, (a*)*, ([a-z]+){5} — the classic exponential-backtracking shape.
-  if (/\([^()]*[+*?][^()]*\)\s*[+*{]/.test(pattern)) return false;
+  // 1. Nested quantifiers / quantified alternation at ANY nesting depth — the catastrophic-
+  //    backtracking shape (e.g. (a+)+, (a|b)+, but also ((ab)+)+ and (((a+)))+ where the inner
+  //    quantifier is separated from the outer by group parens). A single regex can't see through
+  //    nesting, so collapse innermost groups one at a time: a group that is quantified AND whose
+  //    body contains a quantifier, an alternation, or an already-collapsed risky group is rejected.
+  {
+    let s = pattern;
+    const INNER = /\(([^()]*)\)([*+?]|\{\d+(?:,\d*)?\})?/;
+    const RISKY = /[*+?]|\{\d+(?:,\d*)?\}|\|/;
+    const MARK = '\x01'; // a collapsed group that is itself quantified or holds a quantifier/alternation
+    for (let i = 0; i < 200; i++) {
+      const m = INNER.exec(s);
+      if (!m) break;
+      const body = m[1] ?? '';
+      const quantified = !!m[2];
+      const bodyRisky = RISKY.test(body) || body.indexOf(MARK) >= 0;
+      if (quantified && bodyRisky) return false;
+      s = s.slice(0, m.index) + ((quantified || bodyRisky) ? MARK : 'x') + s.slice(m.index + m[0].length);
+    }
+  }
 
-  // 2. Quantified group containing alternation, e.g. (a|b)+, (foo|foobar)* — overlapping
-  //    alternatives backtrack catastrophically. Conservatively reject all such shapes.
-  if (/\([^()]*\|[^()]*\)\s*[+*{]/.test(pattern)) return false;
-
-  // 3. Absurdly large bounded repetitions {n,m} — cheap CPU/memory blowup even without nesting.
+  // 2. Absurdly large bounded repetitions {n,m} — cheap CPU/memory blowup even without nesting.
   for (const r of pattern.match(/\{\s*(\d+)\s*(?:,\s*(\d+)\s*)?\}/g) ?? []) {
     const m = /\{\s*(\d+)\s*(?:,\s*(\d+)\s*)?\}/.exec(r);
     const upper = m?.[2] ? parseInt(m[2], 10) : m?.[1] ? parseInt(m[1], 10) : 0;
     if (upper > 1000) return false;
   }
 
-  // 4. Must actually compile — a malformed pattern should never reach a live RegExp.
+  // 3. Must actually compile — a malformed pattern should never reach a live RegExp.
   try {
     new RegExp(pattern);
   } catch {

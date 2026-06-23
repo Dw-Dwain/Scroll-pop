@@ -155,12 +155,23 @@ describe('isSafeRegex', () => {
     expect(isSafeRegex('/blog/')).toBe(true);
     expect(isSafeRegex('^https://example\\.com/blog/\\d+')).toBe(true);
     expect(isSafeRegex('/products/[a-z0-9-]+')).toBe(true);
+    // A single quantified group, sequential quantified groups, and an UNquantified alternation
+    // group are all safe (no nested/overlapping repetition) and must not be rejected.
+    expect(isSafeRegex('(abc)+')).toBe(true);
+    expect(isSafeRegex('(ab)+(cd)+')).toBe(true);
+    expect(isSafeRegex('(foo|bar)')).toBe(true);
   });
   it('rejects nested-quantifier ReDoS patterns', () => {
     expect(isSafeRegex('(a+)+$')).toBe(false);
     expect(isSafeRegex('([a-z]+)*')).toBe(false);
     expect(isSafeRegex('(a*)*')).toBe(false);
     expect(isSafeRegex('([a-z]+){5}')).toBe(false);
+  });
+  it('rejects deeply-nested ReDoS where parens separate the quantifiers (any depth)', () => {
+    expect(isSafeRegex('((ab)+)+$')).toBe(false);
+    expect(isSafeRegex('(((a+)))+$')).toBe(false);
+    expect(isSafeRegex('((a|b))+')).toBe(false);
+    expect(isSafeRegex('((a+))*')).toBe(false);
   });
   it('rejects quantified-alternation ReDoS patterns', () => {
     expect(isSafeRegex('(a|b)+')).toBe(false);

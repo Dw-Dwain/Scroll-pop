@@ -23,8 +23,11 @@ export async function ensureTeamInvitesSchema(
         accepted_user_id    UUID,
         created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at          TIMESTAMPTZ,
-        accepted_at         TIMESTAMPTZ
+        accepted_at         TIMESTAMPTZ,
+        expires_at          TIMESTAMPTZ
       );
+      -- Additive for tables that predate the column (CREATE TABLE IF NOT EXISTS skips existing).
+      ALTER TABLE team_invites ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
       ALTER TABLE team_invites ENABLE ROW LEVEL SECURITY;
       DO $$ BEGIN
         CREATE POLICY team_invites_all_tenant_isolation ON team_invites USING (true) WITH CHECK (true);

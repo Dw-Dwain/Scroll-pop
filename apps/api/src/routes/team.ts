@@ -6,11 +6,16 @@ import { z } from 'zod';
 // filters explicitly by tenantId/email, and write paths re-verify the user's email. (C-1)
 import { systemDb as db } from '../db/client.js';
 import { teamInvites, tenantMembers, tenants, users } from '../db/schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, or, gt } from 'drizzle-orm';
 import { clerkClient } from '@clerk/fastify';
 import { sendEmail } from '../lib/email.js';
 
 const DASHBOARD_URL = process.env['DASHBOARD_URL'] ?? 'https://dashboard.scrollpop.online';
+// Invites expire 7 days after they're issued (or re-issued). Bounds the window in which a stale or
+// mis-sent invite (recycled mailbox, former employee) can be redeemed into an agency tenant.
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// A SQL predicate for "not expired": legacy invites have NULL expires_at and stay valid.
+const notExpired = () => or(isNull(teamInvites.expiresAt), gt(teamInvites.expiresAt, new Date()));
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
@@ -89,7 +94,7 @@ export const teamRoutes: FastifyPluginAsync = async (fastify) => {
       .select({ id: teamInvites.id, role: teamInvites.role, email: teamInvites.email, status: teamInvites.status, tenantName: tenants.name })
       .from(teamInvites)
       .innerJoin(tenants, eq(tenants.id, teamInvites.tenantId))
-      .where(and(eq(teamInvites.id, request.params.id), isNull(tenants.deletedAt)))
+      .where(and(eq(teamInvites.id, request.params.id), isNull(tenants.deletedAt), notExpired()))
       .limit(1);
     const inv = row[0];
     if (!inv || inv.status !== 'pending') {
@@ -115,12 +120,14 @@ export const teamRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(409).send({ error: { code: 'ALREADY_MEMBER', message: 'That person is already on your team.' } });
     }
 
+    const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
     const [invite] = await db
       .insert(teamInvites)
-      .values({ tenantId: request.tenantId, email: normalized, role, invitedByUserId: request.userId, status: 'pending' })
+      .values({ tenantId: request.tenantId, email: normalized, role, invitedByUserId: request.userId, status: 'pending', expiresAt })
       .onConflictDoUpdate({
         target: [teamInvites.tenantId, teamInvites.email],
-        set: { role, status: 'pending', invitedByUserId: request.userId, acceptedUserId: null, acceptedAt: null, updatedAt: new Date() },
+        // Re-inviting refreshes the expiry too, so a revived invite gets a fresh 7-day window.
+        set: { role, status: 'pending', invitedByUserId: request.userId, acceptedUserId: null, acceptedAt: null, updatedAt: new Date(), expiresAt },
       })
       .returning();
     if (!invite) {
@@ -196,7 +203,7 @@ export const teamRoutes: FastifyPluginAsync = async (fastify) => {
       .select({ id: teamInvites.id, role: teamInvites.role, tenantId: teamInvites.tenantId, tenantName: tenants.name, createdAt: teamInvites.createdAt })
       .from(teamInvites)
       .innerJoin(tenants, eq(tenants.id, teamInvites.tenantId))
-      .where(and(eq(teamInvites.email, me.email.toLowerCase()), eq(teamInvites.status, 'pending'), isNull(tenants.deletedAt)));
+      .where(and(eq(teamInvites.email, me.email.toLowerCase()), eq(teamInvites.status, 'pending'), isNull(tenants.deletedAt), notExpired()));
     return reply.send({ data: rows });
   });
 
@@ -205,6 +212,11 @@ export const teamRoutes: FastifyPluginAsync = async (fastify) => {
     const invite = await db.query.teamInvites.findFirst({ where: eq(teamInvites.id, request.params.id) });
     if (!invite || invite.status !== 'pending') {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Invite not found or no longer pending.' } });
+    }
+    // Expired invites can't be redeemed (legacy NULL-expiry invites stay valid). The owner can
+    // re-issue (POST /team/invites) to mint a fresh 7-day invite.
+    if (invite.expiresAt && invite.expiresAt.getTime() < Date.now()) {
+      return reply.code(404).send({ error: { code: 'INVITE_EXPIRED', message: 'This invitation has expired. Ask the workspace owner to send a new one.' } });
     }
     const me = await db.query.users.findFirst({ where: eq(users.id, request.userId), columns: { email: true, clerkUserId: true } });
     if (!me) return reply.code(403).send({ error: { code: 'USER_NOT_FOUND', message: 'User not found.' } });

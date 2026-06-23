@@ -1,5 +1,5 @@
-import Fastify from 'fastify';
-import { clerkPlugin } from '@clerk/fastify';
+import Fastify, { type FastifyRegisterOptions } from 'fastify';
+import { clerkPlugin, type ClerkFastifyOptions } from '@clerk/fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { Redis } from '@upstash/redis';
@@ -132,8 +132,18 @@ async function bootstrap() {
     keyGenerator: (req) => req.ip,
   });
 
-  // Clerk auth
-  await app.register(clerkPlugin);
+  // Clerk auth. When CLERK_AUTHORIZED_PARTIES is set (comma-separated origins, e.g.
+  // "https://dashboard.scrollpop.online"), Clerk rejects session tokens whose `azp` isn't in the
+  // list — i.e. tokens minted for a different front-end/origin can't be replayed against this API.
+  // Unset → unchanged behavior (no azp restriction), so this is safe to ship before the value is
+  // configured in each environment.
+  const authorizedParties = (process.env['CLERK_AUTHORIZED_PARTIES'] ?? '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  // `authorizedParties` is spread into clerkClient.authenticateRequest at runtime (a valid azp
+  // option on @clerk/backend's ClerkOptions) but is absent from @clerk/fastify's exported option
+  // type — cast through unknown to the register option type.
+  const clerkOpts = (authorizedParties.length ? { authorizedParties } : {}) as unknown as FastifyRegisterOptions<ClerkFastifyOptions>;
+  await app.register(clerkPlugin, clerkOpts);
 
   // Error handler
   await app.register(errorHandlerPlugin);
@@ -465,6 +475,13 @@ async function bootstrap() {
   // Per-(campaign, IP) cap on email_capture/min (S6). It's exempt from the origin gate (so leads
   // save on custom domains) but triggers outbound email + ESP writes, so cap it tightly per IP.
   const EMAIL_CAPTURE_PER_IP_PER_MIN = 10;
+  // Per-(campaign, IP, type) cap for the side-effectful analytic events (conversion / click /
+  // dismiss). These fire outbound webhooks + conversion-milestone notifications and feed
+  // conversion/CTR analytics. The origin gate above keys off the client-supplied `pageUrl`, so a
+  // forger who sets pageUrl to the victim's domain bypasses it — this per-IP cap is the robust
+  // backstop (mirrors the impression gate). Real visitors emit only a few of these per minute.
+  const SIDE_EFFECT_PER_IP_PER_MIN = 60;
+  const SIDE_EFFECT_EVENT_TYPES = new Set(['conversion', 'click', 'dismiss']);
 
   function sanitizeEventUrl(url: unknown): string | null {
     if (typeof url !== 'string' || url.length > 2048) return null;
@@ -730,6 +747,35 @@ async function bootstrap() {
     } catch { return true; }
   }
 
+  // Per-(type, campaign, IP) flood gate for side-effectful analytic events. Mirrors the impression
+  // gate (Redis counter, shared across instances) with a per-instance in-memory fallback so the cap
+  // still applies when Redis is down. Per-type buckets so a click flood can't consume the
+  // conversion budget. Bounds forged-event abuse the (pageUrl-trusting) origin gate can't stop.
+  const memSideEffectGate = new Map<string, { count: number; resetAt: number }>();
+  function memSideEffectWithinIpQuota(key: string): boolean {
+    const now = Date.now();
+    if (memSideEffectGate.size > 50_000) {
+      for (const [k, v] of memSideEffectGate) if (now >= v.resetAt) memSideEffectGate.delete(k);
+    }
+    const e = memSideEffectGate.get(key);
+    if (!e || now >= e.resetAt) {
+      memSideEffectGate.set(key, { count: 1, resetAt: now + 60_000 });
+      return true;
+    }
+    e.count += 1;
+    return e.count <= SIDE_EFFECT_PER_IP_PER_MIN;
+  }
+  async function sideEffectWithinIpQuota(eventType: string, campaignId: string, ip: string): Promise<boolean> {
+    const memKey = `${eventType}:${campaignId}:${ip}`;
+    if (!redis) return memSideEffectWithinIpQuota(memKey);
+    try {
+      const k = `sp_se_gate:${eventType}:${campaignId}:${ip}`;
+      const n = await redis.incr(k);
+      if (n === 1) await redis.expire(k, 60);
+      return typeof n !== 'number' || n <= SIDE_EFFECT_PER_IP_PER_MIN;
+    } catch { return memSideEffectWithinIpQuota(memKey); }
+  }
+
   app.post<{ Body: { events?: any[] } }>('/e', {
     config: {
       rateLimit: {
@@ -763,7 +809,9 @@ async function bootstrap() {
         if (!ALLOWED_EVENT_TYPES.has(eventType)) continue;
         const safeDevice = typeof device === 'string' && ALLOWED_DEVICES.has(device) ? device : null;
         const safePageUrl = sanitizeEventUrl(pageUrl);
-        const safeReferrer = typeof referrer === 'string' && referrer.length <= 2048 ? referrer : null;
+        // Validate referrer as an http(s) URL too (was length-only) — otherwise a forged beacon
+        // could store javascript:/data: values or newlines (log/dashboard injection) verbatim.
+        const safeReferrer = sanitizeEventUrl(referrer);
         // Visitor/session IDs must be UUIDs (the snippet emits crypto.randomUUID()). Reject
         // arbitrary strings so attackers can't inflate unique-visitor counts with junk IDs.
         const safeVisitorId = typeof visitorId === 'string' && UUID_RE.test(visitorId) ? visitorId : null;
@@ -796,6 +844,16 @@ async function bootstrap() {
             // Impression flood gate: drop impressions that exceed the per-IP-per-campaign cap so
             // forged floods can neither poison analytics nor burn the tenant's monthly view quota.
             if (eventType === 'impression' && !(await impressionWithinIpQuota(campaignId, clientIp))) {
+              continue;
+            }
+
+            // Side-effect flood gate (conversion / click / dismiss): the origin gate above trusts
+            // the client-supplied pageUrl, so a forger who sets it to the victim's domain slips
+            // through. Cap these per IP so forged floods can't poison conversion/CTR analytics or
+            // fire the tenant's outbound webhooks + conversion-milestone notifications. Dropping the
+            // event also drops its side effects below. email_capture has its own gate (S6).
+            if (SIDE_EFFECT_EVENT_TYPES.has(eventType) &&
+                !(await sideEffectWithinIpQuota(eventType, campaignId, clientIp))) {
               continue;
             }
 
@@ -1052,7 +1110,7 @@ async function bootstrap() {
   // ensure-*.ts scripts run idempotent DDL on every cold start, adding latency. Cache
   // a Redis flag after first successful run so warm restarts in the same deployment skip
   // them entirely (P3-11). Bump SCHEMA_VERSION whenever a new ensure-* call is added.
-  const SCHEMA_VERSION = '22'; // v22: campaigns.ab_config column (A/B Thompson-sampling bandit, migration 0016)
+  const SCHEMA_VERSION = '23'; // v23: team_invites.expires_at column (invite expiry); v22: campaigns.ab_config
   const schemaBootKey = `sp_schema_v${SCHEMA_VERSION}`;
   const schemaAlreadyRan = redis
     ? await redis.get(schemaBootKey).catch(() => null)

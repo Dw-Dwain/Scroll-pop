@@ -28,9 +28,16 @@ function groupByCampaignId<T extends { campaignId: string }>(rows: T[]): Map<str
 
 function assertInternalSecret(request: FastifyRequest, reply: FastifyReply): boolean {
   const secret = process.env['INTERNAL_SECRET'];
-  const provided = request.headers['x-internal-secret'] as string | undefined;
-
-  if (!secret || provided !== secret) {
+  const provided = request.headers['x-internal-secret'];
+  // Constant-time compare over equal-length buffers (matches isFromWorker in index.ts). FAILS
+  // CLOSED if the secret is unset or the header is missing/wrong-length, so a plain `!==` timing
+  // side-channel can't be used to recover the secret that gates internal-only fields + KV purge.
+  let ok = false;
+  if (secret && typeof provided === 'string' && provided.length === secret.length) {
+    try { ok = crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(secret)); }
+    catch { ok = false; }
+  }
+  if (!ok) {
     void reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Invalid internal secret' } });
     return false;
   }

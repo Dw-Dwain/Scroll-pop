@@ -4,6 +4,7 @@ import { and, eq, asc, sql, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { variants, campaigns, designs, events, sites, tenants } from '../db/schema.js';
 import { purgeSiteConfigCache } from '../lib/cache-purge.js';
+import { isGreyHatTenant, stripAdClose } from '../lib/grey-hat.js';
 
 /**
  * A/B variants API (CTO-AUDIT P0-4 / P1-10). A campaign with variants is served as a weighted
@@ -58,6 +59,15 @@ async function assertCampaign(tenantId: string, campaignId: string) {
     where: and(eq(campaigns.id, campaignId), eq(campaigns.tenantId, tenantId)),
     columns: { id: true, siteId: true },
   });
+}
+
+/** Grey-hat write gate for variant configs — mirrors the designs route. The X-close → affiliate
+ *  redirect (adClose) is permitted ONLY for the Novatise org tenant; for everyone else, neutralise
+ *  it in the persisted variant config so a non-Novatise tenant can't store it via this route (the
+ *  designs route already does this; variants was the gap). Mutates `config` in place. */
+async function gateVariantConfig(tenantId: string, config: unknown): Promise<void> {
+  const t = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId), columns: { clerkOrgId: true } });
+  if (!isGreyHatTenant(t?.clerkOrgId)) stripAdClose(config);
 }
 
 async function purgeForCampaign(tenantId: string, campaignId: string): Promise<void> {
@@ -130,12 +140,17 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
       .from(variants)
       .where(and(eq(variants.tenantId, request.tenantId), eq(variants.campaignId, body.campaignId))))[0]?.n ?? 0;
 
+    // Defense-in-depth: the seed comes from the (already write-gated) base design, but strip again
+    // here so a non-Novatise variant can never be seeded with an adClose, regardless of base state.
+    const seedConfig = base?.config ?? {};
+    await gateVariantConfig(request.tenantId, seedConfig);
+
     const [created] = await db.insert(variants).values({
       tenantId: request.tenantId,
       campaignId: body.campaignId,
       name: body.name ?? `Variant ${String.fromCharCode(65 + existingCount)}`, // A, B, C…
       weight: body.weight ?? 50,
-      config: base?.config ?? {},
+      config: seedConfig,
       affiliateSlots: base?.affiliateSlots ?? [],
     }).returning();
 
@@ -157,6 +172,11 @@ export const variantRoutes: FastifyPluginAsync = async (fastify) => {
       columns: { id: true, campaignId: true },
     });
     if (!existing) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Variant not found' } });
+
+    // Grey-hat write gate: neutralise adClose for non-Novatise tenants before persisting (this
+    // route previously wrote config verbatim, letting a non-Novatise agency tenant store the
+    // X-close redirect that the designs route already blocks).
+    if (body.config !== undefined) await gateVariantConfig(request.tenantId, body.config);
 
     const [updated] = await db.update(variants)
       .set({

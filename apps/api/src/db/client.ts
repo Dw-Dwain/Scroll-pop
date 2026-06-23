@@ -29,6 +29,13 @@ const DATABASE_URL = process.env['DATABASE_URL'];
 const TENANT_URL = process.env['DB_TENANT_URL'];
 
 let _rlsActive = process.env['DB_RLS_ENFORCED'] === 'true' && !!TENANT_URL;
+// Surface the fail-open posture: in production with runtime RLS inactive, app-layer tenant_id
+// filtering is the SOLE isolation layer (no DB backstop), so a single missed WHERE becomes a
+// cross-tenant leak. Warn loudly so the gap is visible in logs — but do NOT change behavior here
+// (enabling RLS requires the DB_TENANT_URL NOBYPASSRLS role to be provisioned first; see MASTER §RLS).
+if (process.env['NODE_ENV'] === 'production' && !_rlsActive) {
+  console.warn('[rls] runtime row-level security is NOT active (set DB_RLS_ENFORCED=true + DB_TENANT_URL after provisioning the tenant role) — tenant isolation currently relies on app-layer filtering only.');
+}
 export function rlsActive(): boolean { return _rlsActive; }
 export function disableRls(reason: string): void {
   if (_rlsActive) console.error(`[rls] disabling runtime enforcement — falling back to app-layer only. Reason: ${reason}`);
