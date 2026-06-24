@@ -11,7 +11,14 @@
 >
 > **Legend:** ✅ control implemented in product · 🟡 partial / needs evidence · 🔴 gap (process/policy)
 >
-> Last updated: 2026-06-13. Owner: [security lead]. Audit window target: [set 3–12 month observation].
+> Last updated: 2026-06-22 (verified against current code; SCA/Dependabot now implemented).
+> Owner: [security lead]. Audit window target: [set 3–12 month observation — see
+> `soc2-readiness-checklist.md` §5, recommended 6 months].
+>
+> **Companion docs (the execution side of this mapping):** `soc2-readiness-checklist.md` (program
+> plan, owners, platform recommendation, observation window + pentest), `incident-response-plan.md`
+> (CC7.4), `mfa-enforcement.md` (CC6), `security-logging-alerting-proposal.md` (CC7.2),
+> `risk-register.md` (CC3/CC9).
 
 ---
 
@@ -32,8 +39,8 @@ evidence collection (a compliance-automation platform), (3) run the observation 
 | CC1.1 | Integrity & ethics commitments | 🔴 | — | Code of conduct, security policy set |
 | CC1.2 | Board/oversight independence | 🔴 | — | Define security ownership & oversight |
 | CC1.3 | Org structure & authority | 🟡 | `CONTRIBUTING.md` (governance, review process) | Formal org chart, role definitions |
-| CC1.4 | Competence (hiring, training) | 🔴 | — | Security-awareness training cadence |
-| CC1.5 | Accountability | 🟡 | PR review gates, CODEOWNERS [confirm] | Document enforcement |
+| CC1.4 | Competence (hiring, training) | 🔴 | — | Security-awareness training cadence (checklist §4) |
+| CC1.5 | Accountability | 🟡 | PR review gates; branch protection. **No root `CODEOWNERS`** (verified absent 2026-06-22) | Add `CODEOWNERS` + "require code-owner review" (risk R-11) |
 
 *These are policy/process — the largest net-new effort. A compliance platform supplies templates.*
 
@@ -90,9 +97,9 @@ evidence collection (a compliance-automation platform), (3) run the observation 
 | CC6.6 | Boundary protection (external threats) | ✅ | Cloudflare WAF/DDoS; security headers + CSP (`apps/api/src/index.ts`); CORS allow-list | — |
 | CC6.6 | Anti-injection / input validation | ✅ | `packages/snippet/src/sanitize.ts` (+ `sanitize.test.ts`), strict `/e` ingest validation (`apps/api/src/index.ts`) | — |
 | CC6.7 | Transmission & credential protection | ✅ | TLS/HSTS; AES-256-GCM secret encryption (`apps/api/src/lib/token-crypto.ts`, tested `security-fixes.test.ts`) | — |
-| CC6.8 | Prevent/detect unauthorized software | 🟡 | CI gates block disallowed APIs; `p.txt` byte-identical check | Dependency scanning (Dependabot/SCA) |
-| CC6.x | MFA on production/admin systems | 🔴 | [confirm Clerk/provider MFA enforced] | Enforce + evidence MFA everywhere |
-| CC6.x | Access reviews | 🔴 | — | Quarterly access review process |
+| CC6.8 | Prevent/detect unauthorized software | ✅ | CI gates block disallowed APIs; `p.txt` byte-identical check; **SCA live** — `dependency-scan` gates deploys (`.github/workflows/ci.yml`), Dependabot (`.github/dependabot.yml`), CodeQL SAST (`codeql.yml`), weekly `security-audit.yml` | Mark as required status check in branch protection (checklist §6) |
+| CC6.x | MFA on production/admin systems | 🟡 | Clerk is IdP; dashboard 2FA entry point (Clerk-managed). Policy + evidence procedure: `mfa-enforcement.md` | Owner to evidence org-level enforcement on every console (R-03) |
+| CC6.x | Access reviews | 🔴 | — | Quarterly access review process (checklist §4) |
 
 ---
 
@@ -100,11 +107,11 @@ evidence collection (a compliance-automation platform), (3) run the observation 
 
 | Ref | Criterion | Status | Evidence / where | Gap |
 |---|---|---|---|---|
-| CC7.1 | Vulnerability detection | 🟡 | Security regression tests, manual audits | Add automated SCA + scheduled pentest |
-| CC7.2 | Monitoring for anomalies | 🟡 | Sentry, rate-limit/flood gates (`apps/api/src/index.ts`) | Centralized security logging/alerting |
-| CC7.3 | Incident evaluation | 🟡 | Incident notes (e.g. `incident-db-oom-jun12`) | Formal incident classification |
-| CC7.4 | Incident response | 🔴 | Ad-hoc | **Written IR plan** + breach-notification (DPA §5.7) |
-| CC7.5 | Recovery | 🟡 | `RLS-ENABLEMENT-RUNBOOK.md` has rollback; managed-DB backups | Documented BCP/DR + restore test |
+| CC7.1 | Vulnerability detection | ✅ (SCA) / 🟡 (pentest) | **Automated SCA live**: `dependency-scan` (CI, gates deploys), CodeQL SAST (PR + weekly), Dependabot, weekly `security-audit.yml`; security regression tests | Schedule a third-party pentest during the observation window (checklist §5) |
+| CC7.2 | Monitoring for anomalies | 🟡 | Sentry, rate-limit/flood gates (`apps/api/src/index.ts`), `admin_audit_log` | Centralized security logging/alerting — plan in `security-logging-alerting-proposal.md` |
+| CC7.3 | Incident evaluation | 🟡 | Incident notes (e.g. `incident-db-oom-jun12`); severity model now defined | Operate the classification (`incident-response-plan.md` §3) |
+| CC7.4 | Incident response | ✅ (plan) | **Written IR + breach-notification plan: `incident-response-plan.md`** (satisfies DPA §5.7 72-hour) | Adopt formally + run an annual tabletop |
+| CC7.5 | Recovery | 🟡 | `RLS-ENABLEMENT-RUNBOOK.md` has rollback; managed-DB backups | Documented BCP/DR + **tested restore drill** (R-02, checklist §4) |
 
 ---
 
@@ -157,9 +164,14 @@ evidence collection (a compliance-automation platform), (3) run the observation 
 ## Remaining-gap summary (the real SOC 2 to-do list)
 
 **Code: ~mostly done.** The technical control surface is strong. Net-new *engineering* items:
-1. Enforce + evidence **MFA** on all production/admin access (CC6).
-2. Add **automated dependency/SCA scanning** (e.g. Dependabot + a scanner) (CC6.8/CC7.1).
-3. Centralized **security logging/alerting** beyond Sentry (CC7.2).
+1. Enforce + evidence **MFA** on all production/admin access (CC6). 🟡 *procedure + evidence template
+   ready (`mfa-enforcement.md`); owner to complete console evidence.*
+2. ~~Add **automated dependency/SCA scanning**~~ ✅ **DONE (2026-06-22)** — `dependency-scan` gates all
+   deploys (critical blocks anywhere; high blocks in the production tree), Dependabot security PRs,
+   CodeQL SAST, and a weekly `security-audit.yml` evidence re-scan. *Remaining: list it as a required
+   status check in branch protection (checklist §6).*
+3. Centralized **security logging/alerting** beyond Sentry (CC7.2). 🟡 *phased plan ready
+   (`security-logging-alerting-proposal.md`).*
 
 **Process/policy: the bulk of the work** (a compliance-automation platform templates most of it):
 4. Policy set: InfoSec, access control, change management, incident response, BCP/DR, vendor mgmt,
@@ -182,9 +194,10 @@ evidence collection (a compliance-automation platform), (3) run the observation 
    evidence from GitHub, the cloud providers, and Clerk, and supplies policy templates. This is the
    single highest-leverage step.
 2. Close the **CC6 access** gaps (MFA, access reviews) and **CC7.4 IR plan** first — auditors weight
-   these heavily and they're quick.
-3. Wire **SCA/dependency scanning** into the existing CI (cheap; CI is already mature).
-4. Adopt the policy set; assign owners.
+   these heavily and they're quick. *(IR plan now written: `incident-response-plan.md`.)*
+3. ~~Wire **SCA/dependency scanning** into the existing CI~~ ✅ **done** — now make it a required
+   status check in branch protection (`soc2-readiness-checklist.md` §6).
+4. Adopt the policy set; assign owners. *(Tracked in `soc2-readiness-checklist.md` §3.)*
 5. Start the **observation window**; run the **pentest** during it.
 6. **ISO 27001** can largely reuse this control base (CC ≈ Annex A overlap) — pursue in parallel for
    the Japan market, alongside **Privacy Mark (Pマーク)**.
