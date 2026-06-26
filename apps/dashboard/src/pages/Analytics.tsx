@@ -196,45 +196,53 @@ export const Analytics: React.FC<AnalyticsProps> = ({ onNavigate }) => {
   const windowQ = range === '24h' ? 'hours=24' : `days=${days}`;
   const windowLabel = range === '24h' ? 'last 24 hours' : `last ${days} days`;
 
-  // Real-time auto-refresh: poll every 20s so new events surface without a manual
-  // reload. Pauses while the tab is hidden; refreshes on window focus.
+  // Real-time auto-refresh cadence. Core KPIs poll fast (20s); the heavier
+  // breakdown panels (expensive distinct-visitor / JSON-group aggregations) poll
+  // slower (60s) since they barely move minute-to-minute. `staleTime` stops range
+  // switches and tab refocus from re-hitting the DB when the cached data is still
+  // fresh enough; `gcTime` retains previously viewed ranges so flipping back is
+  // instant instead of refetching all 7 queries from scratch.
   const LIVE_MS = 20000;
+  const SLOW_MS = 60000;
+  const GC_MS = 5 * 60_000;
+  const live = { refetchInterval: LIVE_MS, refetchOnWindowFocus: true, staleTime: LIVE_MS - 2000, gcTime: GC_MS } as const;
+  const slow = { refetchInterval: SLOW_MS, refetchOnWindowFocus: false, staleTime: SLOW_MS - 5000, gcTime: GC_MS } as const;
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   const { data: overviewResult, isLoading: overviewLoading } = useCustom({
     url: `${apiUrl}/analytics/overview?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/overview', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/overview', range, activeClientId], ...live },
   });
   const { data: statsResult, isLoading: statsLoading } = useCustom({
     url: `${apiUrl}/analytics/campaigns?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/campaigns', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/campaigns', range, activeClientId], ...live },
   });
   const { data: dailyResult, isLoading: dailyLoading } = useCustom({
     url: `${apiUrl}/analytics/daily?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/daily', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/daily', range, activeClientId], ...live },
   });
   const { data: breakdownResult } = useCustom({
     url: `${apiUrl}/analytics/breakdown?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/breakdown', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/breakdown', range, activeClientId], ...slow },
   });
   const { data: revenueResult, isLoading: revenueLoading } = useCustom({
     url: `${apiUrl}/analytics/revenue?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/revenue', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/revenue', range, activeClientId], ...slow },
   });
   const { data: funnelResult, isLoading: funnelLoading } = useCustom({
     url: `${apiUrl}/analytics/funnel?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/funnel', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/funnel', range, activeClientId], ...slow },
   });
   const { data: intelligenceResult } = useCustom({
     url: `${apiUrl}/analytics/intelligence?${windowQ}${cq}`,
     method: 'get',
-    queryOptions: { queryKey: ['analytics/intelligence', range, activeClientId], refetchInterval: LIVE_MS, refetchOnWindowFocus: true },
+    queryOptions: { queryKey: ['analytics/intelligence', range, activeClientId], ...slow },
   });
 
   // ── Data extraction ────────────────────────────────────────────────────────

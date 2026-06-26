@@ -78,46 +78,43 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
     const { since, period } = parseWindow(request.query);
     const clientFilter = clientEventFilter(request.query.clientId, request.tenantId);
 
-    const rows = await db
+    // Single windowed scan: per-type event counts AND the unique-visitor (distinct) tallies via
+    // filtered aggregates. Previously this was two separate full-window scans (a GROUP BY eventType
+    // count query + a distinct-visitor query) over the identical row set — collapsed into one pass.
+    //
+    // CTR is on UNIQUE visitors (distinct clickers / distinct people who saw it). A clicker
+    // necessarily saw the popup, so this is bounded ≤100%. Raw click EVENTS can exceed impressions —
+    // one popup view produces several clicks (the CTA + the 2-step X-close affiliate click) — which
+    // made the old clicks/impressions CTR read >100%. close_ad_click (X-close affiliate redirects) is
+    // tracked separately so it doesn't inflate clicks/CTR.
+    const [agg] = await db
       .select({
-        eventType: events.eventType,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(events)
-      .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), clientFilter))
-      .groupBy(events.eventType);
-
-    const counts = Object.fromEntries(rows.map((r) => [r.eventType, r.count]));
-    const impressions = counts['impression'] ?? 0;
-    const clicks = counts['click'] ?? 0;
-    // X-close affiliate redirects — tracked separately so they don't inflate clicks/CTR.
-    const adCloseClicks = counts['close_ad_click'] ?? 0;
-
-    // CTR on UNIQUE visitors (distinct clickers / distinct people who saw it). A clicker necessarily
-    // saw the popup, so this is bounded ≤100%. Raw click EVENTS can exceed impressions — one popup
-    // view produces several clicks (the CTA + the 2-step X-close affiliate click) — which made the
-    // old clicks/impressions CTR read >100%.
-    const [uniq] = await db
-      .select({
-        reach:    sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
-        clickers: sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
+        impressions:   sql<number>`count(*) filter (where ${events.eventType}::text = 'impression')::int`,
+        views:         sql<number>`count(*) filter (where ${events.eventType}::text = 'view')::int`,
+        clicks:        sql<number>`count(*) filter (where ${events.eventType}::text = 'click')::int`,
+        adCloseClicks: sql<number>`count(*) filter (where ${events.eventType}::text = 'close_ad_click')::int`,
+        dismissals:    sql<number>`count(*) filter (where ${events.eventType}::text = 'dismiss')::int`,
+        conversions:   sql<number>`count(*) filter (where ${events.eventType}::text = 'conversion')::int`,
+        reach:         sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'impression')::int`,
+        clickers:      sql<number>`count(distinct ${events.visitorId}) filter (where ${events.eventType}::text = 'click')::int`,
       })
       .from(events)
       .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), clientFilter));
-    const reach = uniq?.reach ?? 0;
-    const ctr = reach > 0 ? Math.min((uniq?.clickers ?? 0) / reach, 1) : 0;
+
+    const reach = agg?.reach ?? 0;
+    const ctr = reach > 0 ? Math.min((agg?.clickers ?? 0) / reach, 1) : 0;
 
     return reply.send({
       data: {
         period,
-        impressions,
-        views: counts['view'] ?? 0,
-        clicks,
-        adCloseClicks,
-        dismissals: counts['dismiss'] ?? 0,
-        conversions: counts['conversion'] ?? 0,
+        impressions: agg?.impressions ?? 0,
+        views: agg?.views ?? 0,
+        clicks: agg?.clicks ?? 0,
+        adCloseClicks: agg?.adCloseClicks ?? 0,
+        dismissals: agg?.dismissals ?? 0,
+        conversions: agg?.conversions ?? 0,
         uniqueVisitors: reach,
-        uniqueClicks: uniq?.clickers ?? 0, // distinct people who clicked (≤ uniqueVisitors)
+        uniqueClicks: agg?.clickers ?? 0, // distinct people who clicked (≤ uniqueVisitors)
         ctr: parseFloat(ctr.toFixed(4)),
       },
     });
@@ -454,10 +451,12 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
         .groupBy(sql`metadata->>'triggerType'`)
         .orderBy(sql`count(*) desc`),
 
-      // Unique visitors
-      db.select({ count: sql<number>`count(distinct visitor_id)::int` })
+      // Unique visitors — distinct people who SAW a popup (impression), matching the `uniqueVisitors`
+      // / reach definition in /analytics/overview so the surfaces agree. Filtering to impression also
+      // lets this use events_funnel_idx (tenant_id, event_type, ts) instead of scanning all types.
+      db.select({ count: sql<number>`count(distinct ${events.visitorId})::int` })
         .from(events)
-        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), clientFilter)),
+        .where(and(eq(events.tenantId, request.tenantId), gte(events.ts, since), eq(events.eventType, 'impression'), clientFilter)),
     ]);
 
     return reply.send({
