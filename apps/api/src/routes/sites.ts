@@ -417,7 +417,13 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const res = await safePublicFetch(base, {
           signal: AbortSignal.timeout(8000),
-          headers: { 'User-Agent': 'ScrollPop-Verify/1.0' },
+          // Use a real browser UA. Shopify (and some WAFs/CDNs) serve a bot-challenge or stripped
+          // page to non-browser agents, which made this probe false-fail ("snippet not found")
+          // even when the snippet loads fine for real shoppers. A browser UA gets the real HTML.
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
         });
         if (!res.ok) { lastError = `${base} returned HTTP ${res.status}.`; continue; }
         const html = await res.text();
