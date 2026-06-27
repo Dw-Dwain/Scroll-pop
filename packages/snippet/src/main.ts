@@ -380,6 +380,13 @@ async function fetchConfigAndBoot(publicKey: string): Promise<void> {
       (config.journeys?.some((j) => j.targeting?.some((r) => ADVANCED_TARGET_KINDS.has(r.kind))) ?? false);
     if (needsTargeting) await loadChunk('targeting.js');
 
+    // Preload the X-close affiliate-redirect chunk if ANY campaign uses it, so the close handler is
+    // wired SYNCHRONOUSLY by the time a popup is interactive. Without this, a fast X-click that landed
+    // before the async chunk load fell through to a plain dismiss (popup closed, no affiliate redirect)
+    // — the bug where the redirect fired on a slowly-clicked popup but not a quickly-clicked one.
+    // Kept conditional so non-adClose sites never fetch the chunk (preserves the containment design).
+    if (config.campaigns.some(campaignHasAdClose)) void loadChunk('adclose.js');
+
     for (const campaign of config.campaigns) {
       campaignById.set(campaign.id, campaign); // registry for sequence chaining
       if (!withinSchedule(campaign.design)) {
@@ -529,6 +536,16 @@ function normalizeUrl(u: string): string {
 function preloadCampaignImages(campaign: CampaignConfig): void {
   for (const el of (campaign.design as any)?.steps?.main?.elements || [])
     if (el.type === 'image') new Image().src = safeHref(el.content);
+}
+
+// Does any served campaign use the X-close affiliate redirect (adClose)? Mirrors the render-time
+// detection (the main step's close element carrying extraProps.adClose). Used to preload adclose.js
+// at boot so the X-close handler is wired synchronously before a popup becomes interactive.
+function campaignHasAdClose(campaign: CampaignConfig): boolean {
+  const s = (campaign.design as any)?.steps;
+  const main = Array.isArray(s) ? s.find((x: any) => x.id === 'main') : s?.main;
+  return Array.isArray(main?.elements)
+    && main.elements.some((e: any) => e.type === 'close' && e.extraProps?.adClose === true);
 }
 
 // ─── Triggers ─────────────────────────────────────────────────────────────────
@@ -1442,13 +1459,21 @@ ${design.overlayEnabled ? `.overlay{position:fixed;inset:0;z-index:2147483646;ba
   if (closeEl?.extraProps?.adClose === true) {
     // If the chunk is blocked / slow / absent, onCloseClick stays the plain dismiss — the X is never
     // prevented from closing the popup. dismiss() owns frequency-cap semantics (never reset on close).
-    void loadChunk('adclose.js').then(() => {
+    const wireAdClose = () => {
       (window as any).__sp_adclose?.({
         closeEl, elements: mainStep?.elements, slot, campaign,
         injectMacros, safeHref, beaconEvent, getDisplayDuration, dismiss,
         setOnClose: (fn: () => void) => { onCloseClick = fn; },
       });
-    });
+    };
+    // The chunk is preloaded at config boot (fetchConfigAndBoot), so it's normally already present by
+    // the time a popup is interactive — wire SYNCHRONOUSLY so the X is redirect-ready immediately and a
+    // fast X-click can't hit the plain dismiss before the async wiring runs (the first-works/second-
+    // fails bug). Fall back to load-then-wire if it isn't ready. Either way window.open stays inside the
+    // synchronous click handler (it is NEVER moved behind an await) so the user gesture is preserved
+    // and the redirect isn't popup-blocked.
+    if ((window as any).__sp_adclose) wireAdClose();
+    else void loadChunk('adclose.js').then(wireAdClose);
   }
   // An explicit "no thanks" dismiss-text link still closes, but clicking/tapping the dark backdrop
   // does NOT (intentional: the popup is X-only, so a stray tap outside — common on mobile — can't
