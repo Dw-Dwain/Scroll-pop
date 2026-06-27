@@ -110,6 +110,28 @@ export const leadRoutes: FastifyPluginAsync = async (fastify) => {
       .send(csv);
   });
 
+  // DELETE /api/v1/leads?email=... — DSAR erasure (H-4b). A data subject's email can appear as
+  // MANY rows (the dedup key is (tenant, campaign, email), so one person who converted on several
+  // campaigns has several rows). DELETE /leads/:id only erases one. This erases EVERY matching row
+  // for the email within the caller's tenant in a single request — the processor-side "right to be
+  // forgotten" mechanism. Hard delete (PII must actually be removed). Tenant-scoped; emails are
+  // stored lower-cased on ingest so we match on the normalized value.
+  fastify.delete('/leads', async (request, reply) => {
+    const Q = z.object({ email: z.string().email().max(254) });
+    const parsed = Q.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION', message: 'A valid ?email= is required to erase leads.' },
+      });
+    }
+    const email = parsed.data.email.trim().toLowerCase();
+    const deleted = await db
+      .delete(leads)
+      .where(and(eq(leads.tenantId, request.tenantId), eq(leads.email, email)))
+      .returning({ id: leads.id });
+    return reply.send({ data: { deleted: deleted.length, email } });
+  });
+
   // DELETE /api/v1/leads/:id — remove a captured lead (GDPR / cleanup). Hard delete: a lead is
   // PII the operator may be legally required to erase on request.
   fastify.delete<{ Params: { id: string } }>('/leads/:id', async (request, reply) => {

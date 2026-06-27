@@ -53,7 +53,7 @@ export const siteRoutes: FastifyPluginAsync = async (fastify) => {
 
         const [viewRow] = await db
           .select({ count: sql<number>`count(*)::int` })
-          .from(events)
+          .from(events) // events-tenant-scope-exempt: scoped by site.id, and `site` comes from tenantSites (already tenant-filtered above)
           .where(and(
             eq(events.siteId, site.id),
             eq(events.eventType, 'impression'),

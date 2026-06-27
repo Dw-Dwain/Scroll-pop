@@ -344,6 +344,32 @@ const tenantContextPluginImpl: FastifyPluginAsync = async (fastify) => {
       where: and(eq(tenants.clerkOrgId, personalOrgKey), isNull(tenants.deletedAt)),
     });
 
+    // M-6: anti-farming gate. The Clerk `user.created` webhook (routes/webhooks.ts) is the
+    // AUTHORITATIVE provisioning path; this preHandler block is a fallback for users whose webhook
+    // didn't land. Auto-creating a brand-new personal tenant on any valid JWT is the one spot a bot
+    // army could mint unlimited free workspaces, so when the gate is enabled we require the user's
+    // PRIMARY Clerk email to be verified before provisioning a NEW tenant. Existing users (tenant
+    // already present) skip this entirely — no added latency on the hot path.
+    //
+    // Disabled by default (ANTIFARM_REQUIRE_VERIFIED_EMAIL unset) so it can NEVER break sign-in
+    // before an owner confirms their Clerk flow verifies email before issuing a session. Flip
+    // ANTIFARM_REQUIRE_VERIFIED_EMAIL=1 to enforce. Synthetic placeholder addresses (no real email
+    // on the Clerk account) are exempt so a legitimate social login isn't blocked.
+    if (!tenant && (process.env['ANTIFARM_REQUIRE_VERIFIED_EMAIL'] ?? '0') !== '0') {
+      const isSyntheticEmail = userEmail.endsWith('@users.scrollpop.local');
+      const verified = isElevatedCandidate
+        ? emailVerified // already computed above for elevated candidates
+        : await isVerifiedPrimaryEmail(clerkUserId, userEmail, clerkUser);
+      if (!verified && !isSyntheticEmail) {
+        return reply.code(403).send({
+          error: {
+            code: 'EMAIL_NOT_VERIFIED',
+            message: 'Please verify your email address to finish setting up your account.',
+          },
+        });
+      }
+    }
+
     if (!tenant) {
       // Revive on conflict: if this user's personal tenant was soft-deleted (e.g. via the
       // user.deleted webhook) and they sign in again, restore it rather than 500-ing on the
