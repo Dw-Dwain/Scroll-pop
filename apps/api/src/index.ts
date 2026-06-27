@@ -87,11 +87,18 @@ export const redis = process.env['REDIS_URL']?.startsWith('redis://')
     });
 
 async function bootstrap() {
-  // Security (S9): warn loudly if the Worker-trust secret is missing in production. isFromWorker()
-  // already fails closed when it's unset (nobody is wrongly trusted), but a missing secret means the
-  // edge Worker's forwarded IP/country/revenue are all dropped — surface it so ops notice.
+  // Security (S9 / M-5): INTERNAL_SECRET is REQUIRED in production. isFromWorker() fails closed
+  // when it's unset (nobody is wrongly trusted), but running without it silently degrades several
+  // controls — the edge Worker's forwarded real client IP is dropped, so EVERY direct caller
+  // collapses into the Fly-edge socket IP and the per-IP rate-limit + flood gates stop
+  // distinguishing attackers from each other. Rather than ship that latent footgun, refuse to boot
+  // in production until the secret is configured. (Dev/test still run without it.)
   if (!isDev && !process.env['INTERNAL_SECRET']) {
-    console.error('[security] INTERNAL_SECRET is not set in production — Worker-forwarded IP/country/revenue will be ignored. Set it.');
+    throw new Error(
+      '[security] FATAL: INTERNAL_SECRET is required in production but is not set. ' +
+      'Without it the Worker-trust path is disabled and per-IP rate/flood gates degrade. ' +
+      'Set INTERNAL_SECRET (must match the Cloudflare Worker secret) and redeploy.',
+    );
   }
   // CORS
   const allowedOrigins = [
@@ -483,6 +490,20 @@ async function bootstrap() {
   const SIDE_EFFECT_PER_IP_PER_MIN = 60;
   const SIDE_EFFECT_EVENT_TYPES = new Set(['conversion', 'click', 'dismiss']);
 
+  // H-3: GLOBAL per-IP impression cap (across ALL campaigns). The per-(campaign, IP) gate above
+  // can be multiplied by an attacker who rotates through the many campaign UUIDs visible in served
+  // configs (N campaigns ⇒ N×120/min from one IP). This second gate bounds the TOTAL impressions a
+  // single IP can register per minute regardless of how many campaigns it spreads them across.
+  // Set comfortably above any real single-egress visitor (offices/NAT) but far below a flood.
+  const IMPRESSION_GLOBAL_PER_IP_PER_MIN = 600;
+  // H-2: per-campaign DAILY cap on email_capture side effects (auto-responder send + ESP subscribe).
+  // The per-(campaign, IP) minute gate stops a single IP, but a distributed flood across many IPs
+  // could still drive the operator's email sender / ESP quota. This bounds the TOTAL marketing sends
+  // a campaign can trigger in a day so a forged-lead storm can't torch the operator's sender
+  // reputation or ESP allowance. Real campaigns capturing this many genuine leads/day are rare and
+  // can be raised per-tenant later.
+  const EMAIL_CAPTURE_SIDE_EFFECTS_PER_CAMPAIGN_PER_DAY = 2000;
+
   function sanitizeEventUrl(url: unknown): string | null {
     if (typeof url !== 'string' || url.length > 2048) return null;
     try {
@@ -776,6 +797,52 @@ async function bootstrap() {
     } catch { return memSideEffectWithinIpQuota(memKey); }
   }
 
+  // H-3: GLOBAL per-IP impression gate (across all campaigns). Mirrors the per-campaign gate but
+  // keys on IP only, so rotating campaignIds can't multiply an IP's impression budget. Reuses the
+  // in-memory side-effect fallback map (different key prefix) when Redis is down so the cap still
+  // applies per instance. Best-effort: failing open here just defers to the per-campaign gate.
+  async function impressionWithinGlobalIpQuota(ip: string): Promise<boolean> {
+    if (!redis) {
+      // Reuse the side-effect in-memory gate keyspace with a higher ceiling check.
+      const k = `glob_imp:${ip}`;
+      const now = Date.now();
+      const e = memSideEffectGate.get(k);
+      if (!e || now >= e.resetAt) { memSideEffectGate.set(k, { count: 1, resetAt: now + 60_000 }); return true; }
+      e.count += 1;
+      return e.count <= IMPRESSION_GLOBAL_PER_IP_PER_MIN;
+    }
+    try {
+      const k = `sp_imp_gate_g:${ip}`;
+      const n = await redis.incr(k);
+      if (n === 1) await redis.expire(k, 60);
+      return typeof n !== 'number' || n <= IMPRESSION_GLOBAL_PER_IP_PER_MIN;
+    } catch { return true; }
+  }
+
+  // H-2: per-campaign DAILY cap on email_capture marketing side effects (auto-responder + ESP).
+  // Returns false once the campaign has triggered this many sends today (UTC day). Best-effort:
+  // when Redis is down the per-IP minute gate + (for ESP) the operator's own provider limits apply.
+  async function emailSideEffectsWithinDailyCap(campaignId: string): Promise<boolean> {
+    if (!redis) return true;
+    try {
+      const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+      const k = `sp_ar_day:${campaignId}:${day}`;
+      const n = await redis.incr(k);
+      if (n === 1) await redis.expire(k, 36 * 60 * 60); // 36h TTL covers the UTC day + slack
+      return typeof n !== 'number' || n <= EMAIL_CAPTURE_SIDE_EFFECTS_PER_CAMPAIGN_PER_DAY;
+    } catch { return true; }
+  }
+
+  // M-1: server-side consent enforcement. When a popup shows a marketing-consent checkbox, the
+  // snippet records the visitor's choice as metadata.consent. ONWARD MARKETING (auto-responder
+  // email + ESP subscribe) must honor an explicit decline — a recorded `consent === false` blocks
+  // the onward transfer regardless of what the rest of the forged/legit payload says. When no
+  // consent signal is present (no checkbox configured) behavior is unchanged (lead is still stored
+  // under legitimate interest; this gate governs only third-party marketing dispatch).
+  function marketingConsentAllowsDispatch(md: Record<string, unknown>): boolean {
+    return md['consent'] !== false;
+  }
+
   app.post<{ Body: { events?: any[] } }>('/e', {
     config: {
       rateLimit: {
@@ -843,7 +910,11 @@ async function bootstrap() {
 
             // Impression flood gate: drop impressions that exceed the per-IP-per-campaign cap so
             // forged floods can neither poison analytics nor burn the tenant's monthly view quota.
-            if (eventType === 'impression' && !(await impressionWithinIpQuota(campaignId, clientIp))) {
+            // H-3: also enforce a GLOBAL per-IP cap so an attacker can't multiply the budget by
+            // rotating through the many campaign UUIDs visible in served configs.
+            if (eventType === 'impression' &&
+                (!(await impressionWithinIpQuota(campaignId, clientIp)) ||
+                 !(await impressionWithinGlobalIpQuota(clientIp)))) {
               continue;
             }
 
@@ -862,6 +933,28 @@ async function bootstrap() {
             // or poison the lead list (S6). Drops only the abusable side effects, not the event row.
             const emailCaptureFlooded = eventType === 'email_capture' &&
               !(await emailCaptureWithinIpQuota(campaignId, clientIp));
+
+            // H-2 + M-1: ONWARD MARKETING side effects (auto-responder email, ESP subscribe, and the
+            // email_capture outbound webhook) are gated more tightly than the lead row itself. They
+            // dispatch only when ALL hold (short-circuits so the daily-cap counter is only touched
+            // for genuine email_capture events):
+            //   • not per-IP flooded (existing S6 gate), AND
+            //   • the event's origin is plausible for this campaign — same eventOriginAllowed check
+            //     the analytic events use; it FAILS OPEN when no domain is known, so custom/storefront
+            //     domains still work, but a forger who points pageUrl at an unrelated host while we DO
+            //     know the campaign's domain can no longer drive the operator's sender (H-2), AND
+            //   • the visitor did not explicitly DECLINE marketing consent (M-1 — honors the
+            //     consent checkbox server-side before any third-party transfer), AND
+            //   • the campaign is within its per-day marketing-send cap (H-2 — bounds a distributed,
+            //     many-IP forged-lead storm that the per-IP minute gate can't see).
+            // The lead ROW below still saves under legitimate interest (gated only on !flooded).
+            const ecMeta = (metadata ?? meta ?? {}) as Record<string, unknown>;
+            const emailCaptureMarketingAllowed =
+              eventType === 'email_capture' &&
+              !emailCaptureFlooded &&
+              eventOriginAllowed(safePageUrl, campaign) &&
+              marketingConsentAllowsDispatch(ecMeta) &&
+              (await emailSideEffectsWithinDailyCap(campaignId));
 
             await db.insert(events).values({
               tenantId: campaign.tenantId,
@@ -934,8 +1027,8 @@ async function bootstrap() {
             }
 
             // Email auto-responder: on email_capture, send the operator-configured reply
-            // if enabled. Best-effort — never fail the ingest. P2-13.
-            if (eventType === 'email_capture' && !emailCaptureFlooded && emailEnabled()) {
+            // if enabled. Gated on the marketing side-effect allowance (H-2/M-1). Best-effort.
+            if (emailCaptureMarketingAllowed && emailEnabled()) {
               void (async () => {
                 try {
                   const cam = await db.query.campaigns.findFirst({
@@ -964,8 +1057,9 @@ async function bootstrap() {
             }
 
             // ESP sync: on email_capture, forward lead to Klaviyo / Mailchimp if configured.
-            // P1-8 (Klaviyo) + P1-9 (Mailchimp). Best-effort — never blocks ingest.
-            if (eventType === 'email_capture' && !emailCaptureFlooded) {
+            // P1-8 (Klaviyo) + P1-9 (Mailchimp). Gated on the marketing side-effect allowance
+            // (H-2/M-1) so a forged/non-consented capture is never pushed to a third-party list.
+            if (emailCaptureMarketingAllowed) {
               void (async () => {
                 try {
                   const md5 = (metadata ?? meta ?? {}) as Record<string, unknown>;
@@ -1012,8 +1106,13 @@ async function bootstrap() {
             }
 
             // Outbound webhook: fire for email_capture and conversion (configurable). P2-14.
-            if (eventType === 'email_capture' || eventType === 'conversion' ||
-                eventType === 'click' || eventType === 'dismiss') {
+            // email_capture delivery carries the visitor's email to an operator-controlled URL, so
+            // it respects the same marketing side-effect allowance (H-2/M-1) — consent decline,
+            // origin mismatch, per-IP flood, or daily-cap exhaustion all suppress it. The analytic
+            // events (conversion/click/dismiss) already passed their own per-IP side-effect gate
+            // above (flooded ones `continue` out before reaching here).
+            if ((eventType === 'email_capture' && emailCaptureMarketingAllowed) ||
+                eventType === 'conversion' || eventType === 'click' || eventType === 'dismiss') {
               void (async () => {
                 try {
                   const wCam = await db.query.campaigns.findFirst({

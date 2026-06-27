@@ -27,8 +27,17 @@ export async function ensureLeadsSchema(
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
       ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+      -- H-1b: the policy is a REAL tenant predicate, never the old permissive USING(true). Shipping a
+      -- USING(true) placeholder meant that the day RLS enforcement is switched on, leads would still
+      -- be world-readable across tenants until ensureRlsSchema() happened to re-run. The predicate
+      -- below matches ensure-rls.ts exactly (current_setting('app.current_tenant')), so this table is
+      -- correctly isolated the moment enforcement is enabled, regardless of ensure-* ordering. The
+      -- system/superuser pool still bypasses RLS by role attribute (it is the owner and the table is
+      -- not FORCE'd here — ensure-rls.ts adds FORCE + grants to the NOBYPASSRLS tenant role).
       DO $$ BEGIN
-        CREATE POLICY leads_all_tenant_isolation ON leads USING (true) WITH CHECK (true);
+        CREATE POLICY leads_all_tenant_isolation ON leads
+          USING (tenant_id = nullif(current_setting('app.current_tenant', true), '')::uuid)
+          WITH CHECK (tenant_id = nullif(current_setting('app.current_tenant', true), '')::uuid);
       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
       CREATE INDEX IF NOT EXISTS leads_tenant_created_idx ON leads (tenant_id, created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS leads_tenant_campaign_email_uniq

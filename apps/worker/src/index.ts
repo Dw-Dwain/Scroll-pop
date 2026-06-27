@@ -182,7 +182,28 @@ async function handleConfig(
     });
   }
 
+  // H-3b: per-IP edge rate limit. A browser fetches config a handful of times per page; anything
+  // far above that is enumeration/abuse. Applied before KV/origin work. Fails open on Redis error.
+  const configIp = request.headers.get('CF-Connecting-IP') ?? '';
+  if (configIp && await edgeRateLimited(env, `wrl:c:${configIp}`, EDGE_CONFIG_REQS_PER_IP_PER_MIN, 60)) {
+    return rateLimitResponse();
+  }
+
   const kvKey = `config:v2:${publicKey}`;
+  const negKey = `confneg:${publicKey}`;
+
+  // H-3b: negative cache — if this key was very recently confirmed unknown by the origin (404),
+  // short-circuit here so a flood of random invalid keys can't repeatedly miss KV and hammer the
+  // origin's ~6-query config assembly. TTL is short so a newly-created site appears promptly.
+  if (env.SCROLLPOP_CONFIG) {
+    const neg = await env.SCROLLPOP_CONFIG.get(negKey, 'text');
+    if (neg) {
+      return new Response(JSON.stringify({ error: 'Site not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', 'X-Cache': 'NEG', ...CORS_HEADERS },
+      });
+    }
+  }
 
   // Try KV cache first (only when a KV namespace is bound)
   if (env.SCROLLPOP_CONFIG) {
@@ -231,6 +252,10 @@ async function handleConfig(
     if (upstream === 404) reason = 'Site not found';
     else if (upstream === 401) reason = 'Worker/API INTERNAL_SECRET mismatch';
     console.error(`[config] origin ${upstream} for ${publicKey}: ${reason}`);
+    // H-3b: briefly remember a genuine "unknown key" so repeated probes don't keep hitting origin.
+    if (upstream === 404 && env.SCROLLPOP_CONFIG) {
+      ctx.waitUntil(env.SCROLLPOP_CONFIG.put(negKey, '1', { expirationTtl: CONFIG_NEG_CACHE_TTL }));
+    }
     return new Response(JSON.stringify({ error: reason, upstreamStatus: upstream }), {
       status: upstream === 404 ? 404 : 502,
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
@@ -337,6 +362,46 @@ async function readKillSwitch(env: Env): Promise<boolean> {
   }
 }
 
+// ─── Edge rate limiting (H-3 / H-3b) ────────────────────────────────────────────
+// Per-IP request caps applied AT THE EDGE, before any origin work, using the same Upstash Redis
+// REST endpoint readMonthlyViews already uses. Previously the Worker did NO rate limiting of its
+// own — /e forwarded up to 50 events/request with only the origin's 500/min as a backstop, and /c
+// cache-misses each hit the origin DB with no per-IP brake. These gates bound a single IP's edge
+// request rate so a flood can't burn quota, amplify origin DB load, or fan out forged events.
+// FAIL OPEN: any Redis error / missing creds returns false (not rate-limited) so a Redis blip can
+// never take down legitimate traffic — the origin gates remain as the second layer.
+async function edgeRateLimited(env: Env, key: string, limit: number, windowSec: number): Promise<boolean> {
+  if (!env.REDIS_URL || !env.REDIS_TOKEN) return false;
+  try {
+    const headers = { Authorization: `Bearer ${env.REDIS_TOKEN}` };
+    const res = await fetch(`${env.REDIS_URL}/incr/${encodeURIComponent(key)}`, { headers });
+    if (!res.ok) return false;
+    const body = await res.json() as { result?: number };
+    const n = typeof body.result === 'number' ? body.result : 0;
+    if (n === 1) {
+      // First hit in the window — set the TTL (best-effort; don't block on it).
+      void fetch(`${env.REDIS_URL}/expire/${encodeURIComponent(key)}/${windowSec}`, { headers }).catch(() => {});
+    }
+    return n > limit;
+  } catch {
+    return false;
+  }
+}
+
+function rateLimitResponse(): Response {
+  return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+    status: 429,
+    headers: { 'Content-Type': 'application/json', 'Retry-After': '60', ...CORS_HEADERS },
+  });
+}
+
+// Per-IP edge budgets (per 60s window).
+const EDGE_EVENT_REQS_PER_IP_PER_MIN = 300;  // /e  — generous vs a real page's beacon volume
+const EDGE_CONFIG_REQS_PER_IP_PER_MIN = 120;  // /c  — a browser fetches config a handful of times
+// Negative-cache TTL for unknown public keys (H-3b): a 404 is cached briefly so a flood of random
+// invalid keys can't keep missing KV and hammering the origin config assembly.
+const CONFIG_NEG_CACHE_TTL = 120;
+
 /**
  * Read this tenant's current-month impression count from the Upstash Redis REST API.
  * Returns null on any failure (missing creds, network error) so the caller fails OPEN.
@@ -383,6 +448,13 @@ async function handleIngest(
   env: Env,
   ctx: ExecutionContext
 ): Promise<Response> {
+  // H-3: per-IP edge rate limit before doing any work. CF-Connecting-IP is set by Cloudflare and
+  // cannot be spoofed by the client. Fails open on Redis error so a blip never drops real traffic.
+  const ingestIp = request.headers.get('CF-Connecting-IP') ?? '';
+  if (ingestIp && await edgeRateLimited(env, `wrl:e:${ingestIp}`, EDGE_EVENT_REQS_PER_IP_PER_MIN, 60)) {
+    return rateLimitResponse();
+  }
+
   let body: { events?: RawEvent[] };
 
   try {

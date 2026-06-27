@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege default for the workflow GITHUB_TOKEN (M-4). The deploy jobs use
+# external cloud credentials (FLY_API_TOKEN / CLOUDFLARE_API_TOKEN), not GITHUB_TOKEN,
+# so read-only contents access is all any job here needs. A job that ever needs more
+# should declare its own narrower `permissions:` block.
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: '22'
   PNPM_VERSION: '11.1.1'
@@ -15,10 +22,10 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -29,10 +36,10 @@ jobs:
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -43,10 +50,10 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -76,10 +83,10 @@ jobs:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -101,10 +108,10 @@ jobs:
     name: Snippet Size Budgets (core ≤10KB · lazy chunks capped)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -158,10 +165,10 @@ jobs:
     name: No history.* / popstate in snippet
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -173,11 +180,25 @@ jobs:
       - name: Check for banned navigation APIs (AST)
         run: pnpm --filter @scrollpop/snippet lint
 
+  events-tenant-scope:
+    # H-1c — the `events` table is a compressed TimescaleDB hypertable and CANNOT have RLS, so its
+    # service-layer `WHERE tenant_id = …` predicate is the only thing isolating tenants' analytics.
+    # This gate fails the build if any `.from(events)` read isn't tenant-scoped (or explicitly
+    # exempted with a written reason). Pure Node — no install needed.
+    name: Events table tenant-scope guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '${{ env.NODE_VERSION }}'
+      - run: node apps/api/scripts/check-events-tenant-scope.mjs
+
   migration-safety:
     name: Migration Safety Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
       - name: Check for destructive SQL in new migrations
@@ -220,10 +241,10 @@ jobs:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -236,7 +257,7 @@ jobs:
         run: pnpm --filter @scrollpop/e2e run e2e
         env:
           CI: 'true'
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
@@ -246,11 +267,11 @@ jobs:
   deploy-api:
     name: Deploy API → Fly.io (production)
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, migration-safety]
+    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, events-tenant-scope, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v7
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master (pinned — was a moving branch)
       - name: Deploy to Fly
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then
@@ -296,13 +317,13 @@ jobs:
   deploy-worker:
     name: Deploy Worker → Cloudflare
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, migration-safety]
+    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, events-tenant-scope, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
@@ -364,13 +385,13 @@ jobs:
   deploy-dashboard:
     name: Deploy Dashboard → Cloudflare Pages (production)
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, migration-safety]
+    needs: [lint, typecheck, test, dependency-scan, snippet-size-check, no-history-manipulation, events-tenant-scope, migration-safety]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
         with: { version: '${{ env.PNPM_VERSION }}' }
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '${{ env.NODE_VERSION }}'
           cache: pnpm
