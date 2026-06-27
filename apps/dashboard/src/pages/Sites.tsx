@@ -15,6 +15,7 @@ type SiteRecord = {
   id: string; name: string; domain: string; platform: string;
   publicKey?: string; isActive?: boolean; verifiedAt?: string | null;
   shopifyShop?: string; wpSiteUrl?: string; lastSeenAt?: string;
+  customDomain?: string | null;
   totalViews?: number; campaignCount?: number; clientId?: string | null;
 };
 
@@ -428,7 +429,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
   const [embedMode, setEmbedMode] = React.useState<'cdn' | 'dev'>('cdn');
   const [devUrl, setDevUrl] = React.useState(''); // operator pastes their own tunnel URL
   const [isEditOpen, setIsEditOpen] = React.useState(false);
-  const [editSite, setEditSite] = React.useState({ id: '', name: '', platform: 'html', clientId: '' });
+  const [editSite, setEditSite] = React.useState({ id: '', name: '', platform: 'html', clientId: '', customDomain: '' });
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
 
   // Detect Shopify OAuth success redirect
@@ -719,7 +720,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                       <button
                         className="btn btn-icon"
                         title="Edit"
-                        onClick={(e) => { e.stopPropagation(); setEditSite({ id: site.id, name: site.name, platform: site.platform, clientId: site.clientId ?? '' }); setIsEditOpen(true); }}
+                        onClick={(e) => { e.stopPropagation(); setEditSite({ id: site.id, name: site.name, platform: site.platform, clientId: site.clientId ?? '', customDomain: site.customDomain ?? '' }); setIsEditOpen(true); }}
                       >
                         <Edit size={14} />
                       </button>
@@ -1076,6 +1077,7 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                   values: {
                     name: editSite.name,
                     platform: editSite.platform,
+                    customDomain: editSite.customDomain.trim(),
                     ...(isAgency ? { clientId: editSite.clientId || null } : {}),
                   },
                   successNotification: () => ({ message: 'Site updated', type: 'success' }),
@@ -1097,6 +1099,17 @@ export const Sites: React.FC<{ onNavigate?: (path: string) => void }> = ({ onNav
                   <option value="donorbox">Donorbox</option>
                   <option value="other">Other CMS</option>
                 </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Storefront domain <span style={{ opacity: 0.6 }}>(optional)</span></label>
+                <input type="text" className="input" placeholder="e.g. glamourdusk.com"
+                  value={editSite.customDomain} onChange={(e) => setEditSite({ ...editSite, customDomain: e.target.value })} />
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                  The customer-facing domain where the popup actually runs. Set this when it differs from the
+                  domain above — e.g. a Shopify store on a custom domain (its <code>.myshopify.com</code> address
+                  redirects here). Analytics only count events from a domain registered on the site, so a mismatch
+                  shows traffic but zero hits.
+                </p>
               </div>
               {isAgency && (
                 <div>
